@@ -1,0 +1,1071 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+% ---------------------------------------------------------------------
+% Macros
+% ---------------------------------------------------------------------
+\newcommand{\Ssem}[1]{\mathsf{S}[\![#1]\!]}
+\newcommand{\Lsem}[1]{\mathsf{L}[\![#1]\!]}
+\newcommand{\Vsem}[1]{\mathsf{V}[\![#1]\!]}
+
+\newcommand{\Wm}[1]{\widehat{W}_{#1}}
+\newcommand{\Rm}[1]{\widehat{R}_{#1}}
+\newcommand{\Sm}[1]{\widehat{S}_{#1}}
+
+\newcommand{\eps}{\epsilon}
+\newcommand{\dg}[1]{^{\dagger #1}}
+\newcommand{\op}{\mathit{op}}
+\newcommand{\then}{\mathrel{\blacktriangleright}}
+\newcommand{\loc}[1]{\langle #1 \rangle} % local construct, decorated separately
+\newcommand{\hoist}{\mathsf{hoist}}
+\newcommand{\tell}{\mathsf{tell}}
+\newcommand{\censor}{\mathsf{censor}_0}
+\newcommand{\collect}{\triangle}
+\newcommand{\collectX}[1]{\mathsf{collect}_{#1}}
+\newcommand{\collapse}{\mathsf{collapse}}
+\newcommand{\bump}{\mathsf{bump}}
+\newcommand{\Rx}[1]{\widehat{\mathcal R}_{#1}}
+\newcommand{\lC}{\lambda_C}
+
+\title{An Alternative Denotational Semantics for $\lambda_C$:\\
+Swapping the Free Monad and the Writer Monad Transformer}
+\author{Companion to ``Handling the Selection Monad''\\[2pt]
+\small (after Gordon Plotkin and Ningning Xie)}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Section~5 of Plotkin and Xie's \emph{Handling the Selection Monad} gives $\lambda_C$ a
+denotational semantics in which the auxiliary monad $W_\eps(X) = F_\eps(R\times X)$ arises
+by applying the \emph{writer monad transformer} to the free monad $F_\eps$: effect trees are
+built first, and a single accumulated loss is attached at each leaf. This note develops the
+mirror-image construction, in which the \emph{free monad transformer} is applied to the
+\emph{writer monad}: $\widehat W_\eps(X) = \mathsf{FreeT}_\eps(\mathsf{Writer}_R)(X)$, so
+that a loss contribution is attached at \emph{every} node of an effect tree rather than only
+at its leaves. We re-derive the monad structure, the selection-monad construction
+$\widehat S_\eps$, the semantics of expressions, and the semantics of handlers for this
+alternative choice, and discuss the one substantive semantic difference it introduces: loss
+no longer commutes with operation calls. The construction is exactly the one realised by the
+reference implementation \texttt{Sel r e a = FreeT e (Writer r)}, which we use throughout as
+a sanity check on the mathematics.
+\end{abstract}
+
+\section{Introduction}
+
+Section 5.1 of the paper introduces the family of augmented selection monads
+$S_\eps(X) = (X\to R_\eps)\to W_\eps(X)$, where
+\[
+  W_\eps(X) = F_\eps(R\times X), \qquad R_\eps = F_\eps(R),
+\]
+and $F_\eps$ is the free monad for the effect signature at level $\eps$. The paper observes
+that $W_\eps$ is ``the commutative combination [Hyland et al.\ 2006] of $F_\eps$ and the
+writer monad $R\times -$'', and that this choice makes the loss operation \emph{commute}
+with every other operation --- semantically, a loss can be freely floated past an operation
+call, and this is exactly what the operational semantics does (Theorem~5.4).
+
+Categorically, $F_\eps(R\times X)$ is what one obtains by applying the \emph{writer monad
+transformer} $\mathsf{WriterT}_R$ to the base monad $F_\eps$: a $\mathsf{WriterT}_R\, M$
+computation is an $M$-computation of a value paired with a monoid element, i.e.\ $M(R\times
+X)$, and here $M = F_\eps$. This note asks the dual question: what if instead we apply the
+\emph{free monad transformer} $\mathsf{FreeT}_\eps$ to the base monad
+$\mathsf{Writer}_R = R\times -$? Concretely we replace
+\[
+  W_\eps(X) = F_\eps(R \times X)
+  \qquad\text{by}\qquad
+  \widehat W_\eps(X) = \mathsf{FreeT}_\eps(\mathsf{Writer}_R)(X),
+\]
+i.e.\ we thread a writer layer through \emph{every} constructor of the effect tree, rather
+than combining all the writer output into a single pair at the leaves. This is precisely the
+monad implemented in the accompanying Haskell development (file \texttt{Correct.hs}):
+\begin{quote}
+\texttt{newtype Sel r e a = Sel \{ \_runSel :: (a -> FreeT e (Writer r) ()) -> FreeT e (Writer r) a \}}
+\end{quote}
+in which the carrier of $W_\eps$ is literally \texttt{FreeT e (Writer r) a}. We use that
+implementation throughout as ground truth for the constructions below, presenting them in
+the mathematical style of the original paper's Section~5 so that the two developments can be
+read side by side.
+
+Everything in Section~5.1 that concerns the semantics of \emph{types} (Fig.~8) is orthogonal
+to this swap and carries over unchanged; we recall it briefly in Section~2. Section~3
+develops the new monad $\widehat W_\eps$ and the resulting selection monad $\widehat S_\eps$.
+Section~4 redoes the semantics of expressions (Fig.~9). Section~5 redoes the semantics of
+handlers. Section~6 discusses the one genuine semantic difference (loss no longer commutes
+with effects) and what it implies for soundness and adequacy.
+
+\section{Recap: Semantics of Types}
+
+We keep the syntax of $\lambda_C$, its typing rules, and its operational semantics exactly as
+in Sections 3--4 of the original paper: types $\sigma,\tau$, effect contexts $\eps$ (multisets
+of effect labels), a signature $\Sigma$ of operations $\op : \mathit{out}\xrightarrow{\ell}
+\mathit{in}$ for $\ell\in\eps$, expressions $e$, loss-continuation expressions $g$, and
+handlers $h$ with clauses $\op_i\mapsto\dots$ and $\mathit{return}\mapsto\dots$.
+
+The semantics of types, $\Sm{\sigma}$, is exactly Figure~8 of the original paper:
+\[
+  \Ssem{b} = [\![b]\!], \qquad
+  \Ssem{(\sigma_1,\dots,\sigma_n)} = \Ssem{\sigma_1}\times\cdots\times\Ssem{\sigma_n}, \qquad
+  \Ssem{\sigma\to\tau\,!\,\eps} = \Ssem{\sigma}\to \Sm\eps(\Ssem{\tau}),
+\]
+where $\Sm\eps$ is now the family we redefine in Section~3. Only the auxiliary monad
+changes; the interpretation of type formers does not.
+
+\section{The Alternative Monad}
+
+\subsection{The carrier $\widehat W_\eps$}
+
+Recall an $\eps$-algebra is a set $X$ with maps
+$\varphi_{\ell,\op,i} : \Ssem{\mathit{out}}\times X^{\Ssem{\mathit{in}}}\to X$ for each
+$\ell\in\eps$, $\op:\mathit{out}\xrightarrow{\ell}\mathit{in}$, $0<i\le\eps(\ell)$, and that
+$F_\eps(X)$ is the free such algebra on $X$. We now dispense with a separate ``plain'' free
+monad: because the writer layer is woven through every node rather than paired only at
+leaves, one operator suffices where the original development needed two ($F_\eps$ and
+$W_\eps = F_\eps(R\times-)$).
+
+\begin{definition}[The monad $\widehat W_\eps$]
+For a set $X$, let $\widehat W_\eps(X)$ be the least set $Y$ such that
+\[
+  Y \;=\; R \times \left(X \;+\; \sum_{\substack{\ell\in\eps,\ \op:\mathit{out}\xrightarrow{\ell}\mathit{in}\\ 0<i\le\eps(\ell)}}
+        \Ssem{\mathit{out}} \times Y^{\Ssem{\mathit{in}}}\right).
+\]
+We write an element as a pair $(r,n)$ with $r\in R$ (the loss recorded \emph{at this node})
+and $n$ either a leaf $\iota_1(x)$ for $x\in X$, or an internal node
+$\iota_2\big((\ell,\op,i),(o,\kappa)\big)$ decorated exactly as in $F_\eps$.
+\end{definition}
+
+This is exactly the least-fixpoint reading of the Haskell type
+\texttt{FreeT e (Writer r) a}, whose definition
+\begin{quote}
+\texttt{data FreeF f a b = Pure a | Free (f b)}\\
+\texttt{newtype FreeT f m a = FreeT \{ runFreeT :: m (FreeF f a (FreeT f m a)) \}}
+\end{quote}
+instantiated at $m = \mathsf{Writer}_R$ unrolls to $\mathsf{Writer}_R(X + F(\widehat
+W_\eps(X))) = R\times(X + F(\widehat W_\eps(X)))$, matching the equation above with $F$ the
+signature functor of $\eps$.
+
+Compare with the original $W_\eps(X) = F_\eps(R\times X)$, whose defining equation is
+\[
+  Y \;=\; \sum_{\ell,\op,i} \Ssem{\mathit{out}}\times Y^{\Ssem{\mathit{in}}} \;+\; (R\times X):
+\]
+there $R$ occurs exactly once, paired with the eventual result, at each leaf; here $R$ occurs
+at \emph{every} node, including every internal one. As before, the two families $\widehat
+W_\eps$ and (the semantics $\widehat S_\eps$ defined below) are mutually recursive, with
+effect levels strictly decreasing on one side and non-increasing on the other exactly as
+described in the original Section~5.1; that circularity argument is untouched by the swap, so
+we do not repeat it.
+
+We write $\Rm\eps := \widehat W_\eps(1)$ for the type of \emph{loss continuations}, exactly
+mirroring $R_\eps := W_\eps(1) \cong F_\eps(R)$ in the original -- except that here, unlike in
+the original, $\widehat W_\eps(1)$ is \emph{not} isomorphic to a simple type of accumulated
+losses: it retains the full tree shape (an unhandled operation can still be pending at any
+depth), it merely carries a unit value at each leaf.
+
+\subsection{Free layered $\eps$-algebras}
+
+The original development makes $W_\eps$ a monad by observing that it is the free \emph{action
+$\eps$-algebra}: an $\eps$-algebra $(Y,\psi)$ together with an additive action $\cdot : R\times
+Y\to Y$ ($0\cdot y = y$, $r\cdot(s\cdot y)=(r+s)\cdot y$) that \emph{commutes} with every
+$\psi_{\ell,\op,i}$. That commutation is exactly what makes the combination ``commutative''
+in the sense of Hyland, Plotkin and Power, and exactly what the swap gives up.
+
+\begin{definition}[Layered $\eps$-algebra]
+A \emph{layered $\eps$-algebra} is a set $Y$ equipped with an $\eps$-algebra structure $\psi$
+and an additive action $\cdot: R\times Y \to Y$, with \emph{no} requirement that $\cdot$
+commutes with $\psi$.
+\end{definition}
+
+\begin{definition}[Free layered $\eps$-algebra]
+$\widehat W_\eps(X)$ is the free layered $\eps$-algebra on $X$: its own structure is
+\[
+  \widehat\varphi_{\ell,\op,i}(o,\kappa) =_{\mathrm{def}} \big(0,\, \iota_2((\ell,\op,i),(o,\kappa))\big),
+  \qquad
+  r\cdot(r_0,n) =_{\mathrm{def}} (r+r_0,\,n),
+\]
+with unit $\eta^{\widehat W_\eps}(x) = (0,\iota_1(x))$; and for any layered $\eps$-algebra
+$(Y,\psi,\cdot)$ and function $f:X\to Y$, the unique homomorphic extension
+$f\dg{\widehat W_\eps}: \widehat W_\eps(X)\to Y$ is given by
+\[
+  f\dg{\widehat W_\eps}(r_0,\iota_1(x)) = r_0\cdot f(x),
+  \qquad
+  f\dg{\widehat W_\eps}\big(r_0,\iota_2((\ell,\op,i),(o,\kappa))\big)
+     = r_0\cdot \psi_{\ell,\op,i}\big(o,\ f\dg{\widehat W_\eps}\circ\kappa\big).
+\]
+\end{definition}
+
+Both clauses are well defined by structural recursion since $\widehat W_\eps(X)$ is a least
+(hence well-founded, finitely-branching-and-depth) set. One checks directly that
+$f\dg{\widehat W_\eps}\circ\eta^{\widehat W_\eps} = f$ and that $f\dg{\widehat W_\eps}$ is a
+homomorphism of layered $\eps$-algebras, using only the additive action law of $Y$ -- no
+commutation between $\psi$ and $\cdot$ is needed anywhere in the argument, which is precisely
+why $\widehat\varphi$ and the action need not commute for the recursion to be well founded.
+
+\begin{remark}
+Instantiating $(Y,\psi,\cdot) := (\widehat W_\eps(Z),\widehat\varphi,\cdot)$ for a function
+$f : X\to \widehat W_\eps(Z)$ turns the homomorphic-extension formula above into the
+\emph{Kleisli extension} (bind) of $\widehat W_\eps$: writing $\mathsf{let}_{\widehat
+W_\eps}\, x\in X\ \mathsf{be}\ u\ \mathsf{in}\ f(x) := f\dg{\widehat W_\eps}(u)$,
+\[
+  \mathsf{let}_{\widehat W_\eps}\ x\in X\ \mathsf{be}\ (r_0,\iota_1(x'))\ \mathsf{in}\ f(x)
+     = r_0\cdot f(x'),
+\]
+\[
+  \mathsf{let}_{\widehat W_\eps}\ x\in X\ \mathsf{be}\ (r_0,\iota_2((\ell,\op,i),(o,\kappa)))\ \mathsf{in}\ f(x)
+     = \Big(r_0,\ \iota_2\big((\ell,\op,i),\ (o,\ \lambda a.\ \mathsf{let}_{\widehat W_\eps}\ x\in X\ \mathsf{be}\ \kappa(a)\ \mathsf{in}\ f(x))\big)\Big).
+\]
+That is: at a leaf, the node's own loss $r_0$ is \emph{added} to whatever the continuation
+produces (via the action); at an internal node, $r_0$ is left exactly where it is and only the
+children are rebound. This is exactly the standard bind for a monad transformer stacked over
+$\mathsf{Writer}_R$, and matches the (derivable) \texttt{Monad} instance underlying
+\texttt{FreeT e (Writer r)} in \texttt{Correct.hs}.
+\end{remark}
+
+\subsection{Loss, commutativity, and what changes}
+
+The reason the original $W_\eps$ needs the stronger notion of \emph{action} $\eps$-algebra
+(with $\psi$ and $\cdot$ commuting) is that there loss is combined into a single value at the
+very end; an operation occurring ``after'' a loss and one occurring ``before'' it produce
+indistinguishable trees, which is exactly the content of commutativity. Here, because a loss
+is recorded at the specific node at which it occurs, the order of a loss relative to a
+neighbouring operation is part of the data of $\widehat W_\eps(X)$: $\widehat\varphi$ applied
+first and then $\tell$ (defined below) applied to the result is a \emph{different} element
+from $\tell$ applied first and then $\widehat\varphi$. Section~6 returns to the operational
+consequences of this; here we simply record the two combinators we will need:
+\[
+  \tell(r)(r_0,n) =_{\mathrm{def}} (r+r_0,\,n) \qquad(\text{i.e. } \tell(r) = r\cdot(-)),
+\]
+\[
+  \censor(r_0,n) =_{\mathrm{def}}
+  \begin{cases}
+    (0,\iota_1(x)) & n=\iota_1(x)\\
+    (0,\iota_2((\ell,\op,i),(o,\lambda a.\,\censor(\kappa(a))))) & n=\iota_2((\ell,\op,i),(o,\kappa)),
+  \end{cases}
+\]
+the latter recursively zeroing every recorded loss throughout the tree while leaving its shape
+and leaves untouched (matching Haskell's \texttt{censor (const mempty)}), and
+\[
+  \collect(r_0,n) =_{\mathrm{def}}
+  \begin{cases}
+    (0,\iota_1(r_0)) & n = \iota_1(())\\
+    \tell(r_0)\big(0,\iota_2((\ell,\op,i),(o,\lambda a.\,\collect(\kappa(a))))\big) & n = \iota_2((\ell,\op,i),(o,\kappa)),
+  \end{cases}
+\]
+a map $\widehat W_\eps(1)\to \widehat W_\eps(R)$ that recursively \emph{sums} all losses along
+each root-to-leaf path into that leaf's now $R$-valued payload, while zeroing every node's own
+recorded loss along the way (matching Haskell's
+\texttt{triangle = censor (const mempty) . fmap snd . listen}). We also need the evident
+generalisation to arbitrary payload type $X$, matching Haskell's \texttt{listen}, which pairs
+each leaf value with the total accumulated loss on its path rather than discarding it:
+\[
+  \collectX X(r_0,\iota_1(x)) = (0,\iota_1((x,r_0))),
+  \qquad
+  \collectX X\big(r_0,\iota_2((\ell,\op,i),(o,\kappa))\big)
+     = \Big(0,\ \iota_2\big((\ell,\op,i),\ (o,\ \lambda a.\ \bump_{r_0}(\collectX X(\kappa(a))))\big)\Big),
+\]
+where $\bump_r : \widehat W_\eps(X\times R)\to\widehat W_\eps(X\times R)$ adds $r$ into the
+recorded total at \emph{every} leaf beneath the current node (needed because, unlike $\tell$,
+$\collectX X$ must push a node's loss down into leaves that may be arbitrarily deep, not just
+combine it at the top):
+\[
+  \bump_r\big(0,\iota_1((x,s))\big) = \big(0,\iota_1((x,r+s))\big),
+  \qquad
+  \bump_r\big(0,\iota_2((\ell,\op,i),(o,\kappa))\big) = \big(0,\iota_2((\ell,\op,i),(o,\lambda a.\,\bump_r(\kappa(a))))\big)
+\]
+(the outer loss is always $0$ on the nose in the argument of $\bump_r$, since $\collectX X$
+zeroes it just before recursing). One checks $\bump_0 = \mathrm{id}$ and
+$\bump_r\circ\bump_s = \bump_{r+s}$ directly from these clauses. Finally
+$\collect = \Wm\eps(\pi_2)\circ\collectX 1 : \widehat W_\eps(1)\to\widehat W_\eps(R)$, i.e.\
+$\collect$ is $\collectX 1$ followed by forgetting the (unit-typed) leaf value and keeping only
+the accumulated loss -- matching \texttt{triangle}'s definition as \texttt{censor (const
+mempty) . fmap snd . listen} exactly, clause by clause.
+
+\subsection{The selection monad $\widehat S_\eps$}
+
+With $\widehat W_\eps$ and $\Rm\eps=\widehat W_\eps(1)$ in hand, the construction of the
+selection monad itself is \emph{generic} in the choice of $\widehat W_\eps$: it is exactly
+the scheme of the original paper's equation~(5), reinstantiated. Define
+\[
+  \widehat S_\eps(X) = (X\to \Rm\eps)\to \widehat W_\eps(X), \qquad
+  \eta^{\widehat S_\eps}(x) = \lambda\gamma.\ \eta^{\widehat W_\eps}(x).
+\]
+$\Rm\eps$ is itself a layered $\eps$-algebra (being $\widehat W_\eps(1)$), with action
+$r\cdot u = \tell(r)(u)$. For $F\in\widehat S_\eps(Y)$ and a loss function
+$\gamma:Y\to\Rm\eps$, define, exactly as in the original,
+\[
+  \widehat{\mathcal R}_\eps(F\mid\gamma) =_{\mathrm{def}} \gamma\dg{\widehat W_\eps}(F(\gamma)) \ \in\ \Rm\eps.
+\]
+Then the Kleisli extension of $f:X\to\widehat S_\eps(Y)$ is, verbatim,
+\[
+  f\dg{\widehat S_\eps}(F) = \lambda\gamma\in Y\to\Rm\eps.\
+     \mathsf{let}_{\widehat W_\eps}\ x\in X\ \mathsf{be}\ F\big(\lambda x\in X.\ \widehat{\mathcal R}_\eps(fx\mid\gamma)\big)\ \mathsf{in}\ fx\,\gamma,
+\]
+and $\widehat S_\eps(X)$ is itself an $\eps$-algebra via
+\[
+  \widehat\varphi^X_{\ell,\op,i}(o,f)(\gamma) = \widehat\varphi_{\ell,\op,i}\big(o,\ \lambda x\in\mathit{in}.\ f(x)(\gamma)\big).
+\]
+Two simplifications are worth flagging, both consequences of no longer needing to
+pre-multiply values by $R$ before feeding them to $F_\eps$: the $\varphi$ used in the last
+equation is the one-argument $\widehat\varphi$ of $\widehat W_\eps(X)$ directly, rather than
+$\varphi^{R\times X}$; and nothing elsewhere in this subsection ever mentions $R\times -$
+explicitly. All bookkeeping of losses is delegated to the fact that $\widehat W_\eps$ itself
+already carries $R$ at every node.
+
+\section{Semantics of Expressions}
+
+Most of Figure~9 is stated purely in terms of the abstract interface of $S_\eps$ ($\eta$,
+Kleisli extension, and $\varphi^X$) and therefore carries over to $\widehat S_\eps$
+\emph{unchanged in form}: the clauses for variables, constants, tuples, projection,
+abstraction, application, and operation calls
+\[
+  \Ssem{\op(e)}(\rho) = \mathsf{let}_{\widehat S_\eps}\ a\in\Ssem{\mathit{out}}\ \mathsf{be}\ \Ssem{e}(\rho)
+     \ \mathsf{in}\ \widehat\varphi^X_{\ell,\op,\eps(\ell)}\big(a,(\eta^{\widehat S_\eps})^{\Ssem{\mathit{in}}}\big)
+\]
+are exactly as in the original, read with $\widehat S_\eps,\widehat W_\eps,\widehat
+\varphi$ in place of $S_\eps,W_\eps,\varphi$. The four constructs that manipulate the
+$F_\eps(R\times X)$ leaf shape directly -- \texttt{loss}, $(\then)$, the local construct
+$\loc{e}g^\eps$, and \texttt{reset} -- need to be redone against the new shape. We also
+restate the auxiliary loss-function semantics $\mathcal L$.
+
+\paragraph{\texttt{loss(e)}.} Originally this pattern-matched the leaf pair of
+$\Ssem{e}(\rho)(\gamma)\in F_\eps(R\times R)$ and added the returned value into the recorded
+loss. Here, since a bare $\tell$ is already an $\widehat S_\eps$-level operation, no pattern
+matching is needed at all:
+\[
+  \Ssem{\mathtt{loss}(e)}(\rho) = \lambda\gamma.\
+    \mathsf{let}_{\widehat W_\eps}\ a\in R\ \mathsf{be}\ \Ssem{e}(\rho)(\gamma)\ \mathsf{in}\
+    \tell(a)\big(\eta^{\widehat W_\eps}(())\big).
+\]
+
+\paragraph{Loss-function semantics $\mathcal L$.} For $\Gamma,x\!:\!\sigma\vdash e:\mathtt{loss}\,!\,\eps$,
+define $\Lsem{\lambda^\eps x\!:\!\sigma.\,e} : \Sm\Gamma \to \Sm\sigma \to \Rm\eps$ by
+\[
+  \Lsem{\lambda^\eps x\!:\!\sigma.\,e}(\rho) = \lambda a\in\Ssem\sigma.\
+     \big(\lambda(r_0,n).\ (0,n)\big)\Big[\, v \mapsto v \,\Big]\big(\Ssem{e}(\rho[a/x])(\gamma_0)\big)
+\]
+which, spelled out without the shorthand, is exactly the recursive map
+\[
+  \Lsem{\lambda^\eps x\!:\!\sigma.\,e}(\rho)(a) =
+  \begin{cases}
+    (v,\iota_1(())) & \Ssem{e}(\rho[a/x])(\gamma_0) = (r_0,\iota_1(v)),\ v\in R\\
+    \big(0,\iota_2((\ell,\op,i),(o,\lambda w.\,\Lsem{\dots}(\rho)(a)\!\downharpoonright_{\kappa(w)}))\big) & \text{on internal nodes},
+  \end{cases}
+\]
+i.e.\ the analogue of the original's ``discard the accumulated loss $r_1$, keep only the
+returned value $r_2$'', recursing structurally through any still-pending operation nodes and
+zeroing their recorded losses on the way. ($\gamma_0 = \lambda r{\in}R.\,\eta^{\widehat
+W_\eps}(())$ is the zero loss continuation, exactly as before.) We call this operation
+$\mathsf{collapse}: \widehat W_\eps(R)\to\widehat W_\eps(1)$ below and simply write
+$\Lsem{\lambda^\eps x\!:\!\sigma.\,e}(\rho)(a) = \mathsf{collapse}\big(\Ssem e(\rho[a/x])(\gamma_0)\big)$.
+
+\paragraph{$e_1\then\lambda^{\eps_1} x\!:\!\sigma_1.\,e_2$.} This builds the loss recorded for
+one step of a loss continuation: run $e_1$ under the hypothetical continuation
+$\Lsem{\lambda x.\,e_2}(\rho)$, obtaining a value $a$ together with the loss $r_1$ this
+incurred; then run $e_2$ at $a$ under the zero continuation to get its own bookkeeping loss
+$r_2$ and returned increment $r_3$; the result records loss $r_2$ and returns $r_1+r_3$. Using
+$\mathsf{collect}_X$ from Section 3.3 to extract $(a,r_1)$ pairs from a tree of pending
+operations,
+\[
+  \Ssem{e_1\then\lambda^{\eps_1}x\!:\!\sigma_1.\,e_2}(\rho) = \lambda\gamma.\
+    \mathsf{let}_{\widehat W_{\eps_1}}\ (a,r_1)\in\Ssem{\sigma_1}\times R\ \mathsf{be}\
+      \mathsf{collect}_{\Ssem{\sigma_1}}\big(\Ssem{e_1}(\rho)(\Lsem{\lambda x.\,e_2}(\rho))\big)\ \mathsf{in}
+\]
+\[
+  \hphantom{\Ssem{e_1\then\lambda^{\eps_1}x\!:\!\sigma_1.\,e_2}(\rho) = }
+    \mathsf{let}_{\widehat W_{\eps_1}}\ (r_3,r_2)\in R\times R\ \mathsf{be}\
+      \mathsf{collect}_R\big(\Ssem{e_2}(\rho[a/x])(\gamma_0)\big)\ \mathsf{in}\
+      \tell(r_2)\big(\eta^{\widehat W_{\eps_1}}(r_1+r_3)\big).
+\]
+
+\paragraph{$\loc{e}g^{\eps_1}$.} Exactly as in the original, this clause only substitutes a
+different loss continuation and is oblivious to the concrete shape of $\widehat W_\eps$, so it
+transfers verbatim:
+\[
+  \Ssem{\loc{e}g^{\eps_1}}(\rho) = \lambda\gamma.\ \Ssem{e}(\rho)\big(\Lsem{g}(\rho)\big).
+\]
+
+\paragraph{\texttt{reset}\,$e$.} Originally: run $e$ under $\gamma$, discard the recorded loss
+entirely, keep the value. Here that is exactly $\censor$ from Section~3.3:
+\[
+  \Ssem{\mathtt{reset}\ e}(\rho) = \lambda\gamma.\ \censor\big(\Ssem{e}(\rho)(\gamma)\big).
+\]
+This matches \texttt{Correct.hs} exactly: \texttt{reset p = Sel (\textbackslash g ->
+censor (const mempty) (runSel g p))}.
+
+\section{Semantics of Handlers}
+
+We follow the same staged construction as the original (Section 5.3): fix $\rho\in\Sm\Gamma$
+and $\gamma\in\Sm{\sigma'}\to\Rm\eps$, and build a layered $\eps\ell$-algebra structure on
+\[
+  A = \widehat W_\eps(\Sm{\sigma'})^{\Sm{\mathit{par}}}.
+\]
+Because the writer layer is now carried automatically by $\widehat W_\eps$ itself, the
+construction needs no explicit multiplication by $R$ anywhere -- this is the one place where
+the swap strictly \emph{simplifies} the original definitions. For the operations
+\emph{not} handled by $h$ ($\ell_1\in\eps$, i.e.\ shallower than the newly-introduced
+occurrence of $\ell$), pass-through:
+\[
+  \psi_{\ell_1,\op,i}(o,k) = \lambda p.\ \widehat\varphi_{\ell_1,\op,i}\big(o,\ \lambda a.\, k(a)(p)\big).
+\]
+For the handler's own clauses $\op_j\mapsto\lambda^\eps z\!:\!(\dots).\,e_j$, at the newly
+introduced occurrence ($i = \eps(\ell)+1$):
+\[
+  \psi_{\ell,\op_j,i}(o,k) = \lambda p.\ \Ssem{e_j}\big(\rho[(p,o,l_1,k_1)/z]\big)(\gamma),
+\]
+where the delimited continuation is $k_1(p,a) = k(a)(p)$ exactly as before, and the choice
+continuation -- now computed without any $\delta_\eps$-style leaf surgery, using $\collect$ in
+place of it -- is
+\[
+  l_1(p,a) = \lambda\gamma_1.\ \collect\Big(\gamma\dg{\widehat W_\eps}\big(k(a)(p)(\gamma)\big)\Big)
+  \quad \in \widehat S_\eps(R),
+\]
+i.e.\ it \emph{ignores} its nominal continuation $\gamma_1$ (matching Haskell's
+\texttt{hoist}, which does the same), runs the delimited continuation under the ambient
+$\gamma$, extends $\gamma$ homomorphically over the result to obtain a value of $\Rm\eps$, and
+promotes that to an $R$-valued tree via $\collect$ so it can be used as a $\mathtt{loss}$-typed
+value inside $e_j$. This is line for line
+\begin{quote}
+\texttt{hoist (triangle (go g y >>= g))}
+\end{quote}
+from \texttt{handle} in \texttt{Correct.hs}, once \texttt{go g} is unfolded as ``run the
+handler with loss continuation \texttt{g}''.
+
+The return clause needs no multiplication by an accumulated loss either -- again because
+$\widehat W_\eps$ already threads it -- giving a strictly simpler $s$ than the original's
+$s(r,a)=\lambda p.\,r\cdot(\dots)$:
+\[
+  s(a) = \lambda p.\ \Ssem{e_r}\big(\rho[(p,a)/z]\big)(\gamma) \ \in A,
+\]
+matching Haskell's \texttt{hret :: a -> Sel r e b}, which likewise takes no separate loss
+argument. Finally, using the free-algebra property of $\widehat W_{\eps\ell}(\Sm\sigma)$ over
+$A$ (Section 3.2, now instantiated directly at $X = \Sm\sigma$, with no $R\times$ pairing
+needed to seed the extension):
+\[
+  \Ssem{h}(\rho)(p,G)(\gamma) = s\dg{\widehat W_{\eps\ell}}\Big(G\big(\lambda a\in\Sm\sigma.\
+    \gamma\dg{\widehat W_\eps}(s(a)(p))\big)\Big)(p),
+\]
+where the inclusion $\Rm\eps\hookrightarrow\Rm{\eps\ell}$ (from $\eps\subseteq\eps\ell$) is
+left implicit, exactly as sub-effect inclusions are left implicit throughout the original
+paper. This is the mathematical reading of
+\begin{quote}
+\texttt{go g (runSel (\textbackslash x -> transFreeT RightEff (runSel g (hret h x) >>= g)) p)}
+\end{quote}
+where \texttt{transFreeT RightEff} implements the same inclusion $\Rm\eps\hookrightarrow
+\Rm{\eps\ell}$, and \texttt{go g} implements $s\dg{\widehat W_{\eps\ell}}(-)(p)$.
+
+\section{Discussion}
+
+\paragraph{What the swap costs and buys.} Two things changed relative to the original
+Section~5: first, $R$ no longer needs to be paired with the payload type before feeding it to
+a free-monad construction, which removed a handful of $R\times(-)$ occurrences from the
+$\widehat S_\eps$ scheme, the return clause $s$, and the handler extension; second, and more
+substantively, the equations $\psi_{\ell,\op,i}$ and the action $\cdot$ on $\widehat W_\eps$ do
+\emph{not} commute (Section~3.3). Concretely, evaluating \texttt{loss(e1); op(e2)} and
+\texttt{op(e2); loss(e1)} (for independent $e_1,e_2$) now denote different elements of
+$\widehat W_\eps$: the loss is attached to a different node in each case, whereas under the
+original $F_\eps(R\times-)$ both denote the same tree with the same single leaf-loss. This is
+the direct semantic mirror of the algebraic fact from Hyland, Plotkin and Power's
+\emph{tensor}: the original $W_\eps$ is (isomorphic to) the tensor of $F_\eps$ and the writer
+monad, which by construction forces commutativity; $\mathsf{FreeT}_\eps(\mathsf{Writer}_R)$ is
+instead (up to the usual caveats about monad transformers not always agreeing with the
+corresponding algebraic sum/tensor) closer to a \emph{sum}-like combination in which the two
+signatures interleave positionally rather than being identified up to commutation --- see
+Rivas and Jaskelioff's account of composing monoid-shaped notions of computation for the
+general phenomenon.
+
+\paragraph{Soundness and adequacy.} The original Theorems 5.3--5.6 are proved by induction on
+the operational semantics, using at each step only: (i) the generic monad interface of
+$S_\eps$; (ii) the fact that $R_\eps$ is an action $\eps$-algebra; and (iii) the specific
+leaf-shape reasoning inside \texttt{loss}, $(\then)$, and \texttt{reset}, which we have redone
+above against $\widehat W_\eps$. Since the operational semantics of $\lC$ is untouched by this
+note, we expect analogues of Theorems 5.3--5.6 to hold for $\widehat S_\eps$ with $\Rm\eps$ and
+$\collect/\collect_X/\censor$ in place of $R_\eps$ and the leaf-pattern-matching they replace;
+the case analyses of Lemma~5.1 and~5.2 go through unchanged since they only concern values and
+terminal expressions, which never touch the loss bookkeeping at all. The one place a genuinely
+new argument would be needed is wherever the original soundness proof implicitly uses
+commutativity of loss with operation calls to reorder a derivation step -- we have not located
+such a step in the small-step soundness proof sketch, but a full re-verification of
+Theorem~5.3 against $\widehat S_\eps$ is left as future work, alongside a from-scratch proof
+that $\widehat W_\eps$ and $\widehat S_\eps$ as defined here indeed satisfy the monad laws (we
+have checked the unit laws and the algebra-homomorphism property of $f\dg{\widehat W_\eps}$ in
+Section~3.2, but not associativity of bind in full).
+
+As a form of executable evidence, \texttt{Correct.hs} implements exactly $\widehat S_\eps$ (as
+argued constructively above, definition by definition), and runs the same example programs as
+the original selection-monad implementation, giving operational -- if not yet formally
+proved -- confidence that the construction is coherent.
+
+\section{Porting Appendix B: Correctness Proofs}
+
+Appendix B of the Full Version repeats the denotational semantics (its Sections B.1--B.3
+duplicate the material we have already redone in Sections 2--5 above) and then, in Section
+B.4, proves soundness and adequacy against the operational semantics. We now port Section B.4
+lemma by lemma. The operational semantics of $\lC$ (its reduction rules, frames, and the
+termination theorem, Appendix A) is untouched by the swap, so every statement below is
+word-for-word the original's statement with $S_\eps,W_\eps,R_\eps,F_\eps,\varphi,\delta_\eps$
+replaced by $\widehat S_\eps,\widehat W_\eps,\Rm\eps,$ (no separate plain free monad),
+$\widehat\varphi,\collect$; only the \emph{proofs} of the lemmas that manipulate the leaf shape
+of $W_\eps$ need new arguments, using $\tell,\censor,\collect,\collectX{(-)}$ from
+Section~3.3--3.4. As in the original, we restrict attention to the core calculus of Sections
+2--5 (variables, constants, tuples, projection, abstraction, application, operations,
+\texttt{loss}, $(\then)$, the local construct, \texttt{reset}, and handling); extending to sum
+types, \texttt{nat}, and \texttt{list} is routine and, as in the original text, entirely
+orthogonal to the swap (every one of those extra clauses is proved exactly as in the original,
+verbatim, since none of them ever inspects the shape of $W_\eps$).
+
+\subsection{Substitution and value semantics}
+
+\begin{lemma}[Substitution]
+Suppose $\Gamma\vdash v:\sigma$ and $\Gamma,x{:}\sigma\vdash e:\tau\,!\,\eps$. Then
+$\Gamma\vdash e[v/x]:\tau\,!\,\eps$.
+\end{lemma}
+
+This is a syntactic fact about typing and is untouched by the swap. As before, we record the
+value semantics $\Vsem{v}:\Sm\Gamma\to\Sm\sigma$ for $\Gamma\vdash v:\sigma$, needed to state
+soundness and adequacy:
+\[
+  \Vsem{x}(\rho) = \rho(x), \qquad
+  \Vsem{c}(\rho) = [\![c]\!], \qquad
+  \Vsem{(v_1,\dots,v_n)}(\rho) = (\Vsem{v_1}(\rho),\dots,\Vsem{v_n}(\rho)), \qquad
+  \Vsem{\lambda^{\eps_1}x{:}\sigma_1.\,e}(\rho) = \lambda a\in\Ssem{\sigma_1}.\ \Ssem{e}(\rho[a/x]).
+\]
+
+\subsection{Values denote units (Lemma B.2)}
+
+\begin{lemma}
+For any value $\Gamma\vdash v:\sigma\,!\,\eps$: $\Ssem{v}(\rho) = \eta^{\widehat S_\eps}(\Vsem{v}(\rho))$.
+\end{lemma}
+\begin{proof}
+By structural induction on $v$; every case is generic in the monad and transfers with $\eta^{\widehat S_\eps}$
+in place of $\eta^{S_\eps}$. E.g.\ for $v=x$: $\Ssem{x}(\rho) = \eta^{\widehat S_\eps}(\rho(x)) =
+\eta^{\widehat S_\eps}(\Vsem{x}(\rho))$; for $v=(v_1,\dots,v_n)$, using the induction hypothesis
+at each $v_i$ and that $\eta^{\widehat S_\eps}$ is a unit for $\mathsf{let}_{\widehat S_\eps}$,
+\[
+  \Ssem{(v_1,\dots,v_n)}(\rho) = \mathsf{let}_{\widehat S_\eps}\ a_1\in\Ssem{\sigma_1}\ \mathsf{be}\
+     \eta^{\widehat S_\eps}(\Vsem{v_1}(\rho))\ \mathsf{in}\ \cdots\ \mathsf{in}\ \eta^{\widehat S_\eps}((a_1,\dots,a_n))
+   = \eta^{\widehat S_\eps}\big((\Vsem{v_1}(\rho),\dots,\Vsem{v_n}(\rho))\big);
+\]
+and for $v=\lambda^{\eps_1}x{:}\sigma_1.e$, directly $\Ssem{v}(\rho) = \eta^{\widehat
+S_\eps}(\lambda a.\Ssem{e}(\rho[a/x])) = \eta^{\widehat S_\eps}(\Vsem{v}(\rho))$. None of these
+steps ever inspects $\widehat W_\eps$.
+\end{proof}
+
+\subsection{The action law simplifies (Lemma B.3)}
+
+Fix a handler $h$, environment $\rho$, and $\gamma\in\Sm{\sigma'}\to\Rm\eps$ as in Section~5,
+and let $s:\Sm\sigma\to A$ ($A = \widehat W_\eps(\Sm{\sigma'})^{\Sm{\mathit{par}}}$) be the
+return-clause map from Section~5. Write $\tell(r)^P$ for $\tell(r)$ applied pointwise to a
+function into $A$.
+
+\begin{lemma}
+$s\dg{\widehat W_{\eps\ell}}\circ\tell(r) = \tell(r)^P\circ s\dg{\widehat W_{\eps\ell}}$.
+\end{lemma}
+\begin{proof}
+The original's proof of the analogous fact needs the extension-uniqueness argument (both sides
+are shown to be homomorphic extensions of the same map on generators) precisely because there
+$r\cdot(-)$ acts on \emph{every} leaf of $F_\eps(R\times X)$ simultaneously, and one must invoke
+the commutativity of the action with $\psi$ to know that the extended map is still a
+homomorphism. Here $\tell(r)$ only ever touches the \emph{root} loss slot -- $\tell(r)(r_0,n) =
+(r+r_0,n)$ -- so the fact is immediate from the recursive definition of $f\dg{\widehat
+W_{\eps\ell}}$ itself, with no commutation needed at all:
+\[
+  s\dg{\widehat W_{\eps\ell}}(\tell(r)(r_0,n)) = s\dg{\widehat W_{\eps\ell}}(r+r_0,n)
+     = (r+r_0)\cdot(\cdots) = r\cdot\big(r_0\cdot(\cdots)\big) = r\cdot s\dg{\widehat W_{\eps\ell}}(r_0,n),
+\]
+using only additivity of the action on $A$ (the case split on whether $n$ is a leaf or an
+internal node is the same on both sides of ``$(\cdots)$'' and immaterial to the argument). This
+is one of the two places (with the return clause of Section~5) where the swap strictly
+simplifies a piece of the original development.
+\end{proof}
+
+\subsection{Pairing and application (Lemma B.4)}
+
+\begin{lemma}\
+\begin{enumerate}[label=(\arabic*)]
+\item For $\Gamma\vdash v:\sigma$ and $\Gamma\vdash e:\tau\,!\,\eps$:
+  $\Ssem{(v,e)}(\rho) = \mathsf{let}_{\widehat S_\eps}\ b\in\Ssem\tau\ \mathsf{be}\ \Ssem{e}(\rho)\ \mathsf{in}\ \eta^{\widehat S_\eps}((\Vsem{v}(\rho),b))$.
+\item For $\Gamma\vdash v:\sigma\to\tau\,!\,\eps$ and $\Gamma\vdash e:\sigma\,!\,\eps$:
+  $\Ssem{v\,e}(\rho) = \mathsf{let}_{\widehat S_\eps}\ a\in\Ssem\sigma\ \mathsf{be}\ \Ssem{e}(\rho)\ \mathsf{in}\ \Vsem{v}(\rho)(a)$.
+\end{enumerate}
+\end{lemma}
+\begin{proof}
+Both are the generic clauses for tuples and application, using Lemma~5.1's hat-analogue (just
+proved) to replace $\Ssem{v_i}(\rho)$ by $\eta^{\widehat S_\eps}(\Vsem{v_i}(\rho))$ and the unit
+law for $\mathsf{let}_{\widehat S_\eps}$; neither uses $\widehat W_\eps$'s internal shape.
+\end{proof}
+
+\subsection{Loss continuations and $(\then)$ (Lemma B.5)}
+
+This is the first place the internal shape of $\widehat W_\eps$ genuinely enters. Recall from
+Section~4 the \emph{general} definition of the loss-function semantics, for any
+$\Gamma,x{:}\sigma\vdash e:\mathtt{loss}\,!\,\eps$:
+$\Lsem{\lambda^\eps x{:}\sigma.\,e}(\rho)(a) = \collapse(\Ssem{e}(\rho[a/x])(\gamma_0))$, where
+$\gamma_0 = \lambda r{\in}R.\,\eta^{\widehat W_\eps}(())$. The lemma below is not a new
+definition but a \emph{derived compositional law} for the special case where the body is
+itself a $(\then)$-chain, exactly mirroring the role of the original Lemma B.5.
+
+\begin{lemma}\
+\begin{enumerate}[label=(\arabic*)]
+\item For $\Gamma\vdash e:\sigma\,!\,\eps$ and $\Gamma\vdash g:\sigma\to\mathtt{loss}\,!\,\eps_1$
+  with $\eps_1\subseteq\eps$, and for every $\gamma_1$:
+  \[
+    \Ssem{e\then g}(\rho)(\gamma_1) = \collect\big(\Rx\eps(\Ssem{e}(\rho)\mid\Lsem{g}(\rho))\big).
+  \]
+\item For $\Gamma\vdash g:\sigma\to\mathtt{loss}\,!\,\eps$:
+  $\collect\circ\Lsem{g}(\rho) = \lambda a\in\Ssem\sigma.\ \Vsem{g}(\rho)\,a\,\gamma_1$ for every $\gamma_1$.
+\item For $\Gamma,x{:}\sigma\vdash e:\tau\,!\,\eps$ and $\Gamma,x{:}\sigma\vdash g:\tau\to\mathtt{loss}\,!\,\eps_1$
+  with $\eps_1\subseteq\eps$:
+  \[
+    \Lsem{\lambda^\eps x{:}\sigma.\,e\then g}(\rho) = \lambda a\in\Ssem\sigma.\ \Rx\eps\big(\Ssem{e}(\rho[a/x])\mid\Lsem{g}(\rho[a/x])\big).
+  \]
+\end{enumerate}
+\end{lemma}
+\begin{proof}
+Parts (1) and (2) by mutual induction on $g$.
+
+\emph{Part (1).} Unfolding the Section~4 definition of $(\then)$ (which manifestly does not
+mention its own argument $\gamma_1$, giving the claimed constancy for free) and applying
+$\collectX{\Ssem\sigma}$ to expose the pair of value and accumulated loss at the leaves of
+$\Ssem{e}(\rho)(\Lsem{g}(\rho))$:
+\[
+  \Ssem{e\then g}(\rho)(\gamma_1) =
+  \mathsf{let}_{\widehat W_\eps}\ (a,r_1)\in\Ssem\sigma\times R\ \mathsf{be}\ \collectX{\Ssem\sigma}\big(\Ssem{e}(\rho)(\Lsem{g}(\rho))\big)\ \mathsf{in}\
+  \mathsf{let}_{\widehat W_\eps}\ (r_3,r_2)\in R\times R\ \mathsf{be}\ \collectX{R}\big(\Vsem{g}(\rho)\,a\,\gamma_0\big)\ \mathsf{in}\ \tell(r_2)\big(\eta^{\widehat W_\eps}(r_1+r_3)\big).
+\]
+Using the induction hypothesis (2) to replace $\Vsem{g}(\rho)\,a\,\gamma_0$ by
+$\collect(\Lsem{g}(\rho)(a))$, and unfolding $\collect = \Wm\eps(\pi_2)\circ\collectX 1$ so that
+$\collectX{R}(\collect(u)) = \collectX R(\Wm\eps(\pi_2)(\collectX 1(u)))$ has the same total
+accumulated loss as $\collectX 1(u)$ paired with its (now doubly-recorded) value, one checks by
+the defining clauses of $\collectX{(-)}$, $\bump$, and $\tell$ that the right-hand side above
+collapses to exactly $\gamma^{\dagger\Wm\eps}(\Ssem{e}(\rho)(\gamma))$ for $\gamma := \Lsem
+g(\rho)$, i.e.\ to $\Rx\eps(\Ssem e(\rho)\mid\Lsem g(\rho)) \in \Rm\eps$, both sides simply
+re-adding the same two loss contributions $r_1$ and (via $g$) $r_3$ at the same point and
+zeroing the same intermediate bookkeeping; applying the outer $\collect$ then promotes that
+$\Rm\eps$ value to the $\Wm\eps(R)$-typed result, matching the left-hand side exactly. (This is
+the hat-analogue of the original's five-line chain via $\delta_\eps$; here every step is a
+direct unfolding of $\collect,\collectX{(-)},\tell$ rather than a bind-fusion law for
+$F_\eps(R\times-)$'s $\delta_\eps$, but the computation performed is the same one: total up the
+loss along $e$'s evaluation, total up the loss along $g(a)$'s evaluation against the zero
+continuation, add, and record.)
+
+\emph{Part (2).} If $g=\lambda^\eps x{:}\sigma.0$ both sides are $\collect(\eta^{\widehat
+W_\eps}(0)) = \collect(0,\iota_1(()))=(0,\iota_1(0))$ against $\Vsem g(\rho)\,a\,\gamma_1 =
+(0,\iota_1(0))$ directly. If $g=\lambda^\eps x{:}\sigma.\,e_2\then g_1$, then $\Vsem
+g(\rho)\,a\,\gamma_1 = \Ssem{e_2\then g_1}(\rho[a/x])(\gamma_1) = \collect\big(\Rx\eps(\Ssem{e_2}(\rho[a/x])\mid\Lsem{g_1}(\rho[a/x]))\big)$
+by part (1), which is exactly $\collect(\Lsem g(\rho)(a))$ by part (3) applied at $e:=e_2,g:=g_1$
+-- so it remains to note part (3) does not depend on part (2) at the same $g$, only at the
+strictly shorter $g_1$, closing the induction.
+
+\emph{Part (3).} Immediate from parts (1)-(2): unfolding the base definition of $\mathcal L$ at
+$e' := e\then g$ gives $\collapse(\Ssem{e\then g}(\rho[a/x])(\gamma_0))$; by part (1) this is
+$\collapse(\collect(\Rx\eps(\Ssem e(\rho[a/x])\mid\Lsem g(\rho[a/x]))))$, and one checks directly
+from the clauses of $\collapse$ and $\collect$ that $\collapse\circ\collect = \mathrm{id}$ on
+$\Rm\eps$ (collect installs the total loss as a fresh $R$-valued leaf with everything else
+zeroed; collapse discards the (now-zero) root loss and keeps that leaf value, recovering exactly
+the argument), giving $\Rx\eps(\Ssem e(\rho[a/x])\mid\Lsem g(\rho[a/x]))$ as required.
+\end{proof}
+
+\subsection{The context lemma (Lemma B.6)}
+
+\begin{lemma}
+For $e:\sigma\,!\,\eps$ and $F[e]:\tau\,!\,\eps$ where $F$ is a regular frame:
+\[
+  \Ssem{F[e]}(\rho) = \mathsf{let}_{\widehat S_\eps}\ a\in\Ssem\sigma\ \mathsf{be}\ \Ssem{e}(\rho)\ \mathsf{in}\ \Ssem{F[x]}(\rho[x/a]).
+\]
+\end{lemma}
+\begin{proof}
+By cases on the form of $F$, as in the original; we record the same illustrative examples. For
+$F=f(\square)$: both sides unfold to $\eta^{\widehat S_\eps}([\![f]\!](a))$ under the binding
+$a:=\Ssem e(\rho)$, using only the unit law of $\mathsf{let}_{\widehat S_\eps}$. For $F=\square.i$:
+$\Ssem{e.i}(\rho) = \widehat S_\eps(\pi_i)(\Ssem e(\rho)) = \mathsf{let}_{\widehat S_\eps}\ a\in(\sigma_1,\dots,\sigma_n)\
+\mathsf{be}\ \Ssem e(\rho)\ \mathsf{in}\ \pi_i(a)$, again purely a fact about the abstract
+$\widehat S_\eps$ interface. No case here touches $\widehat W_\eps$'s internal structure, so
+every case transfers verbatim with $\widehat S_\eps$ in place of $S_\eps$.
+\end{proof}
+
+\subsection{Threading loss continuations through frames (Lemma B.7)}
+
+\begin{lemma}
+For $e:\sigma\,!\,\eps$, $F[e]:\tau\,!\,\eps$, and $g:\tau\to\mathtt{loss}\,!\,\eps$:
+\[
+  \Ssem{F[e]}\Lsem g = \mathsf{let}_{\widehat W_\eps}\ a\in\Ssem\sigma\ \mathsf{be}\ \Ssem{e}\Lsem{\lambda^\eps x{:}\sigma.\,F[x]\then g}\ \mathsf{in}\ \Ssem{F[x]}(x{\mapsto}a)\Lsem{g}.
+\]
+\end{lemma}
+\begin{proof}
+Exactly the original's three-line argument, unchanged in form:
+\[
+  \Ssem{F[e]}\Lsem g
+  \overset{\text{Lem.~5.6(hat)}}{=} \big(\mathsf{let}_{\widehat S_\eps}\ a\in\Ssem\sigma\ \mathsf{be}\ \Ssem e\ \mathsf{in}\ \Ssem{F[x]}(x{\mapsto}a)\big)\Lsem g
+  \overset{\text{Eq.\ for } f\dg{\widehat S_\eps}}{=} \mathsf{let}_{\widehat W_\eps}\ a\in\Ssem\sigma\ \mathsf{be}\ \Ssem e\big(\lambda a.\,\Rx\eps(\Ssem{F[x]}(x{\mapsto}a)\mid\Lsem g)\big)\ \mathsf{in}\ \Ssem{F[x]}(x{\mapsto}a)\Lsem g,
+\]
+and the inner continuation $\lambda a.\,\Rx\eps(\Ssem{F[x]}(x{\mapsto}a)\mid\Lsem g)$ is exactly
+$\Lsem{\lambda^\eps x{:}\sigma.\,F[x]\then g}$ by Lemma~7.5(3) (the hat-analogue of Lemma~B.5),
+giving the claim. Since the Kleisli-extension formula for $\widehat S_\eps$ is syntactically
+identical to the original's equation~(6) (Section~3.4), this proof is a verbatim transcription.
+\end{proof}
+
+\subsection{Operations under contexts (Lemma B.8)}
+
+\begin{lemma}
+For $K[\op(v)]:\sigma\,!\,\eps$ with $\op\notin\mathrm{heff}(K)$ and $\op:\mathit{out}\xrightarrow{\ell}\mathit{in}$:
+\[
+  \Ssem{K[\op(v)]}(\rho)(\gamma) = \widehat\varphi_{\ell,\op,\eps(\ell)}\big(\Vsem v(\rho),\ \lambda a\in\Ssem{\mathit{in}}.\ \Ssem{K[x]}(\rho[a/x])(\gamma)\big).
+\]
+\end{lemma}
+\begin{proof}
+By induction on the size of $K$. The base case $K=\square$ is the $\op(e)$ clause of Figure~9
+(hat-version) applied to a value: $\Ssem{\op(v)}(\rho)(\gamma) = \widehat\varphi_{\ell,\op,\eps(\ell)}(\Vsem
+v(\rho),(\eta^{\widehat W_\eps})^{\Ssem{\mathit{in}}})$, and $(\eta^{\widehat
+W_\eps})^{\Ssem{in}} = \lambda a.\,(0,\iota_1(a)) = \lambda a.\,\Ssem{x}(\rho[a/x])(\gamma)$ for
+any $\gamma$ (since $\Ssem x(\rho')(\gamma)=\eta^{\widehat W_\eps}(\rho'(x))$ regardless of
+$\gamma$), matching the claim. For the inductive cases:
+\begin{itemize}
+\item $K=F[K_1]$ (regular frame): purely a fact about the abstract $\widehat S_\eps$-algebra
+  structure of $\widehat\varphi^X$ combined with Lemma~7.6 (hat-Lemma~B.6), unchanged in form
+  from the original: the induction hypothesis lets us pull $F[\square]$ through
+  $\widehat\varphi^{\Ssem\tau}_{\ell,\op,\eps(\ell)}$, using that $\widehat\varphi^X_{\ell,\op,i}(o,f)(\gamma)
+  = \widehat\varphi_{\ell,\op,i}(o,\lambda x.f(x)(\gamma))$ is exactly the naturality needed.
+\item $K=\mathtt{with}\ h\ \mathtt{from}\ v\ \mathtt{handle}\ K_1$, handling $\ell'\ne\ell$:
+  writing $T[\gamma]=\lambda a.\,\gamma\dg{\widehat W_\eps}(s(a)(\Vsem v(\rho)))$ for the
+  continuation constructed in Section~5's handler formula, we have by that formula and the
+  induction hypothesis
+  \[
+    \Ssem{\mathtt{with}\ h\ \mathtt{from}\ v\ \mathtt{handle}\ K_1[\op(v)]}(\rho)(\gamma)
+       = s\dg{\widehat W_{\eps\ell'}}\Big(\widehat\varphi_{\ell,\op,\eps(\ell)}\big(\Vsem v(\rho),\lambda a.\,\Ssem{K_1[x]}(\rho[a/x])(T[\gamma])\big)\Big)(\Vsem v(\rho)),
+  \]
+  and since $\ell\ne\ell'$ (the operation is not the one $h$ handles), $\widehat\varphi_{\ell,\op,\eps(\ell)}$
+  is exactly the pass-through case of $\widehat\psi$ from Section~5, so $s\dg{\widehat
+  W_{\eps\ell'}}$ applied to it unfolds, by the defining recursion of $\dg{\widehat
+  W_{\eps\ell'}}$, to $\widehat\varphi_{\ell,\op,\eps(\ell)}$ again (now one level further out),
+  giving exactly $\widehat\varphi_{\ell,\op,\eps(\ell)}(\Vsem v(\rho), \lambda a.\, \Ssem{\mathtt{with}\ h\ \mathtt{from}\ v\ \mathtt{handle}\ K_1[x]}(\rho[a/x])(\gamma))$
+  as required.
+\item $K=\loc{K_1}g^{\eps_1}$: the local-construct clause $\Ssem{\loc e g^{\eps_1}}(\rho)=\lambda\gamma.\Ssem e(\rho)(\Lsem g(\rho))$
+  simply substitutes a fixed continuation and commutes with $\widehat\varphi$ trivially (it does
+  not touch $\widehat W_\eps$'s shape at all), so this case is immediate from the induction
+  hypothesis.
+\item $K=K_1\then\lambda^{\eps_1}x{:}\tau.\,e_1$: unfolding Section~4's $(\then)$-clause and the
+  induction hypothesis on $K_1$, the node $\widehat\varphi_{\ell,\op,\eps(\ell)}(o,\kappa)$
+  produced by $K_1$ carries recorded loss $0$ at its own root (by definition of $\widehat\varphi$),
+  so $\collectX{\Ssem\tau}$ and $\tell$ both simply recurse through it into its children
+  unchanged, letting the whole $(\then)$-construction be pulled inside the
+  $\lambda a\in\Ssem{\mathit{in}}.\,(-)$ exactly as in the original's calculation (there, using
+  that $F_\eps(R\times-)$'s bind passes through internal nodes verbatim; here, using that
+  $\collectX{(-)}$'s and $\tell$'s Free-node clauses are literally the identity-on-shape
+  recursions given in Section~3.3--3.4).
+\item $K=\mathtt{reset}\ K_1$: by the $\censor$-based clause of Section~4, and because
+  $\censor$'s own Free-node clause is $\censor(r_0,\iota_2((\ell,\op,i),(o,\kappa))) =
+  (0,\iota_2((\ell,\op,i),(o,\lambda a.\censor(\kappa(a)))))$ -- i.e.\ $\censor$ commutes with
+  $\widehat\varphi_{\ell,\op,i}$ by its very definition, not merely up to a lemma -- the case
+  is immediate: $\censor(\widehat\varphi_{\ell,\op,\eps(\ell)}(\Vsem v(\rho),\kappa)) =
+  \widehat\varphi_{\ell,\op,\eps(\ell)}(\Vsem v(\rho),\lambda a.\censor(\kappa(a)))$, matching
+  $\Ssem{\mathtt{reset}\ K_1[x]}(\rho[a/x])(\gamma)$ pointwise.
+\end{itemize}
+\end{proof}
+
+\subsection{Small-step soundness (Theorem B.9)}
+
+\begin{theorem}[Small-step soundness]
+Suppose $e:\sigma\,!\,\eps$ and $g:\sigma\to\mathtt{loss}\,!\,\eps_1$ with $\eps_1\subseteq\eps$. Then
+\[
+  g\vdash_\eps e\xrightarrow{r} e' \implies \Ssem{e}\Lsem g = r\cdot\big(\Ssem{e'}\Lsem g\big).
+\]
+\end{theorem}
+\begin{proof}
+By cases on the transition, using Lemma~7.2 (hat-Lemma~B.2) without comment. Cases (1)-(8) of
+the original (basic function application, projection, \texttt{cases}/\texttt{iter}/\texttt{fold}
+reduction, $\beta$-reduction) never mention $F_\eps$, $W_\eps$, or $R_\eps$ at all -- they only
+manipulate $\eta^{S_\eps}$, $\mathsf{let}_{S_\eps}$, and value semantics -- so they transfer
+completely unchanged with $\widehat S_\eps,\eta^{\widehat S_\eps}$ in place of $S_\eps,\eta^{S_\eps}$;
+e.g.\ case (1), $f(v)\xrightarrow{0}v'$ where $f(v)\to v'$:
+\[
+  \Ssem{f(v)}\Lsem g = \mathsf{let}_{\widehat S_\eps}\ a\in\Ssem\sigma\ \mathsf{be}\ \eta^{\widehat S_\eps}(\Vsem v)\ \mathsf{in}\
+    \eta^{\widehat S_\eps}([\![f]\!](a)) = \eta^{\widehat S_\eps}(\Vsem{v'}) = \Ssem{v'}\Lsem g = 0\cdot\Ssem{v'}\Lsem g.
+\]
+We give the remaining, swap-relevant cases in full.
+
+\emph{(9) $g\vdash_\eps \mathtt{loss}(r)\xrightarrow{r} ()$.} For any $\gamma$:
+\[
+  \Ssem{\mathtt{loss}(r)}(\gamma) = \mathsf{let}_{\widehat W_\eps}\ a\in R\ \mathsf{be}\ \eta^{\widehat W_\eps}(r)\ \mathsf{in}\ \tell(a)(\eta^{\widehat W_\eps}(()))
+     = \tell(r)(\eta^{\widehat W_\eps}(())) = (r,\iota_1(())) = r\cdot(0,\iota_1(())) = r\cdot\Ssem{()}(\gamma).
+\]
+
+\emph{(13) $g\vdash_\eps v\then\lambda^{\eps_1}x{:}\sigma.e\xrightarrow{0}\loc{e[v/x]}{\lambda^{\eps\eps_1}x{:}\sigma.0}$.}
+Unfolding Section~4's clause with $\Ssem v(\rho)=\eta^{\widehat W_\eps}(\Vsem v)$:
+\[
+  \Ssem{v\then\lambda x.e}(\gamma) = \mathsf{let}_{\widehat W_\eps}(a,r_1)\in\sigma\times R\ \mathsf{be}\ \collectX\sigma(0,\iota_1(\Vsem v))\ \mathsf{in}\ \cdots
+     = \mathsf{let}_{\widehat W_{\eps_1}}(r_3,r_2)\in R\times R\ \mathsf{be}\ \collectX{R}\big(\Ssem e(x{\mapsto}\Vsem v)(\gamma_0)\big)\ \mathsf{in}\ \tell(r_2)(\eta(0+r_3)),
+\]
+since $\collectX\sigma(0,\iota_1(\Vsem v)) = (0,\iota_1((\Vsem v,0)))$ forces $a=\Vsem v$,
+$r_1=0$. This is precisely $\collapse(\Ssem{e[v/x]}(\gamma_0))$ up to relabelling $r_2,r_3$,
+which is $\Lsem{\lambda^{\eps\eps_1}x{:}\sigma.0}$'s value at $()$ composed with the general
+$\mathcal L$-definition applied to $e[v/x]$ -- i.e.\ exactly $\Ssem{\loc{e[v/x]}{\lambda x.0}}(\gamma)$
+by the local-construct clause, matching the target with loss $0$.
+
+\emph{(14) $g\vdash_\eps \mathtt{reset}\ v\xrightarrow{0}v$.}
+$\Ssem{\mathtt{reset}\ v}\Lsem g = \censor(\Ssem v\Lsem g) = \censor(0,\iota_1(\Vsem v)) = (0,\iota_1(\Vsem v)) = \Ssem v\Lsem g = 0\cdot\Ssem v\Lsem g$,
+using that $\censor$ is already the identity on a $\iota_1$-leaf carrying recorded loss $0$.
+
+\emph{(15) Frame rule} ($\lambda^\eps x{:}\tau.(F[x]\then g)\vdash_\eps e_1\xrightarrow{r}e_1'
+\implies g\vdash_\eps F[e_1]\xrightarrow{r}F[e_1']$): by the induction hypothesis and Lemma~7.7
+(hat-Lemma~B.7) applied twice, exactly as in the original:
+\[
+  \Ssem{F[e_1]}\Lsem g \overset{\text{Lem 7.7}}{=} \mathsf{let}_{\widehat W_\eps}\,a\,\mathsf{be}\,\Ssem{e_1}\Lsem{\lambda x.F[x]\then g}\,\mathsf{in}\,\Ssem{F[x]}(a)\Lsem g
+     \overset{\text{IH}}{=} \mathsf{let}_{\widehat W_\eps}\,a\,\mathsf{be}\,r\cdot\Ssem{e_1'}\Lsem{\lambda x.F[x]\then g}\,\mathsf{in}\,\Ssem{F[x]}(a)\Lsem g
+     = r\cdot\Ssem{F[e_1']}\Lsem g,
+\]
+the last step by $\tell(r)$ (i.e.\ $r\cdot(-)$) commuting with $\mathsf{let}_{\widehat W_\eps}$'s
+leaf clause, which is immediate from the bind formula of Section~3.2.
+
+\emph{(16) $\mathtt{with}\ h\ \mathtt{from}\ v\ \mathtt{handle}\ e_2\to \mathtt{with}\ h\ \mathtt{from}\ v\ \mathtt{handle}\ e_2'$
+(step inside a handled body).} Let $v_r=\lambda^\eps z{:}(\mathit{par},\sigma_1).e_r$ be $h$'s
+return clause. By the induction hypothesis, $\Ssem{e_2}\Lsem{\lambda^\eps x{:}\sigma_1.\,v_r(v,x)\then g} = r\cdot\Ssem{e_2'}\Lsem{\lambda^\eps x{:}\sigma_1.\,v_r(v,x)\then g}$.
+As in the original, one checks $\Lsem{\lambda^\eps x{:}\sigma_1.v_r(v,x)\then g} = \lambda a.\,\Rx\eps(\Ssem{e_r}[(\Vsem v,a)/z]\mid\Lsem g)$
+by Lemma~7.5(3), so both $\Ssem{\mathtt{with}\ h\ \mathtt{from}\ v\ \mathtt{handle}\ e_2}\Lsem g$
+and its primed counterpart equal $s\dg{\widehat W_{\eps\ell}}(\Ssem{e_2}(\cdots))(\Vsem v)$ and
+$s\dg{\widehat W_{\eps\ell}}(\Ssem{e_2'}(\cdots))(\Vsem v)$ respectively, by Section~5's handler
+formula. Applying $s\dg{\widehat W_{\eps\ell}}$ (a function, hence respecting the induction
+hypothesis's equation) and then Lemma~7.3 (hat-Lemma~B.3) to pull $r\cdot(-)$ back out:
+\[
+  s\dg{\widehat W_{\eps\ell}}\big(\Ssem{e_2}(\cdots)\big)(\Vsem v) = s\dg{\widehat W_{\eps\ell}}\big(r\cdot\Ssem{e_2'}(\cdots)\big)(\Vsem v)
+  \overset{\text{Lem.\ 7.3}}{=} r\cdot\Big(s\dg{\widehat W_{\eps\ell}}\big(\Ssem{e_2'}(\cdots)\big)(\Vsem v)\Big),
+\]
+as required. (Recall from Section~7.3 that Lemma~7.3's proof no longer needs the original's
+uniqueness-of-extension argument, so this case is, if anything, slightly more direct than the
+original.)
+
+\emph{(10) Operation call under a handler} ($g\vdash_\eps \mathtt{with}\ h\ \mathtt{from}\ v_1\ \mathtt{handle}\ K[\op(v_2)]\xrightarrow{0}v_o(v_1,v_2,f_l,f_k)$,
+where $\op\notin\mathrm{heff}(K)$, $\op\mapsto v_o\in h$, and, crucially,
+\[
+  f_k = \lambda^\eps(p,y){:}(\mathit{par},\mathit{in}).\ \loc{\mathtt{with}\ h\ \mathtt{from}\ p\ \mathtt{handle}\ K[y]}{g}^\eps,
+  \qquad
+  f_l = \lambda^\eps(p,y){:}(\mathit{par},\mathit{in}).\ (\mathtt{with}\ h\ \mathtt{from}\ p\ \mathtt{handle}\ K[y])\then g
+\]
+-- note $f_k$ is wrapped in the local construct $\loc{\cdot}{g}^\eps$; \emph{this wrapper is
+essential, and Section~8 explains exactly why}). Using Lemma~7.8 (hat-Lemma~B.8) and writing
+$T[\gamma]=\lambda a.\,\Rx\eps(\Ssem{e_r}[(\Vsem{v_1},a)/z]\mid\gamma)$:
+\[
+  \Ssem{\mathtt{with}\ h\ \mathtt{from}\ v_1\ \mathtt{handle}\ K[\op(v_2)]}\Lsem g
+  = s\dg{\widehat W_{\eps\ell}}\Big(\widehat\varphi_{\ell,\op,i}\big(\Vsem{v_2},\lambda a.\,\Ssem{K[y]}(y{\mapsto}a)(T[\Lsem g])\big)\Big)(\Vsem{v_1})
+  = \Ssem{e_o}\big(z{\mapsto}(\Vsem{v_1},\Vsem{v_2},l_1,k_1)\big)\Lsem g,
+\]
+where $k_1(p,a) = s\dg{\widehat W_{\eps\ell}}(\Ssem{K[y]}(y{\mapsto}a)(T[\Lsem g]))(p)$ and
+$l_1(p,a) = \collect\big(\Lsem g\dg{\widehat W_\eps}(k_1(p,a))\big)$ (a bare, $\gamma$-independent
+value of $\Sm\eps(R)$, since $\collect$ and $\Lsem g\dg{\widehat W_\eps}$ have already discharged
+all dependence on any further continuation) -- and one checks, exactly as in the original,
+\[
+  \Ssem{f_k}(p,a)(\gamma_1) = \Ssem{\loc{\mathtt{with}\ h\ \mathtt{from}\ p\ \mathtt{handle}\ K[y]}{g}^\eps}(y{\mapsto}a)(\gamma_1)
+     = \Ssem{\mathtt{with}\ h\ \mathtt{from}\ p\ \mathtt{handle}\ K[y]}(y{\mapsto}a)\Lsem g = k_1(p,a)(\gamma_1),
+\]
+\emph{for every $\gamma_1$}, since the local-construct clause $\Ssem{\loc e g^\eps}(\rho)=\lambda\gamma.\Ssem e(\rho)(\Lsem g(\rho))$
+overrides whatever continuation $f_k$ is applied to with $\Lsem g$ -- this is exactly why
+$S[|f_k|](p,a)$ can be identified with the single, $\gamma$-independent element $k_1(p,a)$ of
+$A=\widehat W_\eps(\Sm{\sigma'})^{\Sm{\mathit{par}}}$ that the handler algebra of Section~5
+requires. Similarly $\Ssem{f_l}(p,a)(\gamma_1) = \collect(\Rx\eps(\Ssem{\mathtt{with}\ h\
+\mathtt{from}\ p\ \mathtt{handle}\ K[y]}(y{\mapsto}a)\mid\Lsem g)) = \collect(\Lsem g\dg{\widehat
+W_\eps}(k_1(p,a))) = l_1(p,a)$, by Lemma~7.5(1) followed by the identity just established.
+
+\emph{(11) $g\vdash_\eps \mathtt{with}\ h\ \mathtt{from}\ v_1\ \mathtt{handle}\ v_2\xrightarrow{0}v_r(v_1,v_2)$.}
+Using Lemma~7.2 to replace $\Ssem{v_2}$ by $\eta^{\widehat W_\eps}(\Vsem{v_2})$ inside the
+handler formula of Section~5, and that $\tell(0)=\mathrm{id}$:
+\[
+  \Ssem{\mathtt{with}\ h\ \mathtt{from}\ v_1\ \mathtt{handle}\ v_2}(\gamma)
+   = s\dg{\widehat W_{\eps\ell}}\big(\eta^{\widehat W_{\eps\ell}}(\Vsem{v_2})\big)(\Vsem{v_1})
+   = 0\cdot s(\Vsem{v_2})(\Vsem{v_1}) = \Ssem{e_r}(z{\mapsto}(\Vsem{v_1},\Vsem{v_2}))(\gamma) = \Ssem{v_r(v_1,v_2)}(\gamma),
+\]
+using the return clause $s(a)=\lambda p.\Ssem{e_r}(\rho[(p,a)/z])(\gamma)$ of Section~5 directly
+(with no $r\cdot(-)$ to carry, as noted in Section~5).
+
+\emph{(17) $\loc{e}{g_1}^{\eps_1}$ frame rule.} By the induction hypothesis
+$\Ssem e\Lsem{g_1} = r\cdot\Ssem{e'}\Lsem{g_1}$, and directly from the local-construct clause:
+$\Ssem{\loc e{g_1}^{\eps_1}}\Lsem g = \Ssem e\Lsem{g_1} = r\cdot\Ssem{e'}\Lsem{g_1} = r\cdot\Ssem{\loc{e'}{g_1}^{\eps_1}}\Lsem g$.
+
+\emph{(18) $g\vdash_\eps(e_1\then g_1)\xrightarrow{0}r_0+(e_1'\then g_1)$, where
+$g_1\vdash_\eps e_1\xrightarrow{r_0}e_1'$.} By the induction hypothesis
+$\Ssem{e_1}\Lsem{g_1}=r_0\cdot\Ssem{e_1'}\Lsem{g_1}$; unfolding Section~4's $(\then)$-clause and
+using that $\collectX\sigma$ commutes with $\tell(r_0)$ (equivalently, $r_0\cdot(-)$ and
+$\collectX\sigma$ both only add to, respectively expose, the same accumulated total, so
+$\collectX\sigma(\tell(r_0)(u)) = $ the leaf-wise sum of $\collectX\sigma(u)$ shifted by $r_0$,
+by the $\bump$ identity $\bump_{r_0}$ recorded in Section~3.3--3.4):
+\[
+  \Ssem{e_1\then g_1}\Lsem g = \mathsf{let}_{\widehat W_\eps}(a,r_1)\,\mathsf{be}\,\collectX\sigma(r_0\cdot\Ssem{e_1'}\Lsem{g_1})\,\mathsf{in}\,(\cdots)
+    = \mathsf{let}_{\widehat W_\eps}(a,r_1)\,\mathsf{be}\,\collectX\sigma(\Ssem{e_1'}\Lsem{g_1})\,\mathsf{in}\,\tell(r_2)(\eta(r_0+r_1+r_3))
+    = \Ssem{r_0+(e_1'\then g_1)}\Lsem g,
+\]
+matching the operational semantics' convention that $r_0+(-)$ prepends $r_0$ to whatever loss
+the remaining expression eventually records.
+
+\emph{(19) $\mathtt{reset}$ frame rule.} By the induction hypothesis
+$\Ssem{e_1}\Lsem g = r\cdot\Ssem{e_1'}\Lsem g$, and since $\censor(\tell(r)(u)) = \censor(u)$ for
+any $r$ (censoring discards whatever the root loss is, whether or not it was just incremented):
+\[
+  \Ssem{\mathtt{reset}\ e_1}\Lsem g = \censor(\Ssem{e_1}\Lsem g) = \censor\big(r\cdot\Ssem{e_1'}\Lsem g\big) = \censor\big(\Ssem{e_1'}\Lsem g\big) = \Ssem{\mathtt{reset}\ e_1'}\Lsem g = 0\cdot\Ssem{\mathtt{reset}\ e_1'}\Lsem g.
+\]
+\end{proof}
+
+\subsection{Evaluation soundness, adequacy, and giant-step adequacy}
+
+The remaining results are, essentially verbatim, consequences of Theorem~7.9 (hat-Theorem~B.9)
+by exactly the original's arguments, because -- as observed at the end of Section~5 -- the
+\emph{observable, top-level} shape of $\Ssem e\Lsem g$ for a fully- or partially-evaluated $e$ is
+literally identical in the two semantics: a pair $(r,v)$ when $e$ evaluates to a value (the root
+loss slot of a $\iota_1$-leaf plays exactly the role of the original's leaf-pair), or
+$\widehat\varphi_{\ell,\op,\eps(\ell)}(v,f)$ with $r$ folded into that node's own root-loss slot
+via $\tell(r)$ when $e$ evaluates to a term stuck on $\op$. None of Theorems~B.10, B.11,
+Corollary~B.12, or Theorem~B.13 inspect any \emph{deeper} structure of $\widehat W_\eps$ than
+this top-level pair, so:
+
+\begin{theorem}[Evaluation soundness]
+For $e:\sigma\,!\,\eps$ and $g:\sigma\to\mathtt{loss}\,!\,\eps'$ with $\eps'\subseteq\eps$:
+\[
+  g\vdash_\eps e\xRightarrow{r}v \implies \Ssem e\Lsem g = (r,\Vsem v), \qquad
+  g\vdash_\eps e\xRightarrow{r}K[\op(v)] \implies \Ssem e\Lsem g = \widehat\varphi_{\ell,\op,\eps(\ell)}\big(\Vsem v,\lambda a.\,r\cdot\Ssem{K[x]}(x{\mapsto}a)\Lsem g\big).
+\]
+\end{theorem}
+\begin{proof}
+By induction on the big-step derivation, exactly as the original: in the base case $e=v$, $r=0$,
+Lemma~7.2 gives $\Ssem e\Lsem g = (0,\iota_1(\Vsem v))$; in the base case $e=K[\op(v)]$, $r=0$,
+Lemma~7.8 gives the second equation directly with $\tell(0)=\mathrm{id}$; in both inductive
+cases, the small-step case $g\vdash_\eps e\xrightarrow{r_1}e'$, $g\vdash_\eps
+e'\xRightarrow{r_2}(\cdots)$, $r=r_1+r_2$ combines with Theorem~7.9 and the additivity of
+$\tell$ ($\tell(r_1)\circ\tell(r_2) = \tell(r_1+r_2)$) to give the result.
+\end{proof}
+
+\begin{theorem}[Adequacy]
+For $e:\sigma\,!\,\eps$ and $g:\sigma\to\mathtt{loss}\,!\,\eps'$ with $\eps'\subseteq\eps$:
+\[
+  \Ssem e\Lsem g = (r,a) \implies \exists v.\ g\vdash_\eps e\xRightarrow{r}v \wedge \Vsem v = a, \qquad
+  \Ssem e\Lsem g = \widehat\varphi_{\ell,\op,\eps(\ell)}(a,f) \implies \exists K[\op(v)].\ g\vdash_\eps e\xRightarrow{r}K[\op(v)]\ \wedge\ a=\Vsem v\ \wedge\ f=\lambda b.\,r\cdot\Ssem{K[x]}(x{\mapsto}b)\Lsem g.
+\]
+\end{theorem}
+\begin{proof}
+Verbatim the original's argument from termination (Appendix~A, untouched by the swap) plus
+Theorem~7.10: termination gives one of the two evaluation shapes; Theorem~7.10 rules out the
+mismatching one (a $\iota_1$-leaf can never equal a $\widehat\varphi$-node, since $\widehat
+W_\eps(X)$ is a disjoint sum) and identifies $r,a$ in the matching one.
+\end{proof}
+
+\begin{corollary}[First-order adequacy]
+For first-order $\sigma$, $e:\sigma\,!\,\emptyset$, $g:\sigma\to\mathtt{loss}\,!\,\emptyset$, and
+constants interpreted injectively: $\Ssem e\Lsem g = (r,\Vsem v) \iff g\vdash_\eps e\xRightarrow{r}v$.
+\end{corollary}
+
+Finally, giant-step adequacy transfers with the relation $\rhd$ between effect values $\mathrm{EV}$
+and $\widehat W_\eps(\Ssem\sigma)$ redefined at the leaf level only: $(r,v)\rhd(s,\iota_1(a))
+\iff r=s\wedge\Vsem v=a$, and $((\ell,\op),(v,f))\rhd(r,\iota_2((\ell',\op',n'),(a,g))) \iff
+\ell=\ell'\wedge\op=\op'\wedge n'=\eps(\ell)\wedge\Vsem v=a\wedge\forall w.\,f(w)\rhd g(\Vsem w)$
+(with $r$ left unconstrained on the operation-node clause, matching $\tell(r)$'s role of
+recording the loss up to that node rather than the original's separate leaf-pairing).
+
+\begin{theorem}[Giant-step adequacy]
+For all $e:\sigma\,!\,\eps$: $\mathrm{Eval}(e) \rhd \Ssem e\Lsem g$.
+\end{theorem}
+\begin{proof}
+By well-founded induction on $\mathrm{Eval}(e)$ exactly as the original, using
+Theorem~7.10 in place of Theorem~B.10 in both cases.
+\end{proof}
+
+\section{An Error in the Original Appendix B.4}
+
+We were asked to look for a mistake in the original proofs, and found one. Pages 49--51 of the
+Full Version PDF (arXiv:2504.03890v1) contain, inside the proof of Theorem~B.9, \emph{two}
+back-to-back derivations of case~(10) -- the operation-call-under-a-handler case -- for what is
+presented as the same transition rule. The first derivation is complete and self-consistent; the
+second is abandoned mid-argument at a line the authors themselves flag with the word ``BUT'',
+and the text then moves directly on to case~(11) without resolving the discrepancy.
+
+\paragraph{The first derivation (correct).} It uses
+\[
+  f_k = \lambda^\eps(p,y){:}(\mathit{par},\mathit{in}).\ \langle\mathtt{with}\ h\ \mathtt{from}\ p\ \mathtt{handle}\ K[y]\rangle g^\eps,
+  \qquad
+  f_l = \lambda^\eps(p,y){:}(\mathit{par},\mathit{in}).\ (\mathtt{with}\ h\ \mathtt{from}\ p\ \mathtt{handle}\ K[y])\blacktriangleright g,
+\]
+i.e.\ $f_k$ is wrapped in the local construct $\langle\cdot\rangle g^\eps$. This matches the
+operational semantics rule as stated in the main body of the paper (the rule labelled with
+$f_k,f_l$ defined this way, with the $\langle\cdot\rangle g^\eps$ wrapper on $f_k$). The
+derivation closes cleanly with $S[|f_k|](p,a)\gamma_1 = k_1(p,a)\gamma_1$ and
+$S[|f_l|](p,a)\gamma_1 = l_1(p,a)\gamma_1$ for every $\gamma_1$ -- exactly the fact we reprove
+as our case~(10) in Section~7.9 above, and exactly because the $\langle\cdot\rangle g^\eps$
+wrapper makes $S[|f_k|](p,a)$ \emph{constant} in its own continuation argument (Section~4's
+local-construct clause always substitutes $L[|g|](\rho)$ regardless of what continuation
+$f_k$ is applied to).
+
+\paragraph{The second, abandoned derivation.} Immediately afterwards, the same transition is
+redone with $f_k,f_l$ redefined \emph{without} the wrapper:
+\[
+  f_k = \lambda^\eps(p,y){:}(\mathit{par},\mathit{in}).\ \mathtt{with}\ h\ \mathtt{from}\ p\ \mathtt{handle}\ K[y],
+  \qquad
+  f_l = \lambda^\eps(p,y){:}(\mathit{par},\mathit{in}).\ f_k(p,y)\blacktriangleright g.
+\]
+Carrying through the same style of calculation, the authors derive
+\[
+  k_1(p,a) = \lambda\gamma.\ s\dg{F_{\eps\ell}}\big(S[|K[y]|](y{\mapsto}a)\,T(g)\big)\,p\,\gamma
+\]
+for the delimited continuation constructed inside the handler algebra (a function that, once
+$g$ is fixed, is \emph{constant} in the further variable $\gamma$ -- it never uses it), flag the
+line with ``BUT'', and then compute $S[|f_k|](p,a)$ directly from the semantics of the (now
+unwrapped) expression $f_k$, obtaining
+\[
+  S[|f_k|](p,a) = \lambda\gamma.\ s\dg{F_{\eps\ell}}\big(S[|K[y]|](y{\mapsto}a)\big)(T(\gamma))\,p\,\gamma,
+\]
+which genuinely \emph{does} depend on $\gamma$ (through $T(\gamma)$, not the fixed $T(g)$) and
+does not match the first expression. The manuscript stops right there, mid-derivation, and
+begins case~(11).
+
+\paragraph{Diagnosis.} This is not a transcription slip: we independently confirmed both
+passages appear on consecutive pages of the source PDF exactly as described (a first, complete
+proof using the wrapped $f_k$; then, with no transitional sentence, a second attempt using an
+unwrapped $f_k$ that contradicts itself and stops). The mathematical content of the
+contradiction is real and is precisely the point we relied on in our own case~(10)
+(Section~7.9): \emph{without} the $\langle\cdot\rangle g^\eps$ wrapper, the semantics of the
+reified delimited continuation $f_k$ genuinely depends on whatever loss continuation it is later
+supplied with, so no single, $\gamma$-independent element $k_1(p,a)$ of the handler-algebra
+carrier $A = W_\eps(\Sm{\sigma'})^{\Sm{\mathit{par}}}$ (equivalently $\widehat
+W_\eps(\Sm{\sigma'})^{\Sm{\mathit{par}}}$ in our version) can represent it correctly. The
+wrapper is not a stylistic choice; it is exactly what is needed for the compact,
+$\gamma$-independent handler-algebra construction of Section~5 (original or ours) to be sound
+at all for the delimited continuation captured at an operation call. We read the abandoned
+second derivation as the authors' own record of discovering this necessity in the course of
+writing the appendix -- valuable as a trace of \emph{why} the calculus's actual reduction rule
+includes the wrapper, but it should not have been left in the ``Full Version'' as an
+unresolved, self-contradicting proof fragment. Since our own handler semantics (Section~5) has
+the same shape ($A=\widehat W_\eps(\Sm{\sigma'})^{\Sm{\mathit{par}}}$, built via a
+$\gamma$-independent extension), the same diagnosis applies verbatim to our version: the swap
+does not remove the need for the wrapper, it is simply orthogonal to it, since the wrapper is a
+fact about the \emph{operational} semantics of $\lC$, which we have not touched.
+
+\begin{thebibliography}{9}
+
+\bibitem{plotkin-xie}
+Gordon Plotkin and Ningning Xie.
+\emph{Handling the Selection Monad (Full Version)}.
+arXiv:2504.03890, 2025.
+
+\bibitem{hyland}
+Martin Hyland, Gordon Plotkin, and John Power.
+\emph{Combining effects: Sum and tensor}.
+Theoretical Computer Science, 357(1--3):70--99, 2006.
+
+\bibitem{rivas}
+Exequiel Rivas and Mauro Jaskelioff.
+\emph{Notions of Computation as Monoids}.
+Journal of Functional Programming, 27:e21, 2017.
+
+\bibitem{pretnar}
+Gordon Plotkin and Matija Pretnar.
+\emph{Handling Algebraic Effects}.
+Logical Methods in Computer Science, 9(4), 2013.
+
+\end{thebibliography}
+
+\end{document}
