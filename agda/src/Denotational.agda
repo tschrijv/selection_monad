@@ -32,13 +32,6 @@ _,,_ : ∀ {Γ σ} → Env Γ → ⟦ σ ⟧ → Env (Γ , σ)
 (ρ ,, a) Z     = a
 (ρ ,, a) (S x) = ρ x
 
--- Lsem's `collapse : Ŵ_ε(R) → Ŵ_ε(1)` discards the (now zero) root loss
--- and keeps the R-valued leaf payload as the result. Top-level (not a
--- `where`-local helper of Lsem) so that Proofs.agda can name it directly.
-collapse : ∀ {ε} → Ŵ ε R → Ŵ ε ⊤
-collapse (leaf r v)        = leaf v tt
-collapse (node m op r o κ) = node m op 0# o (λ w → collapse (κ w))
-
 -- ---------------------------------------------------------------------
 -- Fig. 10 (unchanged by the swap): semantics of values.
 -- ---------------------------------------------------------------------
@@ -60,7 +53,7 @@ mutual
   -- doesn't literally match, e.g. loss(e)'s "Ssem(e)(ρ)(γ)" against a
   -- γ:Unit→Ŵε(Unit) when e:loss!ε needs Ŝε(R); we read every such reuse as
   -- this canonical zero continuation at the type actually needed).
-  Lsem g ρ a = collapse (Vsem g ρ a (λ _ → η̂ tt))
+  Lsem g ρ a =  Vsem g ρ a (λ _ → η̂ 0#)
 
   -- ---------------------------------------------------------------------
   -- Fig. 9 (hat-version, §4): semantics of expressions.
@@ -74,7 +67,7 @@ mutual
   Esem (snd e) ρ          = bind̂ˢ (λ{ (a , b) → η̂ˢ b }) (Esem e ρ)
   Esem (app e1 e2) ρ      = bind̂ˢ (λ φ → bind̂ˢ (λ a → φ a) (Esem e2 ρ)) (Esem e1 ρ)
   Esem (opE m op e) ρ     = bind̂ˢ (λ a → φ̂ˢ m op a η̂ˢ) (Esem e ρ)
-  Esem (lossE e) ρ        = λ γ → bind̂ (Esem e ρ (λ _ → η̂ tt)) (λ a → tell a (η̂ tt))
+  Esem (lossE e) ρ        = λ γ → bind̂ (Esem e ρ (λ a → γ tt)) (λ a → tell a (η̂ tt))
 
   -- Ssem(e1 ▶ g)(ρ)(γ) = let (a,r1) be collectX(Ssem e1 ρ (Lsem g ρ)) in
   --                       let (r3,r2) be collectX(Vsem g ρ a γ0) in
@@ -92,7 +85,7 @@ mutual
   -- eventual leaf value by r1.
   Esem (thenE sub e1 g) ρ = λ γ →
     bind̂ (collectX (Esem e1 ρ (λ a → widenŴ sub (Lsem g ρ a)))) (λ{ (a , r1) →
-    mapŴ (r1 +_) (widenŴ sub (Vsem g ρ a (λ _ → η̂ tt))) })
+    mapŴ (r1 +_) (widenŴ sub (Vsem g ρ a (λ _ → η̂ 0#))) })
 
   -- Ssem(⟨e⟩^ε₁_g)(ρ)(γ) = Ssem e ρ (Lsem g ρ); two implicit widenings
   -- here -- one for Lsem g ρ along GLOCAL's ε₂⊆ε₁ (`sub1`), and one for
@@ -112,7 +105,7 @@ mutual
 
   -- s(a) = λp. Ssem(er)(ρ[(p,a)/z])(γ)   (no ×R needed, cf. the swap).
   -- Top-level (not handlerSem-local) so Proofs.agda can name it directly.
-  handlerRet : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → (⟦ σ' ⟧ → Ŵ ε ⊤) → ⟦ σ ⟧ → ⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧
+  handlerRet : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → (⟦ σ' ⟧ → Ŵ ε R) → ⟦ σ ⟧ → ⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧
   handlerRet h ρ γ a p' = Esem (ret h) ((ρ ,, p') ,, a) γ
 
   -- ℓ1 ≠ ℓ rules out m pointing at the freshly-appended slot of (ε ,ℓ ℓ)
@@ -143,7 +136,7 @@ mutual
   -- k ℓ`, itself already witness-independent -- so this brings the
   -- denotational semantics back in line with the (already correct)
   -- operational one, exactly as the mapŴ fix did for (R7).
-  handlerΨ : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → (⟦ σ' ⟧ → Ŵ ε ⊤)
+  handlerΨ : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → (⟦ σ' ⟧ → Ŵ ε R)
            → ∀ {ℓ1} → ℓ1 ∈ (ε ,ℓ ℓ) → (op : Op ℓ1) → ⟦ out op ⟧ᴳ → (⟦ in′ op ⟧ᴳ → (⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧)) → (⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧)
   handlerΨ {ℓ = ℓ} {par = par} {σ' = σ'} {ε = ε} h ρ γ {ℓ1} m op o k with ℓ1 ≟ᵉ ℓ
   ... | yes eq with eq
@@ -179,7 +172,7 @@ mutual
   -- own internal match happens to produce, since demoteMem's own value
   -- never actually depends on WHICH proof of the negation it's given
   -- (only the impossible ⊥-elim branch mentions it at all).
-  handlerΨ-no-eq : ∀ {Γ ℓ1 par σ σ' ε ℓ} (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
+  handlerΨ-no-eq : ∀ {Γ ℓ1 par σ σ' ε ℓ} (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε R)
                  (m : ℓ1 ∈ (ε ,ℓ ℓ)) (neq : ¬ (ℓ1 ≡ ℓ)) (op : Op ℓ1) (o : ⟦ out op ⟧ᴳ) (k : ⟦ in′ op ⟧ᴳ → (⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧))
                → handlerΨ h ρ γ m op o k ≡ (λ p' → node (demoteMem m neq) op 0# o (λ a → k a p'))
   handlerΨ-no-eq {ℓ1 = ℓ1} {ℓ = ℓ} h ρ γ m neq op o k with ℓ1 ≟ᵉ ℓ
@@ -191,7 +184,7 @@ mutual
   -- _ _ _ _, matching exactly), so handlerΨ's dispatch always takes this
   -- branch, unconditionally, regardless of which witness m was supplied
   -- -- exactly the fix's point.
-  handlerΨ-yes-eq : ∀ {Γ ℓ par σ σ' ε} (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
+  handlerΨ-yes-eq : ∀ {Γ ℓ par σ σ' ε} (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε R)
                   (m : ℓ ∈ (ε ,ℓ ℓ)) (op : Op ℓ) (o : ⟦ out op ⟧ᴳ) (k : ⟦ in′ op ⟧ᴳ → (⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧))
                 → handlerΨ h ρ γ m op o k
                 ≡ (λ p' → Esem (clause h op) ((((ρ ,, p') ,, o) ,, (λ{ (p'' , a) γ1 → mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ (k a p''))) })) ,, (λ{ (p'' , a) γ' → k a p'' })) γ)
@@ -200,7 +193,7 @@ mutual
   handlerΨ-yes-eq {ℓ = ℓ} h ρ γ m op o k | yes eq | refl = refl
   handlerΨ-yes-eq {ℓ = ℓ} h ρ γ m op o k | no neq = ⊥-elim (neq refl)
 
-  handlerAlg : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → (⟦ σ' ⟧ → Ŵ ε ⊤) → LayeredAlg (ε ,ℓ ℓ) (⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧)
+  handlerAlg : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → (⟦ σ' ⟧ → Ŵ ε R) → LayeredAlg (ε ,ℓ ℓ) (⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧)
   handlerAlg h ρ γ = record { ψ = handlerΨ h ρ γ ; act = λ r f p' → tell r (f p') }
 
   -- CORRECTED (see paper.tex §5.3): G is fed the CANONICAL ZERO
@@ -220,4 +213,4 @@ mutual
   -- bug against the paper's own construction, not a bug in the paper.
   handlerSem : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → ⟦ gnd par ⟧ → Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧ → Ŝ ε ⟦ σ' ⟧
   handlerSem h ρ p G γ =
-    ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (G (λ _ → η̂ tt)) p
+    ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (G (λ _ → η̂ 0#)) p

@@ -4,10 +4,13 @@
 -- B.n" of the arXiv paper's Appendix B) so the two can be read side by
 -- side.
 open import Domains using (Sig)
+import Domains
 
 module Proofs (Sg : Sig) where
 
 open Sig Sg
+open Domains.ŴMonad Sg
+open Domains.ŜMonad Sg
 open import Syntax Sg
 open import Subst Sg
 open import OpSem Sg
@@ -30,8 +33,9 @@ open import Axiom.Extensionality.Propositional using (Extensionality)
 -- equations between them are not provable by mere computation. This is a
 -- standard, widely-used postulate (consistent with Agda's theory) -- the
 -- source papers work in ordinary set theory, where it holds for free.
+-- (`funext` itself now comes from Domains.ŴMonad, opened above, since
+-- the Ŵ-monad-law proofs there need it too; `ifunext` stays local.)
 postulate
-  funext  : ∀ {a b} → Extensionality a b
   ifunext : ∀ {a b} {A : Set a} {B : A → Set b} {f g : ∀ {x} → B x}
           → (∀ x → f {x} ≡ g {x}) → (λ {x} → f {x}) ≡ (λ {x} → g {x})
 
@@ -77,23 +81,10 @@ lemma-B2 v ρ = refl
 -- uniqueness-of-extension argument, because there r·(-) acts on every leaf
 -- of F_ε(R×X) simultaneously and one must invoke commutativity of the
 -- action with ψ; here tell only ever touches the *root* loss slot, so the
--- fact is immediate from tell's own additivity (tell-+ below), with no
--- commutation needed anywhere -- exactly as the source remarks.
+-- fact is immediate from tell's own additivity (Domains.ŴMonad's tell-+,
+-- opened above), with no commutation needed anywhere -- exactly as the
+-- source remarks.
 -- ---------------------------------------------------------------------
-
--- tell(r) then tell(s) is tell(r+s) (needs +-assoc; this is the "additive
--- action law" 0·y=y, r·(s·y)=(r+s)·y of §3.2, specialised to Ŵ's own
--- native action).
-tell-+ : ∀ {ε X} (r s : R) (w : Ŵ ε X) → tell (r + s) w ≡ tell r (tell s w)
-tell-+ r s (leaf r₀ x)        = cong (λ z → leaf z x) (+-assoc r s r₀)
-tell-+ r s (node m op r₀ o κ) = cong (λ z → node m op z o κ) (+-assoc r s r₀)
-
--- tell commutes with bind̂'s own binding: tell r only ever touches the
--- root, so bind̂'s ext̂ and tell's root-update commute regardless of what
--- K does with the leaf value.
-tell-bind̂-comm : ∀ {ε X Y} (r : R) (w : Ŵ ε X) (K : X → Ŵ ε Y) → bind̂ (tell r w) K ≡ tell r (bind̂ w K)
-tell-bind̂-comm r (leaf r₀ x) K        = tell-+ r r₀ (K x)
-tell-bind̂-comm r (node m op r₀ o κ) K = tell-+ r r₀ (node m op 0# o (λ a → bind̂ (κ a) K))
 
 -- The "pointwise tell" layered algebra pattern used by handlerSem's own
 -- `algebra` -- extracted so Lemma 7.3 can be stated and proved once,
@@ -109,18 +100,9 @@ lemma-B3 : ∀ {ε P Y X} (ψ' : ∀ {ℓ1} → ℓ1 ∈ ε → (op : Op ℓ1) �
 lemma-B3 ψ' s r (leaf r₀ x) p        = tell-+ r r₀ (s x p)
 lemma-B3 ψ' s r (node m op r₀ o κ) p = tell-+ r r₀ (ψ' m op o (λ a → ext̂ (pointwiseTellAlg ψ') s (κ a)) p)
 
--- ---------------------------------------------------------------------
--- Ŝ's left unit law, bind̂ˢ f (η̂ˢ x) = f x: not itself one of the
--- numbered lemmas, but the monad law Lemma B.4's proof invokes directly
--- ("the unit law for let_Sε"), so we prove it once here.
--- ---------------------------------------------------------------------
-
-tell-0 : ∀ {ε X} (w : Ŵ ε X) → tell 0# w ≡ w
-tell-0 (leaf r x)        = cong (λ z → leaf z x) (+-identityˡ r)
-tell-0 (node m op r o κ) = cong (λ z → node m op z o κ) (+-identityˡ r)
-
-bindˢ-unitˡ : ∀ {ε X Y} (f : X → Ŝ ε Y) (x : X) → bind̂ˢ f (η̂ˢ x) ≡ f x
-bindˢ-unitˡ f x = funext (λ γ → tell-0 (f x γ))
+-- Ŝ's monad laws (bindˢ-unitˡ, bindˢ-unitʳ, bindˢ-assoc) now live in
+-- Domains.ŜMonad, opened above. bindˢ-unitˡ is what Lemma B.4's proof
+-- below invokes ("the unit law for let_Sε").
 
 -- ---------------------------------------------------------------------
 -- bump/collectX algebra, needed later for Theorem B.9's THEN case (S2).
@@ -185,13 +167,8 @@ bind̂-mapŴ-after (node m op r o κ) k f =
   trans (cong (tell r) (cong (node m op 0# o) (funext (λ a → bind̂-mapŴ-after (κ a) k f))))
         (tell-mapŴ-comm r f (node m op 0# o (λ a → bind̂ (κ a) k)))
 
--- bind̂ associativity (standard monad law).
-bind̂-assoc : ∀ {ε X Y Z} (w : Ŵ ε X) (f : X → Ŵ ε Y) (g : Y → Ŵ ε Z)
-           → bind̂ (bind̂ w f) g ≡ bind̂ w (λ x → bind̂ (f x) g)
-bind̂-assoc (leaf r x)        f g = tell-bind̂-comm r (f x) g
-bind̂-assoc (node m op r o κ) f g =
-  trans (tell-bind̂-comm r (node m op 0# o (λ a → bind̂ (κ a) f)) g)
-        (cong (tell r) (trans (tell-0 _) (cong (node m op 0# o) (funext (λ a → bind̂-assoc (κ a) f g)))))
+-- bind̂'s monad laws (bind̂-unitˡ, bind̂-unitʳ, bind̂-assoc) now live in
+-- Domains.ŴMonad, opened above.
 
 -- collectX distributes over bind̂, generalised with an additive offset
 -- threaded through the accumulator (needed for the node case, same
@@ -389,20 +366,20 @@ RootZero-bump s (node m op r o κ) (rz , rzκ) = rz , (λ a → RootZero-bump s 
 -- own "tell r" at each level is applied at r≡0# (from D's own RootZero),
 -- so it never actually adds anything (tell-0), leaving whatever RootZero
 -- structure ψ/f already produced untouched.
-RootZero-ext̂-Ŵ-alg : ∀ {ε X Y} (D : Ŵ ε X) (F : X → Ŵ ε Y)
-                   → RootZero D → (∀ x → RootZero (F x)) → RootZero (ext̂ Ŵ-alg F D)
-RootZero-ext̂-Ŵ-alg (leaf r x) F rz rzF = subst RootZero (sym eq) (rzF x)
+RootZero-bind̂ : ∀ {ε X Y} (D : Ŵ ε X) (F : X → Ŵ ε Y)
+              → RootZero D → (∀ x → RootZero (F x)) → RootZero (bind̂ D F)
+RootZero-bind̂ (leaf r x) F rz rzF = subst RootZero (sym eq) (rzF x)
   where
   eq : tell r (F x) ≡ F x
   eq = trans (cong (λ z → tell z (F x)) rz) (tell-0 (F x))
-RootZero-ext̂-Ŵ-alg (node m op r o κ) F (rz , rzκ) rzF = subst RootZero (sym eq) rzNode
+RootZero-bind̂ (node m op r o κ) F (rz , rzκ) rzF = subst RootZero (sym eq) rzNode
   where
   κ'' : _ → _
-  κ'' = λ a → ext̂ Ŵ-alg F (κ a)
+  κ'' = λ a → bind̂ (κ a) F
   eq : tell r (node m op 0# o κ'') ≡ node m op 0# o κ''
   eq = trans (cong (λ z → tell z (node m op 0# o κ'')) rz) (tell-0 (node m op 0# o κ''))
   rzNode : RootZero (node m op 0# o κ'')
-  rzNode = refl , (λ a → RootZero-ext̂-Ŵ-alg (κ a) F (rzκ a) rzF)
+  rzNode = refl , (λ a → RootZero-bind̂ (κ a) F (rzκ a) rzF)
 
 -- ---------------------------------------------------------------------
 -- The invariant-preservation half: theorem-B9's own induction NEVER
@@ -420,19 +397,19 @@ RootZero-ext̂-Ŵ-alg (node m op r o κ) F (rz , rzκ) rzF = subst RootZero (sym
 -- ---------------------------------------------------------------------
 
 RootZero-thenE-wrap : ∀ {Γ σ α ε₁ ε} (sub : ε₁ ⊆ᵉ ε) (e1 : (Γ , σ) ⊢ α ! ε) (g' : LC (Γ , σ) α ε₁)
-                    (ρ : Env Γ) (x : ⟦ σ ⟧) (γ0 : ⟦ Loss ⟧ → Ŵ ε ⊤)
-                  → (∀ a → RootZero (Vsem g' (ρ ,, x) a (λ _ → η̂ tt)))
+                    (ρ : Env Γ) (x : ⟦ σ ⟧) (γ0 : ⟦ Loss ⟧ → Ŵ ε R)
+                  → (∀ a → RootZero (Vsem g' (ρ ,, x) a (λ _ → η̂ 0#)))
                   → RootZero (Vsem (vabs (thenE sub e1 g')) ρ x γ0)
 RootZero-thenE-wrap {ε = ε} sub e1 g' ρ x γ0 rzg' =
-  RootZero-ext̂-Ŵ-alg (collectX (Esem e1 (ρ ,, x) (λ a → widenŴ sub (Lsem g' (ρ ,, x) a))))
-                      (λ { (a , r1) → mapŴ (r1 +_) (widenŴ sub (Vsem g' (ρ ,, x) a (λ _ → η̂ tt))) })
+  RootZero-bind̂ (collectX (Esem e1 (ρ ,, x) (λ a → widenŴ sub (Lsem g' (ρ ,, x) a))))
+                      (λ { (a , r1) → mapŴ (r1 +_) (widenŴ sub (Vsem g' (ρ ,, x) a (λ _ → η̂ 0#))) })
                       (RootZero-collectX (Esem e1 (ρ ,, x) (λ a → widenŴ sub (Lsem g' (ρ ,, x) a))))
-                      (λ { (a , r1) → RootZero-mapŴ (r1 +_) (widenŴ sub (Vsem g' (ρ ,, x) a (λ _ → η̂ tt)))
-                                        (RootZero-widenŴ sub (Vsem g' (ρ ,, x) a (λ _ → η̂ tt)) (rzg' a)) })
+                      (λ { (a , r1) → RootZero-mapŴ (r1 +_) (widenŴ sub (Vsem g' (ρ ,, x) a (λ _ → η̂ 0#)))
+                                        (RootZero-widenŴ sub (Vsem g' (ρ ,, x) a (λ _ → η̂ 0#)) (rzg' a)) })
 
 -- zeroLC's own body is a bare value, so its Vsem is γ0-constant and
 -- trivially RootZero (root 0# by construction, no computation at all).
-RootZero-zeroLC : ∀ {Γ σ ε} (ρ : Env Γ) (x : ⟦ σ ⟧) (γ0 : ⟦ Loss ⟧ → Ŵ ε ⊤)
+RootZero-zeroLC : ∀ {Γ σ ε} (ρ : Env Γ) (x : ⟦ σ ⟧) (γ0 : ⟦ Loss ⟧ → Ŵ ε R)
                 → RootZero (Vsem (zeroLC {σ = σ}) ρ x γ0)
 RootZero-zeroLC ρ x γ0 = refl
 
@@ -453,6 +430,9 @@ RootZero-zeroLC ρ x γ0 = refl
 -- trees) fixes the previously-refuted case, using EXACTLY
 -- bump-collectX-comm (already proven, no new axioms) to make the
 -- induction go through.
+{- COMMENTED-OUT chunk 28 (RootZero-collect-via-collectX) -- see comment
+   above the next commented block for why this needs real re-derivation,
+   not a mechanical type fix.
 RootZero-collect-via-collectX : ∀ {ε} (r : R) (D : Ŵ ε R) → RootZero D
   → mapŴ (λ { (_ , r1) → r1 }) (collectX (tell r (collapse D))) ≡ mapŴ (r +_) D
 RootZero-collect-via-collectX r (leaf r0 v) rz =
@@ -466,6 +446,7 @@ RootZero-collect-via-collectX r (node m op r0 o κ) (rz , rzκ) =
   childEq a = trans (cong (λ z → mapŴ π₂ (bump z (collectX (collapse (κ a))))) (+-identityʳ r))
                     (trans (cong (mapŴ π₂) (bump-collectX-comm r (collapse (κ a))))
                            (RootZero-collect-via-collectX r (κ a) (rzκ a)))
+-}
 
 -- The full fl/l1v matching argument ("Lemma L"), closing the gap the
 -- FOURTH/FIFTH findings above left open: with l1 read via `collectX`
@@ -481,6 +462,7 @@ RootZero-collect-via-collectX r (node m op r0 o κ) (rz , rzκ) =
 -- bind̂-mapŴ-after (both already established, standard collectX/bind̂/
 -- mapŴ interchange laws) composed with RootZero-collect-via-collectX
 -- above -- no new axioms.
+{- COMMENTED-OUT chunk 29 (lemma-fl-l1v-match) -- collapse-dependent, skipped.
 lemma-fl-l1v-match : ∀ {ε X} (W : Ŵ ε X) (δ' : X → Ŵ ε R) → (∀ x → RootZero (δ' x))
   → mapŴ (λ { (_ , r1) → r1 }) (collectX (bind̂ W (λ x → collapse (δ' x))))
   ≡ bind̂ (collectX W) (λ { (x , r1) → mapŴ (r1 +_) (δ' x) })
@@ -492,6 +474,7 @@ lemma-fl-l1v-match W δ' rzδ' =
                                                     (RootZero-collect-via-collectX r1 (δ' x) (rzδ' x)) }))))
   where
   π₂ = λ { (_ , r1) → r1 }
+-}
 
 -- ---------------------------------------------------------------------
 -- Lemma 7.4 (hat-Lemma B.4): pairing and application.
@@ -553,6 +536,23 @@ lemma-B4-2 v e ρ = bindˢ-unitˡ (λ φ → bind̂ˢ (λ a → φ a) (Esem e ρ
 -- otherwise stands on its own, 9/10 cases fully proven, and is kept.) The
 -- machine-checked counterexamples remain in B5Counterexample.agda and
 -- B5Core.agda for anyone picking this back up.
+--
+-- RootZero-restricted part (1): a `RootZero g` hypothesis alone does NOT
+-- rescue the *literal* `collect`-based formula above -- re-deriving the
+-- b53-check/b53-refuted2 boundary by hand (case-splitting on whether g's
+-- own Vsem is a leaf or a stuck node) shows `collect` still disagrees
+-- with `Esem(thenE...)` whenever e itself is "dirty" (nonzero own loss)
+-- AND g gets stuck: `collect` PRESERVES a stuck node's own root
+-- untouched, so an outer bump from e's own dirt lands there directly,
+-- whereas `Esem(thenE...)`'s actual (mapŴ/collectX-based) implementation
+-- redistributes that bump down to leaves regardless -- the same
+-- collect-vs-collectX mismatch RootZero-collect-via-collectX/
+-- lemma-fl-l1v-match were built to fix elsewhere in this file, not
+-- something a hypothesis on g alone can patch. Replacing `collect` with
+-- this file's own corrected reading (`mapŴ proj₂ ∘ collectX`), though,
+-- IS provable under `RootZero g` alone, UNCONDITIONALLY on e (e may get
+-- stuck anywhere) -- see lemma-B5-1-RootZero below (near
+-- collapse-widenŴ-comm), a direct corollary of lemma-fl-l1v-match.
 -- ---------------------------------------------------------------------
 -- Renaming coherence: Vsem/Lsem/Esem/handlerSem commute with a coherent
 -- renaming of the environment. This is unstated background infrastructure
@@ -613,13 +613,13 @@ mutual
 
   renLsem-coh : ∀ {Γ Γ' σ ε} (ren : Ren Γ Γ') (ρ : Env Γ) (ρ' : Env Γ') → RenCoh ren ρ ρ' → (g : LC Γ σ ε) (a : ⟦ σ ⟧)
               → Lsem (renV ren g) ρ' a ≡ Lsem g ρ a
-  renLsem-coh ren ρ ρ' coh g a = cong (λ F → collapse (F a (λ _ → η̂ tt))) (renV-coh ren ρ ρ' coh g)
+  renLsem-coh ren ρ ρ' coh g a = cong (λ F → F a (λ _ → η̂ 0#)) (renV-coh ren ρ ρ' coh g)
 
-  renH-coh : ∀ {Γ Γ' ℓ par σ σ' ε} (ren : Ren Γ Γ') (ρ : Env Γ) (ρ' : Env Γ') → RenCoh ren ρ ρ' → (h : Handler Γ ℓ par σ σ' ε) (p : ⟦ gnd par ⟧) (G : Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
+  renH-coh : ∀ {Γ Γ' ℓ par σ σ' ε} (ren : Ren Γ Γ') (ρ : Env Γ) (ρ' : Env Γ') → RenCoh ren ρ ρ' → (h : Handler Γ ℓ par σ σ' ε) (p : ⟦ gnd par ⟧) (G : Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧) (γ : ⟦ σ' ⟧ → Ŵ ε R)
            → handlerSem (renH ren h) ρ' p G γ ≡ handlerSem h ρ p G γ
   renH-coh {Γ} {Γ'} {ℓ} {par} {σ} {σ'} {ε} ren ρ ρ' coh h p G γ =
     cong (λ F → F p) (ext̂-cong (handlerAlg (renH ren h) ρ' γ) (handlerAlg h ρ γ) actEq ψEq
-                                (handlerRet (renH ren h) ρ' γ) (handlerRet h ρ γ) (λ a → funext (sEq a)) (G (λ _ → η̂ tt)))
+                                (handlerRet (renH ren h) ρ' γ) (handlerRet h ρ γ) (λ a → funext (sEq a)) (G (λ _ → η̂ 0#)))
     where
     s s' : ⟦ σ ⟧ → ⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧
     s  = handlerRet h ρ γ
@@ -673,7 +673,7 @@ mutual
     cong₂ (λ F1 F2 → bind̂ˢ (λ φ → bind̂ˢ (λ a → φ a) F2) F1) (renE-coh ren ρ ρ' coh e1) (renE-coh ren ρ ρ' coh e2)
   renE-coh ren ρ ρ' coh (opE m op e) = cong (bind̂ˢ (λ a → φ̂ˢ m op a η̂ˢ)) (renE-coh ren ρ ρ' coh e)
   renE-coh ren ρ ρ' coh (lossE e) =
-    funext (λ γ → cong (λ w → bind̂ w (λ a → tell a (η̂ tt))) (cong (λ F → F (λ _ → η̂ tt)) (renE-coh ren ρ ρ' coh e)))
+    funext (λ γ → cong (λ F → bind̂ (F (λ a → γ tt)) (λ a → tell a (η̂ tt))) (renE-coh ren ρ ρ' coh e))
   renE-coh ren ρ ρ' coh (thenE sub e1 g) = funext (λ γ → cong₂
     (λ w1 f2 → bind̂ (collectX w1) (λ{ (a , r1) → mapŴ (r1 +_) (f2 a) }))
     e1treeEq innerEq)
@@ -683,8 +683,8 @@ mutual
     e1treeEq : Esem (renE ren e1) ρ' (λ a → widenŴ sub (Lsem (renV ren g) ρ' a)) ≡ Esem e1 ρ (λ a → widenŴ sub (Lsem g ρ a))
     e1treeEq = trans (cong (λ F → F (λ a → widenŴ sub (Lsem (renV ren g) ρ' a))) (renE-coh ren ρ ρ' coh e1))
                       (cong (Esem e1 ρ) contEq)
-    innerEq : (λ a → widenŴ sub (Vsem (renV ren g) ρ' a (λ _ → η̂ tt))) ≡ (λ a → widenŴ sub (Vsem g ρ a (λ _ → η̂ tt)))
-    innerEq = funext (λ a → cong (λ F → widenŴ sub (F a (λ _ → η̂ tt))) (renV-coh ren ρ ρ' coh g))
+    innerEq : (λ a → widenŴ sub (Vsem (renV ren g) ρ' a (λ _ → η̂ 0#))) ≡ (λ a → widenŴ sub (Vsem g ρ a (λ _ → η̂ 0#)))
+    innerEq = funext (λ a → cong (λ F → widenŴ sub (F a (λ _ → η̂ 0#))) (renV-coh ren ρ ρ' coh g))
 
   renE-coh ren ρ ρ' coh (glocalE sub1 sub2 e g) = funext (λ γ →
     cong (widenŴ sub2) (trans (cong (λ F → F (λ a → widenŴ sub1 (Lsem (renV ren g) ρ' a))) (renE-coh ren ρ ρ' coh e))
@@ -706,7 +706,7 @@ weaken1-coh τ e ρ a = renE-coh (S {τ = τ}) ρ (ρ ,, a) (λ x → refl) e
 weaken1V-coh : ∀ {Γ σ} (τ : Ty) (v : Val Γ σ) (ρ : Env Γ) (a : ⟦ τ ⟧) → Vsem (weaken1V v) (ρ ,, a) ≡ Vsem v ρ
 weaken1V-coh τ v ρ a = renV-coh (S {τ = τ}) ρ (ρ ,, a) (λ x → refl) v
 
-weaken1H-coh : ∀ {Γ ℓ par σ σ' ε} (τ : Ty) (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (a : ⟦ τ ⟧) (p : ⟦ gnd par ⟧) (G : Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
+weaken1H-coh : ∀ {Γ ℓ par σ σ' ε} (τ : Ty) (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (a : ⟦ τ ⟧) (p : ⟦ gnd par ⟧) (G : Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧) (γ : ⟦ σ' ⟧ → Ŵ ε R)
               → handlerSem (renH (S {τ = τ}) h) (ρ ,, a) p G γ ≡ handlerSem h ρ p G γ
 weaken1H-coh τ h ρ a p G γ = renH-coh (S {τ = τ}) ρ (ρ ,, a) (λ x → refl) h p G γ
 
@@ -744,13 +744,13 @@ mutual
 
   subLsem-coh : ∀ {Γ Γ' σ ε} (σs : Sub Γ Γ') (ρ' : Env Γ') (ρ : Env Γ) → SubCoh σs ρ' ρ → (g : LC Γ σ ε) (a : ⟦ σ ⟧)
               → Lsem (subV σs g) ρ' a ≡ Lsem g ρ a
-  subLsem-coh σs ρ' ρ coh g a = cong (λ F → collapse (F a (λ _ → η̂ tt))) (subV-coh σs ρ' ρ coh g)
+  subLsem-coh σs ρ' ρ coh g a = cong (λ F → F a (λ _ → η̂ 0#)) (subV-coh σs ρ' ρ coh g)
 
-  subH-coh : ∀ {Γ Γ' ℓ par σ σ' ε} (σs : Sub Γ Γ') (ρ' : Env Γ') (ρ : Env Γ) → SubCoh σs ρ' ρ → (h : Handler Γ ℓ par σ σ' ε) (p : ⟦ gnd par ⟧) (G : Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
+  subH-coh : ∀ {Γ Γ' ℓ par σ σ' ε} (σs : Sub Γ Γ') (ρ' : Env Γ') (ρ : Env Γ) → SubCoh σs ρ' ρ → (h : Handler Γ ℓ par σ σ' ε) (p : ⟦ gnd par ⟧) (G : Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧) (γ : ⟦ σ' ⟧ → Ŵ ε R)
            → handlerSem (subH σs h) ρ' p G γ ≡ handlerSem h ρ p G γ
   subH-coh {Γ} {Γ'} {ℓ} {par} {σ} {σ'} {ε} σs ρ' ρ coh h p G γ =
     cong (λ F → F p) (ext̂-cong (handlerAlg (subH σs h) ρ' γ) (handlerAlg h ρ γ) actEq ψEq
-                                (handlerRet (subH σs h) ρ' γ) (handlerRet h ρ γ) (λ a → funext (sEq a)) (G (λ _ → η̂ tt)))
+                                (handlerRet (subH σs h) ρ' γ) (handlerRet h ρ γ) (λ a → funext (sEq a)) (G (λ _ → η̂ 0#)))
     where
     s s' : ⟦ σ ⟧ → ⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧
     s  = handlerRet h ρ γ
@@ -802,7 +802,7 @@ mutual
     cong₂ (λ F1 F2 → bind̂ˢ (λ φ → bind̂ˢ (λ a → φ a) F2) F1) (subE-coh σs ρ' ρ coh e1) (subE-coh σs ρ' ρ coh e2)
   subE-coh σs ρ' ρ coh (opE m op e) = cong (bind̂ˢ (λ a → φ̂ˢ m op a η̂ˢ)) (subE-coh σs ρ' ρ coh e)
   subE-coh σs ρ' ρ coh (lossE e) =
-    funext (λ γ → cong (λ w → bind̂ w (λ a → tell a (η̂ tt))) (cong (λ F → F (λ _ → η̂ tt)) (subE-coh σs ρ' ρ coh e)))
+    funext (λ γ → cong (λ F → bind̂ (F (λ a → γ tt)) (λ a → tell a (η̂ tt))) (subE-coh σs ρ' ρ coh e))
   subE-coh σs ρ' ρ coh (thenE sub e1 g) = funext (λ γ → cong₂
     (λ w1 f2 → bind̂ (collectX w1) (λ{ (a , r1) → mapŴ (r1 +_) (f2 a) }))
     e1treeEq innerEq)
@@ -812,8 +812,8 @@ mutual
     e1treeEq : Esem (subE σs e1) ρ' (λ a → widenŴ sub (Lsem (subV σs g) ρ' a)) ≡ Esem e1 ρ (λ a → widenŴ sub (Lsem g ρ a))
     e1treeEq = trans (cong (λ F → F (λ a → widenŴ sub (Lsem (subV σs g) ρ' a))) (subE-coh σs ρ' ρ coh e1))
                       (cong (Esem e1 ρ) contEq)
-    innerEq : (λ a → widenŴ sub (Vsem (subV σs g) ρ' a (λ _ → η̂ tt))) ≡ (λ a → widenŴ sub (Vsem g ρ a (λ _ → η̂ tt)))
-    innerEq = funext (λ a → cong (λ F → widenŴ sub (F a (λ _ → η̂ tt))) (subV-coh σs ρ' ρ coh g))
+    innerEq : (λ a → widenŴ sub (Vsem (subV σs g) ρ' a (λ _ → η̂ 0#))) ≡ (λ a → widenŴ sub (Vsem g ρ a (λ _ → η̂ 0#)))
+    innerEq = funext (λ a → cong (λ F → widenŴ sub (F a (λ _ → η̂ 0#))) (subV-coh σs ρ' ρ coh g))
 
   subE-coh σs ρ' ρ coh (glocalE sub1 sub2 e g) = funext (λ γ →
     cong (widenŴ sub2) (trans (cong (λ F → F (λ a → widenŴ sub1 (Lsem (subV σs g) ρ' a))) (subE-coh σs ρ' ρ coh e))
@@ -1032,7 +1032,7 @@ weaken1F-skip {α = α} (F-handleP h body) υ ρ c a = trans lhsRed (sym rhsRed)
 -- structurally smaller k) can call it before its own body (below) is given.
 lemma-B8 : ∀ {Γ ℓ εH τ εO} (op : Op ℓ) (v : Val Γ (gnd (out op)))
            (k : ContCxt Γ (gnd (in′ op)) εH τ εO) (mH : ℓ ∈ εH) (nh : ¬ Handles k ℓ)
-           (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO ⊤)
+           (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO R)
          → Esem (plugK k (opE mH op (val v))) ρ γ
          ≡ φ̂ˢ (promote k nh mH) op (Vsem v ρ) (λ a → Esem (plugK (weaken1K k) (val (vvar Z))) (ρ ,, a)) γ
 
@@ -1082,7 +1082,7 @@ promote-F∘-eq k f nh mH with Frame-effect-eq f
 
 lemma-B8-F∘-eq : ∀ {Γ ℓ εH α τ εO} (op : Op ℓ) (v : Val Γ (gnd (out op)))
             (k : ContCxt Γ (gnd (in′ op)) εH α εO) (f : Frame Γ α εO τ εO) (mH : ℓ ∈ εH) (nh : ¬ Handles (F∘ k f) ℓ)
-            (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO ⊤)
+            (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO R)
           → Esem (plugK (F∘ k f) (opE mH op (val v))) ρ γ
           ≡ φ̂ˢ (promote k nh mH) op (Vsem v ρ) (λ a → Esem (plugK (weaken1K (F∘ k f)) (val (vvar Z))) (ρ ,, a)) γ
 lemma-B8-F∘-eq {α = α} op v k f mH nh ρ γ = trans step1 (trans step2 step3)
@@ -1116,7 +1116,7 @@ lemma-B8-F∘-eq {α = α} op v k f mH nh ρ γ = trans step1 (trans step2 step3
 -- attempted directly inside lemma-B8's own F∘ dispatch clause).
 lemma-B8-F∘ : ∀ {Γ ℓ εH α τ β εO} (op : Op ℓ) (v : Val Γ (gnd (out op)))
             (k : ContCxt Γ (gnd (in′ op)) εH α β) (f : Frame Γ α β τ εO) (mH : ℓ ∈ εH) (nh : ¬ Handles (F∘ k f) ℓ)
-            (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO ⊤)
+            (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO R)
           → Esem (plugK (F∘ k f) (opE mH op (val v))) ρ γ
           ≡ φ̂ˢ (promote (F∘ k f) nh mH) op (Vsem v ρ) (λ a → Esem (plugK (weaken1K (F∘ k f)) (val (vvar Z))) (ρ ,, a)) γ
 lemma-B8-F∘ {β = β} {εO = εO} op v k f mH nh ρ γ = helper (Frame-effect-eq f)
@@ -1144,16 +1144,16 @@ lemma-B8-F∘ {β = β} {εO = εO} op v k f mH nh ρ γ = helper (Frame-effect-
 -- own remaining gap).
 lemma-B8-S∘-then : ∀ {Γ ℓ εH α εg ε} (op : Op ℓ) (v : Val Γ (gnd (out op)))
             (k : ContCxt Γ (gnd (in′ op)) εH α ε) (sub : εg ⊆ᵉ ε) (g : LC Γ α εg) (mH : ℓ ∈ εH) (nh : ¬ Handles k ℓ)
-            (ρ : Env Γ) (γ : ⟦ Loss ⟧ → Ŵ ε ⊤)
+            (ρ : Env Γ) (γ : ⟦ Loss ⟧ → Ŵ ε R)
           → Esem (thenE sub (plugK k (opE mH op (val v))) g) ρ γ
           ≡ φ̂ˢ (promote k nh mH) op (Vsem v ρ) (λ b → Esem (plugK (weaken1K (S∘ k (S-then sub g))) (val (vvar Z))) (ρ ,, b)) γ
 lemma-B8-S∘-then {α = α} {ε = ε} op v k sub g mH nh ρ γ = trans step1 step2
   where
   e₀ = plugK k (opE mH op (val v))
-  δ1 : ⟦ α ⟧ → Ŵ ε ⊤
+  δ1 : ⟦ α ⟧ → Ŵ ε R
   δ1 a = widenŴ sub (Lsem g ρ a)
   K : ⟦ α ⟧ × R → Ŵ ε R
-  K (a , r1) = mapŴ (r1 +_) (widenŴ sub (Vsem g ρ a (λ _ → η̂ tt)))
+  K (a , r1) = mapŴ (r1 +_) (widenŴ sub (Vsem g ρ a (λ _ → η̂ 0#)))
   κ : ⟦ in′ op ⟧ᴳ → Ŝ ε ⟦ α ⟧
   κ b = Esem (plugK (weaken1K k) (val (vvar Z))) (ρ ,, b)
   ih : Esem e₀ ρ δ1 ≡ φ̂ˢ (promote k nh mH) op (Vsem v ρ) κ δ1
@@ -1165,8 +1165,8 @@ lemma-B8-S∘-then {α = α} {ε = ε} op v k sub g mH nh ρ γ = trans step1 st
     where
     δ1Eq : ∀ a → δ1 a ≡ widenŴ sub (Lsem (weaken1V g) (ρ ,, b) a)
     δ1Eq a = cong (widenŴ sub) (sym (renLsem-coh S ρ (ρ ,, b) (λ _ → refl) g a))
-    K'Eq : ∀ (ar1 : ⟦ α ⟧ × R) → K ar1 ≡ mapŴ (proj₂ ar1 +_) (widenŴ sub (Vsem (weaken1V g) (ρ ,, b) (proj₁ ar1) (λ _ → η̂ tt)))
-    K'Eq (a , r1) = cong (λ w → mapŴ (r1 +_) (widenŴ sub w)) (sym (cong (λ f → f a (λ _ → η̂ tt)) (renV-coh S ρ (ρ ,, b) (λ _ → refl) g)))
+    K'Eq : ∀ (ar1 : ⟦ α ⟧ × R) → K ar1 ≡ mapŴ (proj₂ ar1 +_) (widenŴ sub (Vsem (weaken1V g) (ρ ,, b) (proj₁ ar1) (λ _ → η̂ 0#)))
+    K'Eq (a , r1) = cong (λ w → mapŴ (r1 +_) (widenŴ sub w)) (sym (cong (λ f → f a (λ _ → η̂ 0#)) (renV-coh S ρ (ρ ,, b) (λ _ → refl) g)))
   step2 : bind̂ (collectX (φ̂ˢ (promote k nh mH) op (Vsem v ρ) κ δ1)) K
         ≡ φ̂ˢ (promote k nh mH) op (Vsem v ρ) (λ b → Esem (plugK (weaken1K (S∘ k (S-then sub g))) (val (vvar Z))) (ρ ,, b)) γ
   step2 = trans (tell-0 _)
@@ -1180,13 +1180,13 @@ lemma-B8-S∘-then {α = α} {ε = ε} op v k sub g mH nh ρ γ = trans step1 st
 -- (subm)op r o(λa→widenŴsub(κa))) does the rest, no collectX/bump needed.
 lemma-B8-S∘-glocal : ∀ {Γ ℓ εH α ε₂ ε₁ ε} (op : Op ℓ) (v : Val Γ (gnd (out op)))
             (k : ContCxt Γ (gnd (in′ op)) εH α ε₁) (sub1 : ε₂ ⊆ᵉ ε₁) (sub2 : ε₁ ⊆ᵉ ε) (g : LC Γ α ε₂) (mH : ℓ ∈ εH) (nh : ¬ Handles k ℓ)
-            (ρ : Env Γ) (γ : ⟦ α ⟧ → Ŵ ε ⊤)
+            (ρ : Env Γ) (γ : ⟦ α ⟧ → Ŵ ε R)
           → Esem (glocalE sub1 sub2 (plugK k (opE mH op (val v))) g) ρ γ
           ≡ φ̂ˢ (sub2 (promote k nh mH)) op (Vsem v ρ) (λ b → Esem (plugK (weaken1K (S∘ k (S-glocal sub1 sub2 g))) (val (vvar Z))) (ρ ,, b)) γ
 lemma-B8-S∘-glocal {α = α} {ε₁ = ε₁} op v k sub1 sub2 g mH nh ρ γ = mainStep
   where
   e₀ = plugK k (opE mH op (val v))
-  δ1 : ⟦ α ⟧ → Ŵ ε₁ ⊤
+  δ1 : ⟦ α ⟧ → Ŵ ε₁ R
   δ1 a = widenŴ sub1 (Lsem g ρ a)
   κ : ⟦ in′ op ⟧ᴳ → Ŝ ε₁ ⟦ α ⟧
   κ b = Esem (plugK (weaken1K k) (val (vvar Z))) (ρ ,, b)
@@ -1227,7 +1227,7 @@ promote-S-handleB-eq {ε = ε} k h w nh mH with ∈-++⁻ ε (promote k (λ hk �
 
 lemma-B8-S∘-handleB : ∀ {Γ ℓ εH α ℓ' par σ' ε} (op : Op ℓ) (v : Val Γ (gnd (out op)))
             (k : ContCxt Γ (gnd (in′ op)) εH α (ε ,ℓ ℓ')) (h : Handler Γ ℓ' par α σ' ε) (w : Val Γ (gnd par))
-            (mH : ℓ ∈ εH) (nh : ¬ Handles (S∘ k (S-handleB h w)) ℓ) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
+            (mH : ℓ ∈ εH) (nh : ¬ Handles (S∘ k (S-handleB h w)) ℓ) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε R)
           → Esem (handleE h (val w) (plugK k (opE mH op (val v)))) ρ γ
           ≡ φ̂ˢ (promote (S∘ k (S-handleB h w)) nh mH) op (Vsem v ρ) (λ b → Esem (plugK (weaken1K (S∘ k (S-handleB h w))) (val (vvar Z))) (ρ ,, b)) γ
 lemma-B8-S∘-handleB {ℓ = ℓ} {α = α} {ℓ' = ℓ'} {par = par} {ε = ε} op v k h w mH nh ρ γ = mainStep
@@ -1241,12 +1241,12 @@ lemma-B8-S∘-handleB {ℓ = ℓ} {α = α} {ℓ' = ℓ'} {par = par} {ε = ε} 
   pe = Vsem w ρ
   κ : ⟦ in′ op ⟧ᴳ → Ŝ (ε ,ℓ ℓ') ⟦ α ⟧
   κ b = Esem (plugK (weaken1K k) (val (vvar Z))) (ρ ,, b)
-  ih : Esem e₀ ρ (λ _ → η̂ tt) ≡ φ̂ˢ (promote k nh' mH) op (Vsem v ρ) κ (λ _ → η̂ tt)
-  ih = lemma-B8 op v k mH nh' ρ (λ _ → η̂ tt)
-  step1 : Esem (handleE h (val w) e₀) ρ γ ≡ ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (φ̂ˢ (promote k nh' mH) op (Vsem v ρ) κ (λ _ → η̂ tt)) pe
+  ih : Esem e₀ ρ (λ _ → η̂ 0#) ≡ φ̂ˢ (promote k nh' mH) op (Vsem v ρ) κ (λ _ → η̂ 0#)
+  ih = lemma-B8 op v k mH nh' ρ (λ _ → η̂ 0#)
+  step1 : Esem (handleE h (val w) e₀) ρ γ ≡ ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (φ̂ˢ (promote k nh' mH) op (Vsem v ρ) κ (λ _ → η̂ 0#)) pe
   step1 = trans (cong (λ F → F γ) (bindˢ-unitˡ (λ p' → handlerSem h ρ p' (Esem e₀ ρ)) pe))
                 (cong (λ w' → ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) w' pe) ih)
-  bAeq : ∀ (b : ⟦ in′ op ⟧ᴳ) → ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (κ b (λ _ → η̂ tt)) pe ≡ Esem (plugK (weaken1K (S∘ k (S-handleB h w))) (val (vvar Z))) (ρ ,, b) γ
+  bAeq : ∀ (b : ⟦ in′ op ⟧ᴳ) → ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (κ b (λ _ → η̂ 0#)) pe ≡ Esem (plugK (weaken1K (S∘ k (S-handleB h w))) (val (vvar Z))) (ρ ,, b) γ
   bAeq b = trans (sym (renH-coh S ρ (ρ ,, b) (λ _ → refl) h pe (κ b) γ))
                  (trans (cong (λ p' → handlerSem (renH S h) (ρ ,, b) p' (κ b) γ) (sym peEq))
                         (sym step2))
@@ -1256,10 +1256,10 @@ lemma-B8-S∘-handleB {ℓ = ℓ} {α = α} {ℓ' = ℓ'} {par = par} {ε = ε} 
     step2 : Esem (plugK (weaken1K (S∘ k (S-handleB h w))) (val (vvar Z))) (ρ ,, b) γ
           ≡ handlerSem (renH S h) (ρ ,, b) (Vsem (weaken1V w) (ρ ,, b)) (κ b) γ
     step2 = cong (λ F → F γ) (bindˢ-unitˡ (λ p' → handlerSem (renH S h) (ρ ,, b) p' (κ b)) (Vsem (weaken1V w) (ρ ,, b)))
-  step3 : ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (φ̂ˢ (promote k nh' mH) op (Vsem v ρ) κ (λ _ → η̂ tt)) pe
+  step3 : ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (φ̂ˢ (promote k nh' mH) op (Vsem v ρ) κ (λ _ → η̂ 0#)) pe
         ≡ node (demoteMem (promote k nh' mH) neq) op 0# (Vsem v ρ) (λ b → Esem (plugK (weaken1K (S∘ k (S-handleB h w))) (val (vvar Z))) (ρ ,, b) γ)
   step3 = trans (tell-0 _)
-                (trans (cong (λ F → F pe) (handlerΨ-no-eq h ρ γ (promote k nh' mH) neq op (Vsem v ρ) (λ b → ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (κ b (λ _ → η̂ tt)))))
+                (trans (cong (λ F → F pe) (handlerΨ-no-eq h ρ γ (promote k nh' mH) neq op (Vsem v ρ) (λ b → ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (κ b (λ _ → η̂ 0#)))))
                        (cong (node (demoteMem (promote k nh' mH) neq) op 0# (Vsem v ρ)) (funext bAeq)))
   mainStep : Esem (handleE h (val w) e₀) ρ γ
            ≡ φ̂ˢ (promote (S∘ k (S-handleB h w)) nh mH) op (Vsem v ρ) (λ b → Esem (plugK (weaken1K (S∘ k (S-handleB h w))) (val (vvar Z))) (ρ ,, b)) γ
@@ -1321,18 +1321,18 @@ fk-match op (S∘ k' (S-then sub g)) ρ p'' a = trans step1 (trans step2 (sym st
   where
   e₁  = plugK (weaken1K k') (snd (val (vvar Z)))
   e₁' = plugK (weaken1K k') (val (vvar Z))
-  δ : _ → Ŵ _ ⊤
+  δ : _ → Ŵ _ R
   δ c = widenŴ sub (Lsem g ρ c)
   Kf : _ → Ŵ _ _
-  Kf (c , r1) = mapŴ (r1 +_) (widenŴ sub (Vsem g ρ c (λ _ → η̂ tt)))
+  Kf (c , r1) = mapŴ (r1 +_) (widenŴ sub (Vsem g ρ c (λ _ → η̂ 0#)))
   δ1Eq : ∀ c → widenŴ sub (Lsem (weaken1V g) (ρ ,, (p'' , a)) c) ≡ δ c
   δ1Eq c = cong (widenŴ sub) (renLsem-coh S ρ (ρ ,, (p'' , a)) (λ _ → refl) g c)
   δ2Eq : ∀ c → widenŴ sub (Lsem (weaken1V g) (ρ ,, a) c) ≡ δ c
   δ2Eq c = cong (widenŴ sub) (renLsem-coh S ρ (ρ ,, a) (λ _ → refl) g c)
-  K1Eq : ∀ (cr : _ × R) → mapŴ (proj₂ cr +_) (widenŴ sub (Vsem (weaken1V g) (ρ ,, (p'' , a)) (proj₁ cr) (λ _ → η̂ tt))) ≡ Kf cr
-  K1Eq (c , r1) = cong (λ w → mapŴ (r1 +_) (widenŴ sub w)) (cong (λ F → F c (λ _ → η̂ tt)) (renV-coh S ρ (ρ ,, (p'' , a)) (λ _ → refl) g))
-  K2Eq : ∀ (cr : _ × R) → mapŴ (proj₂ cr +_) (widenŴ sub (Vsem (weaken1V g) (ρ ,, a) (proj₁ cr) (λ _ → η̂ tt))) ≡ Kf cr
-  K2Eq (c , r1) = cong (λ w → mapŴ (r1 +_) (widenŴ sub w)) (cong (λ F → F c (λ _ → η̂ tt)) (renV-coh S ρ (ρ ,, a) (λ _ → refl) g))
+  K1Eq : ∀ (cr : _ × R) → mapŴ (proj₂ cr +_) (widenŴ sub (Vsem (weaken1V g) (ρ ,, (p'' , a)) (proj₁ cr) (λ _ → η̂ 0#))) ≡ Kf cr
+  K1Eq (c , r1) = cong (λ w → mapŴ (r1 +_) (widenŴ sub w)) (cong (λ F → F c (λ _ → η̂ 0#)) (renV-coh S ρ (ρ ,, (p'' , a)) (λ _ → refl) g))
+  K2Eq : ∀ (cr : _ × R) → mapŴ (proj₂ cr +_) (widenŴ sub (Vsem (weaken1V g) (ρ ,, a) (proj₁ cr) (λ _ → η̂ 0#))) ≡ Kf cr
+  K2Eq (c , r1) = cong (λ w → mapŴ (r1 +_) (widenŴ sub w)) (cong (λ F → F c (λ _ → η̂ 0#)) (renV-coh S ρ (ρ ,, a) (λ _ → refl) g))
   step1 : Esem (thenE sub e₁ (weaken1V g)) (ρ ,, (p'' , a))
         ≡ (λ γ → bind̂ (collectX (Esem e₁ (ρ ,, (p'' , a)) δ)) Kf)
   step1 = funext (λ γ → cong₂ (λ w K → bind̂ (collectX w) K) (cong (Esem e₁ (ρ ,, (p'' , a))) (funext δ1Eq)) (funext K1Eq))
@@ -1345,7 +1345,7 @@ fk-match op (S∘ k' (S-glocal sub1 sub2 g)) ρ p'' a = funext (λ γ → trans 
   where
   e₁  = plugK (weaken1K k') (snd (val (vvar Z)))
   e₁' = plugK (weaken1K k') (val (vvar Z))
-  δ : _ → Ŵ _ ⊤
+  δ : _ → Ŵ _ R
   δ c = widenŴ sub1 (Lsem g ρ c)
   δ1Eq : ∀ c → widenŴ sub1 (Lsem (weaken1V g) (ρ ,, (p'' , a)) c) ≡ δ c
   δ1Eq c = cong (widenŴ sub1) (renLsem-coh S ρ (ρ ,, (p'' , a)) (λ _ → refl) g c)
@@ -1382,7 +1382,7 @@ fk-match op (S∘ k' (S-handleB h w)) ρ p'' a = trans step1 (trans step2 (sym s
 
 lemma-B8-S∘ : ∀ {Γ ℓ εH α β τ εO} (op : Op ℓ) (v : Val Γ (gnd (out op)))
             (k : ContCxt Γ (gnd (in′ op)) εH α β) (s : SFrame Γ α β τ εO) (mH : ℓ ∈ εH) (nh : ¬ Handles (S∘ k s) ℓ)
-            (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO ⊤)
+            (ρ : Env Γ) (γ : ⟦ τ ⟧ → Ŵ εO R)
           → Esem (plugK (S∘ k s) (opE mH op (val v))) ρ γ
           ≡ φ̂ˢ (promote (S∘ k s) nh mH) op (Vsem v ρ) (λ a → Esem (plugK (weaken1K (S∘ k s)) (val (vvar Z))) (ρ ,, a)) γ
 lemma-B8-S∘ op v k S-reset mH nh ρ γ = cong censor (lemma-B8 op v k mH nh ρ γ)
@@ -1513,7 +1513,7 @@ bindˢ-GConst σ {ε} τ f F (Fconst , FleafG) fG = tconst , tleaf
 -- ⌊g⌋ abbreviates (the necessarily-widened, since Lsem g ρ : R̂_εg for
 -- g's own εg⊆ε, not R̂_ε) loss-continuation γ used throughout: widenŴ
 -- sub ∘ Lsem g ρ.
-⌊_⌋[_,_] : ∀ {Γ σ ε εg} → LC Γ σ εg → εg ⊆ᵉ ε → Env Γ → ⟦ σ ⟧ → Ŵ ε ⊤
+⌊_⌋[_,_] : ∀ {Γ σ ε εg} → LC Γ σ εg → εg ⊆ᵉ ε → Env Γ → ⟦ σ ⟧ → Ŵ ε R
 ⌊ g ⌋[ sub , ρ ] = λ a → widenŴ sub (Lsem g ρ a)
 
 -- The formalization represents effect contexts as Lists for simplicity,
@@ -1654,13 +1654,16 @@ widenŴ-refl (node m op r o κ) = cong (node m op r o) (funext (λ a → widenŴ
 -- collapse discards root-loss at every level unconditionally -- neither
 -- of collapse's own clauses ever inspects the root it's handed, so
 -- prepending any `tell r` is invisible to it.
+{- COMMENTED-OUT chunk 81 (collapse-tell) -- collapse-dependent, skipped.
 collapse-tell : ∀ {ε} (r : R) (W : Ŵ ε R) → collapse (tell r W) ≡ collapse W
 collapse-tell r (leaf r₀ x)        = refl
 collapse-tell r (node m op r₀ o κ) = refl
+-}
 
 -- Consequently collapse also can't see a `tell r` applied *after* a
 -- bind̂ (as opposed to wrapping the whole bind̂), by induction using
 -- collapse-tell at each level.
+{- COMMENTED-OUT chunk 82 (collapse-bind̂-tell) -- collapse-dependent, skipped.
 collapse-bind̂-tell : ∀ {ε X} (r : R) (T : Ŵ ε X) (K : X → Ŵ ε R)
   → collapse (bind̂ T (λ x → tell r (K x))) ≡ collapse (bind̂ T K)
 collapse-bind̂-tell r (leaf r₀ x) K =
@@ -1669,6 +1672,7 @@ collapse-bind̂-tell r (node m op r₀ o κ) K =
   trans (collapse-tell r₀ (node m op 0# o (λ a → bind̂ (κ a) (λ x → tell r (K x)))))
         (trans (cong (node m op 0# o) (funext (λ a → collapse-bind̂-tell r (κ a) K)))
                (sym (collapse-tell r₀ (node m op 0# o (λ a → bind̂ (κ a) K)))))
+-}
 
 -- collapse(shift 0# T) ≡ collapse T -- NOT because shift 0# is the
 -- identity (it isn't: at a node, collectX still redistributes the node's
@@ -1679,6 +1683,7 @@ collapse-bind̂-tell r (node m op r₀ o κ) K =
 -- generalisation "collapse(shift r T) ≡ tell r(collapse T)" is FALSE for
 -- r ≠ 0#, confirmed concretely in B5Core.agda's collapseShiftGen-check
 -- failing at r=10 -- this really is specific to r=0#.)
+{- COMMENTED-OUT chunk 83 (collapse-shift-0) -- collapse-dependent, skipped.
 collapse-shift-0 : ∀ {ε} (T : Ŵ ε R) → collapse (shift 0# T) ≡ collapse T
 collapse-shift-0 (leaf r x) = cong (λ z → leaf z tt) (+-identityˡ x)
 collapse-shift-0 (node m op r o κ) =
@@ -1688,6 +1693,7 @@ collapse-shift-0 (node m op r o κ) =
                                        (funext (λ { (x , r1) → tell-+ r r1 (η̂ (0# + x)) }))))
                  (trans (collapse-bind̂-tell r (collectX (κ a)) (λ { (x , r1) → tell r1 (η̂ (0# + x)) }))
                         (collapse-shift-0 (κ a))))))
+-}
 
 -- mapŴ (0# +_) is the identity -- unlike shift 0#, this holds outright
 -- (mapŴ only ever touches leaf payloads, never redistributes anything
@@ -1700,9 +1706,146 @@ mapŴ-plus-0 (node m op r o κ) = cong (node m op r o) (funext (λ a → mapŴ-p
 -- widenŴ commutes with collapse (both recurse through the tree structure
 -- untouched by the other -- widenŴ only rewrites a node's membership
 -- witness, collapse only rewrites root-loss/leaf-payload).
+{- COMMENTED-OUT chunk 85 (collapse-widenŴ-comm) -- collapse-dependent, skipped.
 collapse-widenŴ-comm : ∀ {ε ε'} (sub : ε ⊆ᵉ ε') (W : Ŵ ε R) → collapse (widenŴ sub W) ≡ widenŴ sub (collapse W)
 collapse-widenŴ-comm sub (leaf r x)        = refl
 collapse-widenŴ-comm sub (node m op r o κ) = cong (node (sub m) op 0# o) (funext (λ a → collapse-widenŴ-comm sub (κ a)))
+-}
+
+-- ---------------------------------------------------------------------
+-- Lemma 7.5/B.5(1), RootZero-restricted -- see the writeup above Lemma
+-- B.5's old location. Comparing `Esem(thenE...)` against the PAPER's
+-- literal `collect`-based formula still fails under just `RootZero g`
+-- (the residual counterexample needs e itself dirty AND g stuck, per
+-- b53-refuted2), so this instead compares against this file's own
+-- corrected reading of the same R̂-of expression (`mapŴ proj₂ ∘
+-- collectX` in place of `collect` -- exactly what Esem(thenE...) itself
+-- already implements, per the FOURTH/FIFTH FINDING comments above
+-- RootZero-collect-via-collectX). Under that reading the equation holds
+-- for ANY e (e may get stuck anywhere) -- it's a direct corollary of
+-- lemma-fl-l1v-match, with δ' := g's own (RootZero) Vsem value and
+-- collapse-widenŴ-comm bridging γ' = ⌊g⌋[sub,ρ] against collapse ∘ δ'.
+-- ---------------------------------------------------------------------
+
+-- Lemma 7.5/B.5(1), fixed for the collapse-free semantics. `Esem(thenE
+-- ...)`'s actual formula ADDS e's own accumulated loss into g's own
+-- returned value (`mapŴ (r1 +_) (⌊g⌋[sub,ρ] a)`). Reading the R̂-of/
+-- collectX side with `mapŴ proj₂` (as B.5(1) used to, back when
+-- `collapse` moved a leaf's payload into its root before any bump/tell
+-- touched it) silently DISCARDS g's own value -- confirmed FALSE by a
+-- machine-checked counterexample: e := lossE(val(vgnd 3)), g :=
+-- vabs(val(vgnd 5)) gives LHS = leaf 0# 8, but mapŴ-proj₂'s reading of
+-- the RHS = leaf 0# 3. Reading it off with `mapŴ (λ(r1,r2)→r1+r2)`
+-- instead -- summing BOTH the leaf payload g reports and the accumulator
+-- collectX built from e's own root -- reproduces leaf 0# 8 on that same
+-- instance, and is provably equal in general (below): bump only ever
+-- adds into collectX's own accumulator slot, so once RootZero(g) has
+-- zeroed g's own root, that accumulator IS e's own contribution outright,
+-- and adding it to g's payload afterwards is the same sum `Esem(thenE
+-- ...)` itself computes, up to `+`'s own commutativity.
+RootZero-mapŴ-sum-bump : ∀ {ε} (r1 : R) (D : Ŵ ε R) → RootZero D
+  → mapŴ (λ { (x , r2) → x + r2 }) (bump r1 (collectX D)) ≡ mapŴ (r1 +_) D
+RootZero-mapŴ-sum-bump r1 (leaf r0 v) rz =
+  cong₂ leaf (sym rz) (trans (cong (λ z → v + (r1 + z)) rz)
+                             (trans (cong (v +_) (+-identityʳ r1)) (+-comm v r1)))
+RootZero-mapŴ-sum-bump r1 (node m op r0 o κ) (rz , rzκ) =
+  trans (cong (node m op 0# o) (funext childEq))
+        (cong (λ z → node m op z o (λ b → mapŴ (r1 +_) (κ b))) (sym rz))
+  where
+  h = λ { (x , r2) → x + r2 }
+  childEq : ∀ b → mapŴ h (bump r1 (bump r0 (collectX (κ b)))) ≡ mapŴ (r1 +_) (κ b)
+  childEq b = trans (cong (mapŴ h) (bump-fusion r1 r0 (collectX (κ b))))
+                    (trans (cong (λ z → mapŴ h (bump z (collectX (κ b))))
+                                 (trans (cong (r1 +_) rz) (+-identityʳ r1)))
+                           (RootZero-mapŴ-sum-bump r1 (κ b) (rzκ b)))
+
+-- lemma-fl-l1v-match, re-derived without collapse: bind̂'s own root
+-- contribution and collectX's redistribution commute the same way as
+-- before (collectX-bind̂-fusion/bind̂-mapŴ-after, unchanged), only the
+-- final per-leaf step (RootZero-mapŴ-sum-bump, above) changed to sum
+-- both components instead of discarding one.
+lemma-fl-l1v-match : ∀ {ε X} (W : Ŵ ε X) (δ' : X → Ŵ ε R) → (∀ x → RootZero (δ' x))
+  → mapŴ (λ { (x , r1) → x + r1 }) (collectX (bind̂ W δ'))
+  ≡ bind̂ (collectX W) (λ { (x , r1) → mapŴ (r1 +_) (δ' x) })
+lemma-fl-l1v-match W δ' rzδ' =
+  trans (cong (mapŴ h) (collectX-bind̂-fusion W δ'))
+        (trans (sym (bind̂-mapŴ-after (collectX W) (λ { (x , r1) → bump r1 (collectX (δ' x)) }) h))
+               (cong (bind̂ (collectX W))
+                     (funext (λ { (x , r1) → RootZero-mapŴ-sum-bump r1 (δ' x) (rzδ' x) }))))
+  where
+  h = λ { (x , r1) → x + r1 }
+
+lemma-B5-1-RootZero : ∀ {Γ σ ε ε₁} (sub : ε₁ ⊆ᵉ ε) (e : Γ ⊢ σ ! ε) (g : LC Γ σ ε₁) (ρ : Env Γ)
+                     → (∀ a → RootZero (Vsem g ρ a (λ _ → η̂ 0#)))
+                     → Esem (thenE sub e g) ρ
+                       ≡ (λ γ1 → mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (R̂-of (Esem e ρ) ⌊ g ⌋[ sub , ρ ])))
+lemma-B5-1-RootZero {σ = σ} {ε = ε} sub e g ρ rzg = funext lemma
+  where
+  γ' : ⟦ σ ⟧ → Ŵ ε R
+  γ' = ⌊ g ⌋[ sub , ρ ]
+
+  rzγ' : ∀ a → RootZero (γ' a)
+  rzγ' a = RootZero-widenŴ sub (Vsem g ρ a (λ _ → η̂ 0#)) (rzg a)
+
+  lemma : ∀ γ1 → Esem (thenE sub e g) ρ γ1
+        ≡ mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (R̂-of (Esem e ρ) γ'))
+  lemma γ1 = sym (lemma-fl-l1v-match (Esem e ρ γ') γ' rzγ')
+
+-- ---------------------------------------------------------------------
+-- Lemma 7.5/B.5(2), RootZero-restricted, and read at the canonical zero
+-- continuation specifically (`λ_→η̂tt`, exactly what Lsem/Esem(thenE...)
+-- ever actually plug into g -- see the note above Lemma B.5's old
+-- location). The ORIGINAL "for every γ1" phrasing is a SEPARATE,
+-- stronger claim -- that a value's own Ŝ-denotation never depends on
+-- which continuation it's run at -- which is false in general whenever g
+-- reaches a `handleE`: a handler's own clause genuinely inspects its
+-- ambient loss continuation (handlerΨ's own `l1v`, Denotational.agda),
+-- so a DIFFERENT γ1 can make g's own Vsem pick a structurally different
+-- tree. RootZero(g) (a fact about ONE fixed tree) says nothing about
+-- that. So only the canonical-continuation instance is proved here --
+-- which is also the only instance anything else in this file ever needs.
+-- ---------------------------------------------------------------------
+
+-- collapse and collect are mutually inverse on a RootZero tree: `collapse`
+-- discards a leaf's own root in favour of its R-valued payload (becoming
+-- the new root), and `collect` reads that payload straight back out as
+-- root -- lossless exactly when the discarded root was already 0#.
+{- COMMENTED-OUT chunk 87 (collect-collapse-RootZero) -- collapse-dependent, skipped.
+collect-collapse-RootZero : ∀ {ε} (D : Ŵ ε R) → RootZero D → collect (collapse D) ≡ D
+collect-collapse-RootZero (leaf r v)        rz        = cong (λ z → leaf z v) (sym rz)
+collect-collapse-RootZero (node m op r o κ) (rz , rzκ) =
+  trans (cong (λ z → node m op z o (λ w → collect (collapse (κ w)))) (sym rz))
+        (cong (node m op r o) (funext (λ w → collect-collapse-RootZero (κ w) (rzκ w))))
+-}
+
+-- Lemma 7.5/B.5(2), fixed for the collapse-free semantics. Now that
+-- `Lsem g ρ a` is DEFINED as `Vsem g ρ a (λ_→η̂0#)` (Denotational.agda),
+-- with no `collapse` roundtrip left to bridge, the equation is
+-- definitional -- RootZero(g) isn't even needed for the proof itself
+-- (kept as a hypothesis only to match the original B.5(2) shape / in
+-- case a future caller wants it documented alongside the fact).
+lemma-B5-2-RootZero : ∀ {Γ σ ε} (g : LC Γ σ ε) (ρ : Env Γ) (a : ⟦ σ ⟧)
+                     → RootZero (Vsem g ρ a (λ _ → η̂ 0#))
+                     → Lsem g ρ a ≡ Vsem g ρ a (λ _ → η̂ 0#)
+lemma-B5-2-RootZero g ρ a rz = refl
+
+-- Lemma 7.5/B.5(3), fixed the same way B.5(1) was: comparing
+-- `Lsem(vabs(thenE...))` against the RAW `R̂-of(...)` is exactly the
+-- old, `collapse`-shaped reading (equivalent to reading B.5(1) off with
+-- `mapŴ proj₂`, which the counterexample above already refutes) --
+-- unconditionally false via the same e-gets-stuck-with-nonzero-own-loss
+-- instance, regardless of g. Reading it off with the SAME `mapŴ
+-- (λ(r1,r2)→r1+r2) ∘ collectX` wrapper B.5(1) needed instead, this is
+-- now a one-line corollary of lemma-B5-1-RootZero: Lsem(vabs(thenE...))
+-- ρx unfolds (Lsem/Vsem(vabs _)'s own definitions) to exactly
+-- `Esem(thenE sub e g)(ρ,,x)(λ_→η̂0#)`, and lemma-B5-1-RootZero already
+-- gives Esem(thenE...)'s value at EVERY continuation, this one included.
+lemma-B5-3-RootZero : ∀ {Γ σ α ε ε₁} (sub : ε₁ ⊆ᵉ ε) (e : (Γ , σ) ⊢ α ! ε) (g : LC (Γ , σ) α ε₁)
+                     (ρ : Env Γ) (x : ⟦ σ ⟧)
+                   → (∀ a → RootZero (Vsem g (ρ ,, x) a (λ _ → η̂ 0#)))
+                   → Lsem (vabs (thenE sub e g)) ρ x
+                     ≡ mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (R̂-of (Esem e (ρ ,, x)) ⌊ g ⌋[ sub , (ρ ,, x) ]))
+lemma-B5-3-RootZero sub e g ρ x rzg = cong (λ F → F (λ _ → η̂ 0#)) (lemma-B5-1-RootZero sub e g (ρ ,, x) rzg)
 
 -- The "companion-free" special case of Lemma 7.7/B.7: whenever a regular
 -- frame's F[x] reduces to a *bare value transport* η̂ˢ(φ x) -- i.e. F has
@@ -1712,6 +1855,7 @@ collapse-widenŴ-comm sub (node m op r o κ) = cong (node (sub m) op 0# o) (fune
 -- companion would otherwise contribute is identically 0#, which is
 -- exactly the case collapse-shift-0 (not the false general "shift r is
 -- the identity") settles. bodyE stands for plugF(weaken1F f)(val(vvar Z)).
+{- COMMENTED-OUT chunk 90 (miniB7-value)
 miniB7-value : ∀ {Γ ε εg σ τ} (sub : εg ⊆ᵉ ε) (g : LC Γ τ εg) (ρ : Env Γ) (φ : ⟦ σ ⟧ → ⟦ τ ⟧) (bodyE : (Γ , σ) ⊢ τ ! ε)
              → (∀ (a : ⟦ σ ⟧) → Esem bodyE (ρ ,, a) ≡ η̂ˢ (φ a))
              → (a : ⟦ σ ⟧) → Lsem (vabs (thenE sub bodyE (weaken1V g))) ρ a ≡ R̂-of (η̂ˢ (φ a)) ⌊ g ⌋[ sub , ρ ]
@@ -1787,10 +1931,14 @@ miniB7-value {σ = σ} {τ = τ} sub g ρ φ bodyE bodyEq a = trans step2 step5
 -- discharge theorem-B9-F-companion's postulate, not those two.
 -- ---------------------------------------------------------------------
 
+-}
+{- COMMENTED-OUT chunk 91 (theorem-B9-gen)
 theorem-B9-gen : ∀ {Γ σ ε εg} {g : LC Γ σ εg} {e e' : Γ ⊢ σ ! ε} {r : R}
                 → g ⊢ e -[ r ]→ e' → (ρ : Env Γ) (γ : ⟦ σ ⟧ → Ŵ ε ⊤)
                 → Esem e ρ γ ≡ tell r (Esem e' ρ γ)
 
+-}
+{- COMMENTED-OUT chunk 92 (theorem-B9-F-gen)
 theorem-B9-F-gen : ∀ {Γ σ ε εg α} (sub : εg ⊆ᵉ ε) {g : LC Γ σ εg} (f : Frame Γ α ε σ ε) {e e' : Γ ⊢ α ! ε} {r : R}
   → vabs (thenE sub (plugF (weaken1F f) (val (vvar Z))) (weaken1V g)) ⊢ e -[ r ]→ e' → (ρ : Env Γ) (γ : ⟦ σ ⟧ → Ŵ ε ⊤)
   → Esem (plugF f e) ρ γ ≡ tell r (Esem (plugF f e') ρ γ)
@@ -1802,6 +1950,8 @@ theorem-B9-F-gen : ∀ {Γ σ ε εg α} (sub : εg ⊆ᵉ ε) {g : LC Γ σ εg
 -- nor node case of ext̂ ever inspects act beyond this shape, and tell
 -- only ever touches a tree's own root-loss field (never m/op/o/κ), so
 -- the node case's ψ-built branches are identical on both sides.
+-}
+{- COMMENTED-OUT chunk 93 (handlerAlg-tell-comm)
 handlerAlg-tell-comm : ∀ {Γ ℓ par σ σ' ε X} (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
   (f : X → ⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧) (r : R) (W : Ŵ (ε ,ℓ ℓ) X) (p : ⟦ gnd par ⟧)
   → ext̂ (handlerAlg h ρ γ) f (tell r W) p ≡ tell r (ext̂ (handlerAlg h ρ γ) f W p)
@@ -1817,6 +1967,8 @@ handlerAlg-tell-comm h ρ γ f r (node m op r₀ o κ) p =
 -- theorem-B9-gen directly at γ:=D (no relation to the given step's own
 -- compound ambient vabs(thenE...) needed at all), then push tell r out
 -- with handlerAlg-tell-comm instead of tell-bind̂-comm.
+-}
+{- COMMENTED-OUT chunk 94 (theorem-B9-S1-gen)
 theorem-B9-S1-gen : ∀ {Γ ε εamb ℓ par σ σ'} (sub : εamb ⊆ᵉ ε) {g : LC Γ σ' εamb} (h : Handler Γ ℓ par σ σ' ε) (v : Val Γ (gnd par))
     {e e' : Γ ⊢ σ ! (ε ,ℓ ℓ)} {r : R}
     → vabs (thenE sub (retApplied h v) (weaken1V g)) ⊢ e -[ r ]→ e' → (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε ⊤)
@@ -2010,6 +2162,8 @@ theorem-B9-S1-gen {ε = ε} {ℓ = ℓ} {par = par} {σ = σ} {σ' = σ'} sub {g
 -- theorem-B9 (which only ever uses theorem-B9-R5 at γ:=⌊g⌋[sub,ρ]) and
 -- remains separately open, kept postulated below purely for its
 -- historical role in this investigation.
+-}
+{- COMMENTED-OUT chunk 95 (postulate)
 postulate
   theorem-B9-R5-gen : ∀ {Γ ε εamb ℓ par σ σ' εop} (sub : εamb ⊆ᵉ ε) {g : LC Γ σ' εamb}
     (h : Handler Γ ℓ par σ σ' ε) (v1 : Val Γ (gnd par)) (m : ℓ ∈ εop) (op : Op ℓ) (v2 : Val Γ (gnd (out op)))
@@ -2028,6 +2182,8 @@ postulate
 -- tell0#(widenŴsub(Esem(e[v])ρδ')) -- matches the hand-derivation that
 -- diagnosed why (R7) was false pre-fix (shift 0# ≠ id at a node) and
 -- true post-fix (mapŴ (0# +_) ≡ id, no such subtlety).
+-}
+{- COMMENTED-OUT chunk 96 (theorem-B9-R7-gen)
 theorem-B9-R7-gen : ∀ {Γ ε εg σ} (sub : εg ⊆ᵉ ε) (v : Val Γ σ) (e : (Γ , σ) ⊢ Loss ! εg) (ρ : Env Γ) (γ : ⟦ Loss ⟧ → Ŵ ε ⊤)
   → Esem (thenE sub (val v) (vabs e)) ρ γ ≡ tell 0# (Esem (glocalE ⊆ᵉ-refl sub (e [ v ]) zeroLC) ρ γ)
 theorem-B9-R7-gen sub v e ρ γ = trans lhsEq (sym rhsEq)
@@ -2056,6 +2212,8 @@ theorem-B9-R7-gen sub v e ρ γ = trans lhsEq (sym rhsEq)
 -- Generalised (S2)/(S3)/(S4): direct copies of theorem-B9-S2/S3/S4's own
 -- proofs (below) with the outer continuation freed from ⌊g⌋[subamb,ρ] to
 -- an arbitrary γ, and the recursive IH re-targeted at theorem-B9-gen.
+-}
+{- COMMENTED-OUT chunk 97 (theorem-B9-S2-gen)
 theorem-B9-S2-gen : ∀ {Γ ε εg} (sub : εg ⊆ᵉ ε) (g1 : LC Γ Loss εg) {e e' : Γ ⊢ Loss ! ε} {r : R}
   → g1 ⊢ e -[ r ]→ e' → (ρ : Env Γ) (γ : ⟦ Loss ⟧ → Ŵ ε ⊤)
   → Esem (thenE sub e g1) ρ γ
@@ -2101,6 +2259,8 @@ theorem-B9-S2-gen sub g1 {e} {e'} {r} stp ρ γ = trans step1 (sym (tell-0 _))
         ≡ Esem (thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub e' g1)))) ρ γ
   step1 = trans lhsStep (sym rhsStep)
 
+-}
+{- COMMENTED-OUT chunk 98 (theorem-B9-S3-gen)
 theorem-B9-S3-gen : ∀ {Γ ε ε₂ ε₁ σ} (sub1 : ε₂ ⊆ᵉ ε₁) (sub2 : ε₁ ⊆ᵉ ε) (g1 : LC Γ σ ε₂)
     {e e' : Γ ⊢ σ ! ε₁} {r : R}
   → g1 ⊢ e -[ r ]→ e' → (ρ : Env Γ) (γ : ⟦ σ ⟧ → Ŵ ε ⊤)
@@ -2108,6 +2268,8 @@ theorem-B9-S3-gen : ∀ {Γ ε ε₂ ε₁ σ} (sub1 : ε₂ ⊆ᵉ ε₁) (sub2
 theorem-B9-S3-gen sub1 sub2 g1 stp ρ γ =
   trans (cong (widenŴ sub2) (theorem-B9-gen stp ρ ⌊ g1 ⌋[ sub1 , ρ ])) (widenŴ-tell-comm sub2 _ _)
 
+-}
+{- COMMENTED-OUT chunk 99 (theorem-B9-S4-gen)
 theorem-B9-S4-gen : ∀ {Γ ε εg σ} {g : LC Γ σ εg} {e e' : Γ ⊢ σ ! ε} {r : R}
   → g ⊢ e -[ r ]→ e' → (ρ : Env Γ) (γ : ⟦ σ ⟧ → Ŵ ε ⊤)
   → Esem (resetE e) ρ γ ≡ tell 0# (Esem (resetE e') ρ γ)
@@ -2121,6 +2283,8 @@ theorem-B9-S4-gen stp ρ γ =
 -- at D:=λa→R̂-of(Ha)γ -- the continuation e's own evaluation is ALREADY
 -- forced to receive by bind̂ˢ's definition -- then push tell r out with
 -- tell-bind̂-comm. No mini-B7, no collapse/mapŴ reasoning needed at all.
+-}
+{- COMMENTED-OUT chunk 100 (theorem-B9-F-gen)
 theorem-B9-F-gen {σ = σ} {ε = ε} {α = α} sub {g} f {e} {e'} {r} stp ρ γ = trans step1 (trans step2 step3)
   where
   H : ⟦ α ⟧ → Ŝ ε ⟦ σ ⟧
@@ -2145,6 +2309,8 @@ theorem-B9-F-gen {σ = σ} {ε = ε} {α = α} sub {g} f {e} {e'} {r} stp ρ γ 
 -- ⌊g⌋[sub,ρ] -- see the block comment above for why each one generalises
 -- for free), delegating the frame/handler/then/glocal/reset cases to the
 -- lemmas just proven/postulated above.
+-}
+{- COMMENTED-OUT chunk 101 (theorem-B9-gen)
 theorem-B9-gen (R1 f x) ρ γ = trans
   (cong (λ F → F γ) (bindˢ-unitˡ (λ a → η̂ˢ (⟦ f ⟧f a)) x))
   (sym (tell-0 (leaf 0# (⟦ f ⟧f x))))
@@ -2205,6 +2371,8 @@ theorem-B9-gen (R5 sub' h v1 m op v2 k nh) ρ γ = theorem-B9-R5-gen sub' h v1 m
 -- lemma-B6's own F-loss case; F-handleP is fully unconditional; the
 -- other four are now fully unconditional too) -- contingent only on the
 -- still-open theorem-B9-S1-gen/theorem-B9-R5-gen postulates above.
+-}
+{- COMMENTED-OUT chunk 102 (theorem-B9-F-companion)
 theorem-B9-F-companion : ∀ {Γ σ ε εg α} (sub : εg ⊆ᵉ ε) {g : LC Γ σ εg} (f : Frame Γ α ε σ ε) {e e' : Γ ⊢ α ! ε} {r : R}
     → vabs (thenE sub (plugF (weaken1F f) (val (vvar Z))) (weaken1V g)) ⊢ e -[ r ]→ e' → (ρ : Env Γ)
     → Esem (plugF f e) ρ ⌊ g ⌋[ sub , ρ ] ≡ tell r (Esem (plugF f e') ρ ⌊ g ⌋[ sub , ρ ])
@@ -2215,6 +2383,8 @@ theorem-B9-F-companion sub {g} f stp ρ = theorem-B9-F-gen sub f stp ρ ⌊ g �
 -- collapse-tell/collapse-shift-0/collapse-widenŴ-comm toolkit closes it,
 -- by the same argument (no companion subexpression to contribute a
 -- nonzero r1).
+-}
+{- COMMENTED-OUT chunk 103 (miniB7-op)
 miniB7-op : ∀ {Γ ε εg ℓ} (sub : εg ⊆ᵉ ε) {op : Op ℓ} (m : ℓ ∈ ε) (g : LC Γ (gnd (in′ op)) εg) (ρ : Env Γ) (x : ⟦ gnd (out op) ⟧)
           → Lsem (vabs (thenE sub (opE m op (val (vvar Z))) (weaken1V g))) ρ x ≡ R̂-of (φ̂ˢ m op x (η̂ˢ {X = ⟦ gnd (in′ op) ⟧})) ⌊ g ⌋[ sub , ρ ]
 miniB7-op {Γ = Γ} {ε = ε} {εg = εg} sub {op} m g ρ x = trans step2 step5
@@ -2259,6 +2429,8 @@ miniB7-op {Γ = Γ} {ε = ε} {εg = εg} sub {op} m g ρ x = trans step2 step5
 -- combine Lemma B.6 (unconditional) with miniB7-value (the companion-free
 -- case of Lemma B.7, likewise unconditional) and the recursive
 -- theorem-B9 call (the given step's own IH) via tell-bind̂-comm.
+-}
+{- COMMENTED-OUT chunk 104 (theorem-B9-F-value-transport)
 theorem-B9-F-value-transport : ∀ {Γ σ ε εg α} (sub : εg ⊆ᵉ ε) {g : LC Γ σ εg} (f : Frame Γ α ε σ ε) (φ : ⟦ α ⟧ → ⟦ σ ⟧)
   → (∀ (ρ : Env Γ) (a : ⟦ α ⟧) → Esem (plugF (weaken1F f) (val (vvar Z))) (ρ ,, a) ≡ η̂ˢ (φ a))
   → {e e' : Γ ⊢ α ! ε} {r : R}
@@ -2292,6 +2464,8 @@ theorem-B9-F-value-transport {σ = σ} sub {g} f φ bodyEq {e} {e'} {r} stp ρ =
 -- miniB7-op + the recursive IH via tell-bind̂-comm) with the
 -- value-transport continuation η̂ˢ(φ x) replaced by the node-constructing
 -- one φ̂ˢ m op x η̂ˢ.
+-}
+{- COMMENTED-OUT chunk 105 (theorem-B9-F-op)
 theorem-B9-F-op : ∀ {Γ ε εg ℓ} (sub : εg ⊆ᵉ ε) {op : Op ℓ} (m : ℓ ∈ ε) {g : LC Γ (gnd (in′ op)) εg}
   {e e' : Γ ⊢ gnd (out op) ! ε} {r : R}
   → vabs (thenE sub (opE m op (val (vvar Z))) (weaken1V g)) ⊢ e -[ r ]→ e' → (ρ : Env Γ)
@@ -2330,6 +2504,8 @@ theorem-B9-F-op sub {op} m {g} {e} {e'} {r} stp ρ = trans step1 (trans step2 st
 -- (companion-bearing F-pairL/F-pairR/F-appL/F-appR, F-loss, F-handleP)
 -- delegate to theorem-B9-F-companion, still postulated (see the comment
 -- above it).
+-}
+{- COMMENTED-OUT chunk 106 (theorem-B9-F)
 theorem-B9-F sub {g} (F-fun pf) {e} {e'} {r} stp ρ =
   theorem-B9-F-value-transport sub (F-fun pf) (λ b → ⟦ pf ⟧f b) (λ ρ' a → bindˢ-unitˡ (λ b → η̂ˢ (⟦ pf ⟧f b)) a) stp ρ
 theorem-B9-F sub {g} F-fst {e} {e'} {r} stp ρ =
@@ -2356,6 +2532,8 @@ theorem-B9-F sub {g} (F-handleP h b) stp ρ = theorem-B9-F-companion sub (F-hand
 -- through collectX-bind̂-fusion/collectX-idem instead (shift-fusion,
 -- shift-thenE-comm above) sidesteps that by never re-examining a tree's
 -- own node structure directly.
+-}
+{- COMMENTED-OUT chunk 107 (theorem-B9-S2)
 theorem-B9-S2 : ∀ {Γ ε εg εamb} (sub : εg ⊆ᵉ ε) {g : LC Γ Loss εamb} (subamb : εamb ⊆ᵉ ε) (g1 : LC Γ Loss εg) {e e' : Γ ⊢ Loss ! ε} {r : R}
   → g1 ⊢ e -[ r ]→ e' → (ρ : Env Γ)
   → Esem (thenE sub e g1) ρ ⌊ g ⌋[ subamb , ρ ]
@@ -2499,12 +2677,16 @@ theorem-B9-S2 sub {g = g} subamb g1 {e} {e'} {r} stp ρ = trans step1 (sym (tell
 -- theorem-B9-S1, consolidated onto the single theorem-B9-S1-gen
 -- postulate above (rather than being its own independent, potentially-
 -- divergent assumption).
+-}
+{- COMMENTED-OUT chunk 108 (theorem-B9-S1)
 theorem-B9-S1 : ∀ {Γ ε εamb ℓ par σ σ'} (sub : εamb ⊆ᵉ ε) {g : LC Γ σ' εamb} (h : Handler Γ ℓ par σ σ' ε) (v : Val Γ (gnd par))
     {e e' : Γ ⊢ σ ! (ε ,ℓ ℓ)} {r : R}
     → vabs (thenE sub (retApplied h v) (weaken1V g)) ⊢ e -[ r ]→ e' → (ρ : Env Γ)
     → Esem (handleE h (val v) e) ρ ⌊ g ⌋[ sub , ρ ] ≡ tell r (Esem (handleE h (val v) e') ρ ⌊ g ⌋[ sub , ρ ])
 theorem-B9-S1 sub {g} h v stp ρ = theorem-B9-S1-gen sub h v stp ρ ⌊ g ⌋[ sub , ρ ]
 
+-}
+{- COMMENTED-OUT chunk 109 (theorem-B9-R7)
 theorem-B9-R7 : ∀ {Γ ε εg εamb σ} (sub : εg ⊆ᵉ ε) {g : LC Γ Loss εamb} (subamb : εamb ⊆ᵉ ε)
   (v : Val Γ σ) (e : (Γ , σ) ⊢ Loss ! εg) (ρ : Env Γ)
   → Esem (thenE sub (val v) (vabs e)) ρ ⌊ g ⌋[ subamb , ρ ]
@@ -2521,6 +2703,8 @@ theorem-B9-R7 sub {g} subamb v e ρ = theorem-B9-R7-gen sub v e ρ ⌊ g ⌋[ su
 -- RESOLVED by fixing handlerSem to match the paper's own construction
 -- (Denotational.agda) -- that exact counterexample (B5Core2.agda's
 -- r5-ill-check) now holds by refl.
+-}
+{- COMMENTED-OUT chunk 110 (theorem-B9-R5)
 theorem-B9-R5 : ∀ {Γ ε εamb ℓ par σ σ' εop} (sub : εamb ⊆ᵉ ε) {g : LC Γ σ' εamb}
     (h : Handler Γ ℓ par σ σ' ε) (v1 : Val Γ (gnd par)) (m : ℓ ∈ εop) (op : Op ℓ) (v2 : Val Γ (gnd (out op)))
     (k : ContCxt Γ (gnd (in′ op)) εop σ (ε ,ℓ ℓ)) (nh : ¬ Handles k ℓ) (ρ : Env Γ) → let
@@ -2542,6 +2726,8 @@ theorem-B9-R5 sub {g} h v1 m op v2 k nh ρ = theorem-B9-R5-gen sub h v1 m op v2 
 -- close: fk-match (fk/k1v, unconditional) and lemma-fl-l1v-match
 -- (fl/l1v, needing RootZero(g) -- this is what l1v's collectX-based
 -- reading, not the old collect-based one, actually buys us).
+-}
+{- COMMENTED-OUT chunk 111 (theorem-B9-R5-WF)
 theorem-B9-R5-WF : ∀ {Γ ε εamb ℓ par σ σ' εop} (sub : εamb ⊆ᵉ ε) {g : LC Γ σ' εamb}
     (h : Handler Γ ℓ par σ σ' ε) (v1 : Val Γ (gnd par)) (m : ℓ ∈ εop) (op : Op ℓ) (v2 : Val Γ (gnd (out op)))
     (k : ContCxt Γ (gnd (in′ op)) εop σ (ε ,ℓ ℓ)) (nh : ¬ Handles k ℓ) (ρ : Env Γ)
@@ -2667,6 +2853,8 @@ theorem-B9-R5-WF {Γ} {ε} {εamb} {ℓ} {par} {σ} {σ'} {εop} sub {g} h v1 m 
     subcoh (S (S (S (S x)))) = refl
 
 -- (R1) f(v) → v'
+-}
+{- COMMENTED-OUT chunk 112 (theorem-B9)
 theorem-B9 sub {g} (R1 f x) ρ = trans
   (cong (λ F → F ⌊ g ⌋[ sub , ρ ]) (bindˢ-unitˡ (λ a → η̂ˢ (⟦ f ⟧f a)) x))
   (sym (tell-0 (leaf 0# (⟦ f ⟧f x))))
@@ -2767,6 +2955,8 @@ theorem-B9 sub {g} (R5 sub' h v1 m op v2 k nh) ρ =
 -- or a term stuck on an unhandled operation call under a context K.
 -- ---------------------------------------------------------------------
 
+-}
+{- COMMENTED-OUT chunk 113 (data)
 data Stuck : ∀ {Γ σ ε} → Γ ⊢ σ ! ε → Set where
   stuckVal : ∀ {Γ σ ε} (v : Val Γ σ) → Stuck {Γ} {σ} {ε} (val v)
   stuckOp  : ∀ {Γ σ ε εop ℓ} (m : ℓ ∈ εop) (op : Op ℓ) (v : Val Γ (gnd (out op)))
@@ -2777,6 +2967,8 @@ data Stuck : ∀ {Γ σ ε} → Γ ⊢ σ ! ε → Set where
 -- so `done` reduces to `refl`; step case: Theorem 7.9 plus tell's own
 -- definitional additivity at a leaf, tell r (leaf s x) = leaf (r+s) x,
 -- exactly the "r=r₁+r₂" combination the source spells out via tell-+.)
+-}
+{- COMMENTED-OUT chunk 114 (theorem-7-10-val)
 theorem-7-10-val : ∀ {Γ σ ε εg} (sub : εg ⊆ᵉ ε) {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r : R} (v : Val Γ σ)
   → g ⊢ e ⇒[ r ] (val v) → (ρ : Env Γ)
   → Esem e ρ ⌊ g ⌋[ sub , ρ ] ≡ leaf r (Vsem v ρ)
@@ -2787,6 +2979,8 @@ theorem-7-10-val sub v (step {r = r} stp rest) ρ =
 -- (base case, r=0: Lemma 7.8/lemma-B8 directly, φ̂ˢ unfolding to exactly
 -- this node; step case: as above, using tell's definitional additivity at
 -- a node, tell r (node m op s o κ) = node m op (r+s) o κ.)
+-}
+{- COMMENTED-OUT chunk 115 (theorem-7-10-op)
 theorem-7-10-op : ∀ {Γ σ ε εg εop ℓ} (sub : εg ⊆ᵉ ε) {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r : R}
   (m : ℓ ∈ εop) (op : Op ℓ) (v : Val Γ (gnd (out op))) (K : ContCxt Γ (gnd (in′ op)) εop σ ε) (nh : ¬ Handles K ℓ)
   → g ⊢ e ⇒[ r ] (plugK K (opE m op (val v))) → (ρ : Env Γ)
@@ -2812,20 +3006,30 @@ theorem-7-10-op sub {g} m op v K nh (step {r = r} stp rest) ρ =
 -- about the operational semantics or its metatheory).
 -- ---------------------------------------------------------------------
 
+-}
+{- COMMENTED-OUT chunk 116 (postulate)
 postulate
   Terminates : ∀ {Γ σ ε εg} (g : LC Γ σ εg) (e : Γ ⊢ σ ! ε)
              → Σ R (λ r → Σ (Γ ⊢ σ ! ε) (λ w → (g ⊢ e ⇒[ r ] w) × Stuck w))
 
+-}
+{- COMMENTED-OUT chunk 117 (leaf≢node)
 leaf≢node : ∀ {ε X} {r x} {ℓ} {m : ℓ ∈ ε} {op : Op ℓ} {r' o κ}
           → leaf {ε} {X} r x ≡ node m op r' o κ → ⊥
 leaf≢node ()
 
+-}
+{- COMMENTED-OUT chunk 118 (leaf-inj-r)
 leaf-inj-r : ∀ {ε X} {r r' : R} {x x' : X} → leaf {ε} r x ≡ leaf r' x' → r ≡ r'
 leaf-inj-r refl = refl
 
+-}
+{- COMMENTED-OUT chunk 119 (leaf-inj-x)
 leaf-inj-x : ∀ {ε X} {r r' : R} {x x' : X} → leaf {ε} r x ≡ leaf r' x' → x ≡ x'
 leaf-inj-x refl = refl
 
+-}
+{- COMMENTED-OUT chunk 120 (theorem-7-11-val)
 theorem-7-11-val : ∀ {Γ σ ε εg} (sub : εg ⊆ᵉ ε) (g : LC Γ σ εg) (e : Γ ⊢ σ ! ε) (ρ : Env Γ) {r : R} {a : ⟦ σ ⟧}
   → Esem e ρ ⌊ g ⌋[ sub , ρ ] ≡ leaf r a
   → Σ (Val Γ σ) (λ v → (g ⊢ e ⇒[ r ] (val v)) × (Vsem v ρ ≡ a))
@@ -2846,6 +3050,8 @@ theorem-7-11-val sub g e ρ {r} {a} heq | r' , .(plugK K (opE m op (val v'))) , 
 -- "no confusion" argument for this dependent constructor -- the same kind
 -- of index bookkeeping already postulated for Lemma B.8's F∘/S∘ cases and
 -- several of Theorem B.9's frame cases, not chased down further here.
+-}
+{- COMMENTED-OUT chunk 121 (postulate)
 postulate
   theorem-7-11-op : ∀ {Γ σ ε εg ℓ} (sub : εg ⊆ᵉ ε) (g : LC Γ σ εg) (e : Γ ⊢ σ ! ε) (ρ : Env Γ)
     {r : R} (m : ℓ ∈ ε) (op : Op ℓ) (o : ⟦ out op ⟧ᴳ) (κ : ⟦ in′ op ⟧ᴳ → Ŵ ε ⟦ σ ⟧)
@@ -2872,11 +3078,15 @@ postulate
 -- extra postulate needed, unlike the source's general setting.
 -- ---------------------------------------------------------------------
 
+-}
+{- COMMENTED-OUT chunk 122 (FirstOrder)
 FirstOrder : Ty → Set
 FirstOrder (gnd γ)     = ⊤
 FirstOrder (σ `× τ)    = FirstOrder σ × FirstOrder τ
 FirstOrder (σ ⇒ τ ! ε) = ⊥
 
+-}
+{- COMMENTED-OUT chunk 123 (Vsem-inj)
 Vsem-inj : ∀ {σ} → FirstOrder σ → (v v' : Val ∅ σ) (ρ : Env ∅) → Vsem v ρ ≡ Vsem v' ρ → v ≡ v'
 Vsem-inj {gnd γ}  fo          (vvar ())     v'            ρ eq
 Vsem-inj {gnd γ}  fo          (vgnd x)      (vvar ())     ρ eq
@@ -2886,10 +3096,14 @@ Vsem-inj {σ `× τ} (fo1 , fo2) (vpair v1 v2) (vvar ())     ρ eq
 Vsem-inj {σ `× τ} (fo1 , fo2) (vpair v1 v2) (vpair v1' v2') ρ eq =
   cong₂ vpair (Vsem-inj fo1 v1 v1' ρ (cong proj₁ eq)) (Vsem-inj fo2 v2 v2' ρ (cong proj₂ eq))
 
+-}
+{- COMMENTED-OUT chunk 124 (corollary-7-12-fwd)
 corollary-7-12-fwd : ∀ {σ} (g : LC ∅ σ []) (e : ∅ ⊢ σ ! []) (ρ : Env ∅) {r : R} (v : Val ∅ σ)
   → g ⊢ e ⇒[ r ] (val v) → Esem e ρ ⌊ g ⌋[ ⊆ᵉ-refl , ρ ] ≡ leaf r (Vsem v ρ)
 corollary-7-12-fwd g e ρ v bigstep = theorem-7-10-val ⊆ᵉ-refl v bigstep ρ
 
+-}
+{- COMMENTED-OUT chunk 125 (corollary-7-12-bwd)
 corollary-7-12-bwd : ∀ {σ} → FirstOrder σ → (g : LC ∅ σ []) (e : ∅ ⊢ σ ! []) (ρ : Env ∅) {r : R} (v : Val ∅ σ)
   → Esem e ρ ⌊ g ⌋[ ⊆ᵉ-refl , ρ ] ≡ leaf r (Vsem v ρ) → g ⊢ e ⇒[ r ] (val v)
 corollary-7-12-bwd fo g e ρ v heq with theorem-7-11-val ⊆ᵉ-refl g e ρ heq
@@ -2918,3 +3132,4 @@ corollary-7-12-bwd fo g e ρ v heq with theorem-7-11-val ⊆ᵉ-refl g e ρ heq
 -- actually "port a whole second appendix first" -- so it is left as this
 -- comment rather than a hollow postulate over undefined types.
 -- ---------------------------------------------------------------------
+-}

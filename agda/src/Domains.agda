@@ -32,9 +32,10 @@ open import Data.List using (List; []; _∷_; _++_)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.List.Membership.Propositional.Properties using (∈-++⁺ˡ)
 open import Data.Product using (_×_; _,_)
-open import Relation.Binary.PropositionalEquality using (_≡_)
+open import Relation.Binary.PropositionalEquality using (_≡_; cong; trans; sym)
 open import Relation.Nullary using (Dec)
 open import Data.Unit using (⊤; tt)
+open import Axiom.Extensionality.Propositional using (Extensionality)
 
 -- ---------------------------------------------------------------------
 -- Ground (first-order) types: what operations/primitive functions take
@@ -158,6 +159,8 @@ module WHat (Effect Base : Set) (⟦_⟧ᵇ : Base → Set) (R : Set) (0# : R) (
   bind̂ : ∀ {ε X Y} → Ŵ ε X → (X → Ŵ ε Y) → Ŵ ε Y
   bind̂ w f = ext̂ Ŵ-alg f w
 
+
+
   -- §3.3 loss, commutativity, and what changes: tell (above), censor, and
   -- the collect/collectX/bump family.
 
@@ -189,10 +192,10 @@ module WHat (Effect Base : Set) (⟦_⟧ᵇ : Base → Set) (R : Set) (0# : R) (
 
   -- §3.4 The selection monad Ŝ_ε(X) = (X → R̂_ε) → Ŵ_ε(X), R̂_ε := Ŵ_ε(1).
   Ŝ : EffCxt → Set → Set
-  Ŝ ε X = (X → Ŵ ε ⊤) → Ŵ ε X
+  Ŝ ε X = (X → Ŵ ε R) → Ŵ ε X
 
   R̂ : EffCxt → Set
-  R̂ ε = Ŵ ε ⊤
+  R̂ ε = Ŵ ε R
 
   η̂ˢ : ∀ {ε X} → X → Ŝ ε X
   η̂ˢ x = λ γ → η̂ x
@@ -256,3 +259,106 @@ record Sig : Set₁ where
     in′  : ∀ {ℓ} → Op ℓ → Types.GTy Effect Base ⟦_⟧ᵇ R
 
   open WHat Effect Base ⟦_⟧ᵇ R 0# _+_ Op out in′ public
+
+-- ---------------------------------------------------------------------
+-- Monad laws for Ŵ_ε (bind̂'s left/right unit and associativity).
+-- Ported from Proofs.agda, where they originally lived -- moved here
+-- since they are facts about Ŵ_ε itself (§3.2's bind̂/η̂), not about the
+-- object language Proofs.agda is otherwise concerned with. They need R's
+-- monoid laws (+-identityˡ/+-identityʳ/+-assoc), which WHat's own
+-- parameters deliberately omit (see the SCOPING DECISION note at the top
+-- of this file), so this module takes a full Sig instead.
+-- ---------------------------------------------------------------------
+
+module ŴMonad (Sg : Sig) where
+  open Sig Sg
+
+  postulate
+    funext : ∀ {a b} → Extensionality a b
+
+  -- tell(r) then tell(s) is tell(r+s): the additive action law of §3.2,
+  -- specialised to Ŵ's own native action.
+  tell-+ : ∀ {ε X} (r s : R) (w : Ŵ ε X) → tell (r + s) w ≡ tell r (tell s w)
+  tell-+ r s (leaf r₀ x)        = cong (λ z → leaf z x) (+-assoc r s r₀)
+  tell-+ r s (node m op r₀ o κ) = cong (λ z → node m op z o κ) (+-assoc r s r₀)
+
+  tell-0 : ∀ {ε X} (w : Ŵ ε X) → tell 0# w ≡ w
+  tell-0 (leaf r x)        = cong (λ z → leaf z x) (+-identityˡ r)
+  tell-0 (node m op r o κ) = cong (λ z → node m op z o κ) (+-identityˡ r)
+
+  -- tell commutes with bind̂'s own binding: tell r only ever touches the
+  -- root, so bind̂'s ext̂ and tell's root-update commute regardless of what
+  -- K does with the leaf value.
+  tell-bind̂-comm : ∀ {ε X Y} (r : R) (w : Ŵ ε X) (K : X → Ŵ ε Y) → bind̂ (tell r w) K ≡ tell r (bind̂ w K)
+  tell-bind̂-comm r (leaf r₀ x) K        = tell-+ r r₀ (K x)
+  tell-bind̂-comm r (node m op r₀ o κ) K = tell-+ r r₀ (node m op 0# o (λ a → bind̂ (κ a) K))
+
+  -- Left unit: bind̂ (η̂ x) f = f x. Immediate, since η̂ x = leaf 0# x and
+  -- bind̂'s action at a leaf is exactly tell.
+  bind̂-unitˡ : ∀ {ε X Y} (x : X) (f : X → Ŵ ε Y) → bind̂ (η̂ x) f ≡ f x
+  bind̂-unitˡ x f = tell-0 (f x)
+
+  -- Right unit: bind̂ w η̂ = w.
+  bind̂-unitʳ : ∀ {ε X} (w : Ŵ ε X) → bind̂ w η̂ ≡ w
+  bind̂-unitʳ (leaf r x)        = cong (λ z → leaf z x) (+-identityʳ r)
+  bind̂-unitʳ (node m op r o κ) =
+    trans (cong (λ z → node m op z o (λ a → bind̂ (κ a) η̂)) (+-identityʳ r))
+          (cong (node m op r o) (funext (λ a → bind̂-unitʳ (κ a))))
+
+  -- Associativity: bind̂ (bind̂ w f) g = bind̂ w (λ x → bind̂ (f x) g).
+  bind̂-assoc : ∀ {ε X Y Z} (w : Ŵ ε X) (f : X → Ŵ ε Y) (g : Y → Ŵ ε Z)
+             → bind̂ (bind̂ w f) g ≡ bind̂ w (λ x → bind̂ (f x) g)
+  bind̂-assoc (leaf r x)        f g = tell-bind̂-comm r (f x) g
+  bind̂-assoc (node m op r o κ) f g =
+    trans (tell-bind̂-comm r (node m op 0# o (λ a → bind̂ (κ a) f)) g)
+          (cong (tell r) (trans (tell-0 _) (cong (node m op 0# o) (funext (λ a → bind̂-assoc (κ a) f g)))))
+
+-- ---------------------------------------------------------------------
+-- Monad laws for Ŝ_ε (§3.4's selection monad): bind̂ˢ's left/right unit
+-- and associativity. Ported from/extending Proofs.agda, where only the
+-- left unit law (bindˢ-unitˡ) previously existed -- the right unit and
+-- associativity laws below are new. All three reduce to ŴMonad's own
+-- bind̂ laws once R̂-of/η̂ˢ are unfolded, since bind̂ˢ is exactly bind̂
+-- wrapped in a loss-continuation (γ) abstraction.
+-- ---------------------------------------------------------------------
+
+module ŜMonad (Sg : Sig) where
+  open Sig Sg
+  open ŴMonad Sg
+
+  -- Left unit: bind̂ˢ f (η̂ˢ x) = f x. η̂ˢ x's own continuation-independence
+  -- (η̂ˢ x γ = η̂ x for every γ) reduces bind̂ˢ's outer bind̂ to a tell 0#
+  -- at the root, discharged by tell-0.
+  bindˢ-unitˡ : ∀ {ε X Y} (f : X → Ŝ ε Y) (x : X) → bind̂ˢ f (η̂ˢ x) ≡ f x
+  bindˢ-unitˡ f x = funext (λ γ → tell-0 (f x γ))
+
+  -- Right unit: bind̂ˢ η̂ˢ F = F. R̂-of (η̂ˢ x) γ reduces to tell 0# (γ x) ≡
+  -- γ x (tell-0 again), so the selection-function argument bind̂ˢ passes to
+  -- F collapses back to γ itself; what remains is exactly bind̂'s own
+  -- right unit law.
+  bindˢ-unitʳ : ∀ {ε X} (F : Ŝ ε X) → bind̂ˢ η̂ˢ F ≡ F
+  bindˢ-unitʳ F = funext (λ γ →
+    trans (cong (λ h → bind̂ (F h) η̂) (funext (λ x → tell-0 (γ x))))
+          (bind̂-unitʳ (F γ)))
+
+  -- Associativity: bind̂ˢ g (bind̂ˢ f F) = bind̂ˢ (λ x → bind̂ˢ g (f x)) F.
+  -- Both sides unfold to a `bind̂ (F h) κ` for the same continuation κ; the
+  -- two loss-continuation arguments (h vs h') passed to F agree because
+  -- R̂-of's own unfolding of bind̂ˢ g (f x) γ is exactly ŴMonad's bind̂-assoc,
+  -- applied once to line up κ and once more to line up h/h'.
+  bindˢ-assoc : ∀ {ε X Y Z} (F : Ŝ ε X) (f : X → Ŝ ε Y) (g : Y → Ŝ ε Z)
+              → bind̂ˢ g (bind̂ˢ f F) ≡ bind̂ˢ (λ x → bind̂ˢ g (f x)) F
+  bindˢ-assoc {ε} {X} {Y} {Z} F f g = funext lemma
+    where
+    lemma : ∀ γ → bind̂ˢ g (bind̂ˢ f F) γ ≡ bind̂ˢ (λ x → bind̂ˢ g (f x)) F γ
+    lemma γ = trans (bind̂-assoc (F h) (λ x → f x ψ) m)
+                     (cong (λ w → bind̂ w κ) (cong F (funext (λ x → sym (bind̂-assoc (f x ψ) m γ)))))
+      where
+      ψ : Y → R̂ ε
+      ψ y = R̂-of (g y) γ
+      m : Y → Ŵ ε Z
+      m y = g y γ
+      h : X → R̂ ε
+      h x = R̂-of (f x) ψ
+      κ : X → Ŵ ε Z
+      κ x = bind̂ (f x ψ) m
