@@ -67,7 +67,7 @@ mutual
   Esem (snd e) ρ          = bind̂ˢ (λ{ (a , b) → η̂ˢ b }) (Esem e ρ)
   Esem (app e1 e2) ρ      = bind̂ˢ (λ φ → bind̂ˢ (λ a → φ a) (Esem e2 ρ)) (Esem e1 ρ)
   Esem (opE m op e) ρ     = bind̂ˢ (λ a → φ̂ˢ m op a η̂ˢ) (Esem e ρ)
-  Esem (lossE e) ρ        = λ γ → bind̂ (Esem e ρ (λ a → γ tt)) (λ a → tell a (η̂ tt))
+  Esem (lossE e) ρ        = λ γ → bind̂ (Esem e ρ (λ a → mapŴ (a +_) (γ tt))) (λ a → tell a (η̂ tt))
 
   -- Ssem(e1 ▶ g)(ρ)(γ) = let (a,r1) be collectX(Ssem e1 ρ (Lsem g ρ)) in
   --                       let (r3,r2) be collectX(Vsem g ρ a γ0) in
@@ -156,7 +156,7 @@ mutual
     -- RootZero-collect-via-collectX / lemma-fl-l1v-match, and the
     -- "FIFTH FINDING" comment above theorem-B9-R5-gen's postulate.
     l1v : ⟦ gnd par `× gnd (in′ op) ⟧ → Ŝ ε R
-    l1v (p'' , a) γ1 = mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ (k a p'')))
+    l1v (p'' , a) γ1 = mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ (k a p'')))
     -- the delimited continuation k1(p,a) = k(a)(p), likewise promoted to
     -- a (γ-independent) selection function.
     k1v : ⟦ gnd par `× gnd (in′ op) ⟧ → Ŝ ε ⟦ σ' ⟧
@@ -187,7 +187,7 @@ mutual
   handlerΨ-yes-eq : ∀ {Γ ℓ par σ σ' ε} (h : Handler Γ ℓ par σ σ' ε) (ρ : Env Γ) (γ : ⟦ σ' ⟧ → Ŵ ε R)
                   (m : ℓ ∈ (ε ,ℓ ℓ)) (op : Op ℓ) (o : ⟦ out op ⟧ᴳ) (k : ⟦ in′ op ⟧ᴳ → (⟦ gnd par ⟧ → Ŵ ε ⟦ σ' ⟧))
                 → handlerΨ h ρ γ m op o k
-                ≡ (λ p' → Esem (clause h op) ((((ρ ,, p') ,, o) ,, (λ{ (p'' , a) γ1 → mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ (k a p''))) })) ,, (λ{ (p'' , a) γ' → k a p'' })) γ)
+                ≡ (λ p' → Esem (clause h op) ((((ρ ,, p') ,, o) ,, (λ{ (p'' , a) γ1 → mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ (k a p''))) })) ,, (λ{ (p'' , a) γ' → k a p'' })) γ)
   handlerΨ-yes-eq {ℓ = ℓ} h ρ γ m op o k with ℓ ≟ᵉ ℓ
   handlerΨ-yes-eq {ℓ = ℓ} h ρ γ m op o k | yes eq with eq
   handlerΨ-yes-eq {ℓ = ℓ} h ρ γ m op o k | yes eq | refl = refl

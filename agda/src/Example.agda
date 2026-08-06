@@ -95,7 +95,7 @@ handledSem : Ŝ [] Bool
 handledSem = Esem handled (λ ())
 
 handledResult : Ŵ [] Bool
-handledResult = handledSem (λ _ → η̂ tt)
+handledResult = handledSem (λ _ → η̂ 0#)
 
 -- A single small-step reduction: decide()'s argument (()) is already a
 -- value, so the whole program is stuck on `decide` under the empty

@@ -106,101 +106,17 @@ lemma-B3 ψ' s r (node m op r₀ o κ) p = tell-+ r r₀ (ψ' m op o (λ a → e
 
 -- ---------------------------------------------------------------------
 -- bump/collectX algebra, needed later for Theorem B.9's THEN case (S2).
+-- bump-fusion/bump-collectX-comm/bump-shift/bump-0/tell-mapŴ-comm/
+-- mapŴ-∘/bind̂-mapŴ-after/collectX-bind̂-fusion(-gen) now live in
+-- Domains.ŴMonad, opened above (moved there since bindˢ-assoc needs them
+-- too, now that R̂-of routes through collectX/mapŴ).
 -- ---------------------------------------------------------------------
-
--- bump_r ∘ bump_s = bump_{r+s} (paper's own stated fact, paper.tex line 288).
-bump-fusion : ∀ {ε X} (r s : R) (T : Ŵ ε (X × R)) → bump r (bump s T) ≡ bump (r + s) T
-bump-fusion r s (leaf r₀ (x , y))  = cong (λ z → leaf r₀ (x , z)) (sym (+-assoc r s y))
-bump-fusion r s (node m op r₀ o κ) = cong (node m op r₀ o) (funext (λ a → bump-fusion r s (κ a)))
-
--- bump r (collectX S) ≡ collectX (tell r S): the accumulated-loss field
--- collectX pairs onto every leaf is exactly what bump adds to.
-bump-collectX-comm : ∀ {ε X} (r : R) (S : Ŵ ε X) → bump r (collectX S) ≡ collectX (tell r S)
-bump-collectX-comm r (leaf r₀ x)        = refl
-bump-collectX-comm r (node m op r₀ o κ) = cong (node m op 0# o) (funext (λ a → bump-fusion r r₀ (collectX (κ a))))
-
--- Bumping a collectX-paired tree before feeding it through a continuation
--- that only ever *adds* the accumulated-loss component into something is
--- the same as not bumping and adding the bump amount directly at the use
--- site. (This is the correct shape of "push a bump past a bind̂" -- an
--- earlier attempt that instead tried to pull the bump amount OUT as a
--- separate outer `tell` was genuinely false, see B5Core.agda's
--- bump-outside-refuted; this one holds unconditionally, since it never
--- has to relate two DIFFERENT trees the way collapse/Lsem did.)
-bump-shift : ∀ {ε X Y} (bumpAmt : R) (T : Ŵ ε (X × R)) (h : X → R → Ŵ ε Y)
-  → bind̂ (bump bumpAmt T) (λ { (a , r1) → h a r1 }) ≡ bind̂ T (λ { (a , r1) → h a (bumpAmt + r1) })
-bump-shift bumpAmt (leaf r₀ (x , y)) h = refl
-bump-shift bumpAmt (node m op r₀ o κ) h =
-  cong (tell r₀) (cong (node m op 0# o) (funext (λ a → bump-shift bumpAmt (κ a) h)))
-
--- bump 0# is the identity.
-bump-0 : ∀ {ε X} (T : Ŵ ε (X × R)) → bump 0# T ≡ T
-bump-0 (leaf r₀ (x , y))  = cong (λ z → leaf r₀ (x , z)) (+-identityˡ y)
-bump-0 (node m op r₀ o κ) = cong (node m op r₀ o) (funext (λ a → bump-0 (κ a)))
 
 -- bind̂ after mapŴ is bind̂ with the composed continuation (standard
 -- functor/monad law).
 bind̂-mapŴ : ∀ {ε X Y Z} (g : X → Y) (w : Ŵ ε X) (f : Y → Ŵ ε Z) → bind̂ (mapŴ g w) f ≡ bind̂ w (λ x → f (g x))
 bind̂-mapŴ g (leaf r x)        f = refl
 bind̂-mapŴ g (node m op r o κ) f = cong (tell r) (cong (node m op 0# o) (funext (λ a → bind̂-mapŴ g (κ a) f)))
-
--- tell and mapŴ commute unconditionally (tell only ever touches a
--- root-loss slot; mapŴ only ever touches leaf payloads -- the two are
--- structurally independent, unlike tell/collapse or mapŴ/shift).
-tell-mapŴ-comm : ∀ {ε X Y} (r : R) (f : X → Y) (W : Ŵ ε X) → tell r (mapŴ f W) ≡ mapŴ f (tell r W)
-tell-mapŴ-comm r f (leaf r₀ x)        = refl
-tell-mapŴ-comm r f (node m op r₀ o κ) = refl
-
--- mapŴ is functorial (standard law).
-mapŴ-∘ : ∀ {ε X Y Z} (f : Y → Z) (g : X → Y) (W : Ŵ ε X) → mapŴ f (mapŴ g W) ≡ mapŴ (λ x → f (g x)) W
-mapŴ-∘ f g (leaf r x)        = refl
-mapŴ-∘ f g (node m op r o κ) = cong (node m op r o) (funext (λ a → mapŴ-∘ f g (κ a)))
-
--- Consequently mapŴ can be pulled out from inside a bind̂'s own
--- continuation to wrap the whole bind̂ instead (needed for the
--- EXPERIMENTAL mapŴ-based Esem(thenE) variant: unlike the collectX-based
--- `shift`, mapŴ commutes past bind̂ cleanly, with no root-loss
--- redistribution subtlety at all).
-bind̂-mapŴ-after : ∀ {ε X Y Z} (T : Ŵ ε X) (k : X → Ŵ ε Y) (f : Y → Z) → bind̂ T (λ x → mapŴ f (k x)) ≡ mapŴ f (bind̂ T k)
-bind̂-mapŴ-after (leaf r x) k f = tell-mapŴ-comm r f (k x)
-bind̂-mapŴ-after (node m op r o κ) k f =
-  trans (cong (tell r) (cong (node m op 0# o) (funext (λ a → bind̂-mapŴ-after (κ a) k f))))
-        (tell-mapŴ-comm r f (node m op 0# o (λ a → bind̂ (κ a) k)))
-
--- bind̂'s monad laws (bind̂-unitˡ, bind̂-unitʳ, bind̂-assoc) now live in
--- Domains.ŴMonad, opened above.
-
--- collectX distributes over bind̂, generalised with an additive offset
--- threaded through the accumulator (needed for the node case, same
--- pattern as bump-shift/bump-collectX-comm above).
-collectX-bind̂-fusion-gen : ∀ {ε X Y} (off : R) (w : Ŵ ε X) (f : X → Ŵ ε Y)
-  → bind̂ (collectX w) (λ { (a , r1) → bump (off + r1) (collectX (f a)) }) ≡ bump off (collectX (bind̂ w f))
-collectX-bind̂-fusion-gen off (leaf r x) f =
-  trans (tell-0 _) (trans (sym (bump-fusion off r (collectX (f x)))) (cong (bump off) (bump-collectX-comm r (f x))))
-collectX-bind̂-fusion-gen off (node m op r o κ) f = trans lhsEq (sym rhsEq)
-  where
-  lhsEq : bind̂ (collectX (node m op r o κ)) (λ { (a , r1) → bump (off + r1) (collectX (f a)) })
-        ≡ node m op 0# o (λ a → bump (off + r) (collectX (bind̂ (κ a) f)))
-  lhsEq = trans (tell-0 _)
-                (cong (node m op 0# o) (funext (λ a →
-                  trans (bump-shift r (collectX (κ a)) (λ a' r1 → bump (off + r1) (collectX (f a'))))
-                        (trans (cong (bind̂ (collectX (κ a)))
-                                     (funext (λ { (a' , r1) → cong (λ z → bump z (collectX (f a'))) (sym (+-assoc off r r1)) })))
-                               (collectX-bind̂-fusion-gen (off + r) (κ a) f)))))
-  rhsEq : bump off (collectX (bind̂ (node m op r o κ) f))
-        ≡ node m op 0# o (λ a → bump (off + r) (collectX (bind̂ (κ a) f)))
-  rhsEq = trans (cong (bump off) (sym (bump-collectX-comm r (node m op 0# o (λ a → bind̂ (κ a) f)))))
-                (cong (node m op 0# o) (funext (λ a →
-                  trans (cong (bump off) (bump-fusion r 0# (collectX (bind̂ (κ a) f))))
-                        (trans (bump-fusion off (r + 0#) (collectX (bind̂ (κ a) f)))
-                               (cong (λ z → bump z (collectX (bind̂ (κ a) f))) (cong (off +_) (+-identityʳ r)))))))
-
-collectX-bind̂-fusion : ∀ {ε X Y} (w : Ŵ ε X) (f : X → Ŵ ε Y)
-  → collectX (bind̂ w f) ≡ bind̂ (collectX w) (λ { (a , r1) → bump r1 (collectX (f a)) })
-collectX-bind̂-fusion w f =
-  trans (sym (bump-0 _))
-        (trans (sym (collectX-bind̂-fusion-gen 0# w f))
-               (cong (bind̂ (collectX w)) (funext (λ { (a , r1) → cong (λ z → bump z (collectX (f a))) (+-identityˡ r1) }))))
 
 -- mapŴ's "tack on 0#" combinator commutes past bump the same way it
 -- commutes past everything else that only touches the accumulator slot.
@@ -651,13 +567,13 @@ mutual
                      (clause h op)))
       where
       l1vκ l1vκ' : ⟦ gnd par `× gnd (in′ op) ⟧ → Ŝ ε R
-      l1vκ  (p'' , a) γ1 = mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ (κ  a p'')))
-      l1vκ' (p'' , a) γ1 = mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ (κ' a p'')))
+      l1vκ  (p'' , a) γ1 = mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ (κ  a p'')))
+      l1vκ' (p'' , a) γ1 = mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ (κ' a p'')))
       k1vκ k1vκ' : ⟦ gnd par `× gnd (in′ op) ⟧ → Ŝ ε ⟦ σ' ⟧
       k1vκ  (p'' , a) γ' = κ  a p''
       k1vκ' (p'' , a) γ' = κ' a p''
       l1vEq : l1vκ ≡ l1vκ'
-      l1vEq = funext (λ{ (p'' , a) → funext (λ γ1 → cong (λ w → mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ w))) (cong (λ f → f p'') (κeq a))) })
+      l1vEq = funext (λ{ (p'' , a) → funext (λ γ1 → cong (λ w → mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ w))) (cong (λ f → f p'') (κeq a))) })
       k1vEq : k1vκ ≡ k1vκ'
       k1vEq = funext (λ{ (p'' , a) → funext (λ γ' → cong (λ f → f p'') (κeq a)) })
 
@@ -673,7 +589,7 @@ mutual
     cong₂ (λ F1 F2 → bind̂ˢ (λ φ → bind̂ˢ (λ a → φ a) F2) F1) (renE-coh ren ρ ρ' coh e1) (renE-coh ren ρ ρ' coh e2)
   renE-coh ren ρ ρ' coh (opE m op e) = cong (bind̂ˢ (λ a → φ̂ˢ m op a η̂ˢ)) (renE-coh ren ρ ρ' coh e)
   renE-coh ren ρ ρ' coh (lossE e) =
-    funext (λ γ → cong (λ F → bind̂ (F (λ a → γ tt)) (λ a → tell a (η̂ tt))) (renE-coh ren ρ ρ' coh e))
+    funext (λ γ → cong (λ F → bind̂ (F (λ a → mapŴ (a +_) (γ tt))) (λ a → tell a (η̂ tt))) (renE-coh ren ρ ρ' coh e))
   renE-coh ren ρ ρ' coh (thenE sub e1 g) = funext (λ γ → cong₂
     (λ w1 f2 → bind̂ (collectX w1) (λ{ (a , r1) → mapŴ (r1 +_) (f2 a) }))
     e1treeEq innerEq)
@@ -780,13 +696,13 @@ mutual
                      (clause h op)))
       where
       l1vκ l1vκ' : ⟦ gnd par `× gnd (in′ op) ⟧ → Ŝ ε R
-      l1vκ  (p'' , a) γ1 = mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ (κ  a p'')))
-      l1vκ' (p'' , a) γ1 = mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ (κ' a p'')))
+      l1vκ  (p'' , a) γ1 = mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ (κ  a p'')))
+      l1vκ' (p'' , a) γ1 = mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ (κ' a p'')))
       k1vκ k1vκ' : ⟦ gnd par `× gnd (in′ op) ⟧ → Ŝ ε ⟦ σ' ⟧
       k1vκ  (p'' , a) γ' = κ  a p''
       k1vκ' (p'' , a) γ' = κ' a p''
       l1vEq : l1vκ ≡ l1vκ'
-      l1vEq = funext (λ{ (p'' , a) → funext (λ γ1 → cong (λ w → mapŴ (λ { (_ , r1) → r1 }) (collectX (ext̂ Ŵ-alg γ w))) (cong (λ f → f p'') (κeq a))) })
+      l1vEq = funext (λ{ (p'' , a) → funext (λ γ1 → cong (λ w → mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (ext̂ Ŵ-alg γ w))) (cong (λ f → f p'') (κeq a))) })
       k1vEq : k1vκ ≡ k1vκ'
       k1vEq = funext (λ{ (p'' , a) → funext (λ γ' → cong (λ f → f p'') (κeq a)) })
 
@@ -802,7 +718,7 @@ mutual
     cong₂ (λ F1 F2 → bind̂ˢ (λ φ → bind̂ˢ (λ a → φ a) F2) F1) (subE-coh σs ρ' ρ coh e1) (subE-coh σs ρ' ρ coh e2)
   subE-coh σs ρ' ρ coh (opE m op e) = cong (bind̂ˢ (λ a → φ̂ˢ m op a η̂ˢ)) (subE-coh σs ρ' ρ coh e)
   subE-coh σs ρ' ρ coh (lossE e) =
-    funext (λ γ → cong (λ F → bind̂ (F (λ a → γ tt)) (λ a → tell a (η̂ tt))) (subE-coh σs ρ' ρ coh e))
+    funext (λ γ → cong (λ F → bind̂ (F (λ a → mapŴ (a +_) (γ tt))) (λ a → tell a (η̂ tt))) (subE-coh σs ρ' ρ coh e))
   subE-coh σs ρ' ρ coh (thenE sub e1 g) = funext (λ γ → cong₂
     (λ w1 f2 → bind̂ (collectX w1) (λ{ (a , r1) → mapŴ (r1 +_) (f2 a) }))
     e1treeEq innerEq)
@@ -846,10 +762,29 @@ sub1-coh e ρ v = subE-coh (sub1 v) ρ (ρ ,, Vsem v ρ) (λ { Z → refl ; (S x
 -- ultimately about how `tell` commutes with "let"; postponed with it.
 -- ---------------------------------------------------------------------
 
-postulate
-  postulate-Ŝ-tell-naturality :
-    ∀ {Γ ε} (e : Γ ⊢ Loss ! ε) (ρ : Env Γ)
-    → Esem (lossE e) ρ ≡ bind̂ˢ (λ a → Esem (lossE {ε = ε} (val (vvar Z))) (ρ ,, a)) (Esem e ρ)
+-- Now that R̂-of routes through collectX/mapŴ (Domains.agda) instead of
+-- a plain bind̂, it uses the SAME "mapŴ into the payload" injection style
+-- lossE's own clause does -- so bind̂ˢ's own naturality machinery and
+-- lossE's clause line up directly, with no per-e induction needed at
+-- all: both sides reduce to a bind̂ over the SAME two arguments, via
+-- R̂-of-eq (below) on the first and tell-0 on the second.
+Ŝ-tell-naturality :
+  ∀ {Γ ε} (e : Γ ⊢ Loss ! ε) (ρ : Env Γ)
+  → Esem (lossE e) ρ ≡ bind̂ˢ (λ a → Esem (lossE {ε = ε} (val (vvar Z))) (ρ ,, a)) (Esem e ρ)
+Ŝ-tell-naturality {ε = ε} e ρ = funext lemma
+  where
+  -- R̂-of (Esem (lossE (val (vvar Z))) (ρ,,x)) γ' unfolds (bind̂-unitˡ,
+  -- since Esem (val (vvar Z)) (ρ,,x) is η̂ˢ x, ignoring its own
+  -- continuation) to tell 0# (mapŴ ((x+0#)+_) (γ' tt)), matching lossE's
+  -- own "mapŴ (x +_) (γ' tt)" injection up to tell-0/+-identityʳ.
+  R̂-of-eq : ∀ x γ' → R̂-of (Esem (lossE (val (vvar Z))) (ρ ,, x)) γ' ≡ mapŴ (x +_) (γ' tt)
+  R̂-of-eq x γ' =
+    trans (cong (λ w → bind̂ (collectX w) (λ { (a , r1) → mapŴ (r1 +_) (γ' a) })) (bind̂-unitˡ x (λ a' → tell a' (η̂ tt))))
+          (trans (tell-0 _) (cong (λ z → mapŴ (z +_) (γ' tt)) (+-identityʳ x)))
+
+  lemma : ∀ γ → Esem (lossE e) ρ γ ≡ bind̂ˢ (λ a → Esem (lossE {ε = ε} (val (vvar Z))) (ρ ,, a)) (Esem e ρ) γ
+  lemma γ = cong₂ bind̂ (cong (Esem e ρ) (funext (λ x → sym (R̂-of-eq x γ))))
+                       (funext (λ x → sym (tell-0 (tell x (η̂ tt)))))
 
 lemma-B6 : ∀ {Γ α ε τ} (f : Frame Γ α ε τ ε) (e : Γ ⊢ α ! ε) (ρ : Env Γ)
          → Esem (plugF f e) ρ ≡ bind̂ˢ (λ a → Esem (plugF (weaken1F f) (val (vvar Z))) (ρ ,, a)) (Esem e ρ)
@@ -896,7 +831,7 @@ lemma-B6 {α = α} (F-handleP h body) e ρ = cong (λ F → bind̂ˢ F (Esem e �
   (trans (funext (weaken1H-coh α h ρ a a (Esem (weaken1 body) (ρ ,, a))))
          (cong (handlerSem h ρ a) (weaken1-coh α body ρ a))))))
 
-lemma-B6 F-loss e ρ = postulate-Ŝ-tell-naturality e ρ
+lemma-B6 F-loss e ρ = Ŝ-tell-naturality e ρ
 
 -- Lemma 7.7 (hat-Lemma B.7), "threading loss continuations through
 -- frames", is not formalised here: its proof needs Lemma 7.5(3)/B.5(3),
@@ -1695,13 +1630,7 @@ collapse-shift-0 (node m op r o κ) =
                         (collapse-shift-0 (κ a))))))
 -}
 
--- mapŴ (0# +_) is the identity -- unlike shift 0#, this holds outright
--- (mapŴ only ever touches leaf payloads, never redistributes anything
--- through node structure, so there's no root-loss-vs-node subtlety
--- here at all).
-mapŴ-plus-0 : ∀ {ε} (T : Ŵ ε R) → mapŴ (0# +_) T ≡ T
-mapŴ-plus-0 (leaf r x)        = cong (leaf r) (+-identityˡ x)
-mapŴ-plus-0 (node m op r o κ) = cong (node m op r o) (funext (λ a → mapŴ-plus-0 (κ a)))
+-- mapŴ-plus-0 now lives in Domains.ŴMonad, opened above.
 
 -- widenŴ commutes with collapse (both recurse through the tree structure
 -- untouched by the other -- widenŴ only rewrites a node's membership
@@ -1727,22 +1656,16 @@ collapse-widenŴ-comm sub (node m op r o κ) = cong (node (sub m) op 0# o) (fune
 -- collapse-widenŴ-comm bridging γ' = ⌊g⌋[sub,ρ] against collapse ∘ δ'.
 -- ---------------------------------------------------------------------
 
--- Lemma 7.5/B.5(1), fixed for the collapse-free semantics. `Esem(thenE
--- ...)`'s actual formula ADDS e's own accumulated loss into g's own
--- returned value (`mapŴ (r1 +_) (⌊g⌋[sub,ρ] a)`). Reading the R̂-of/
--- collectX side with `mapŴ proj₂` (as B.5(1) used to, back when
--- `collapse` moved a leaf's payload into its root before any bump/tell
--- touched it) silently DISCARDS g's own value -- confirmed FALSE by a
--- machine-checked counterexample: e := lossE(val(vgnd 3)), g :=
--- vabs(val(vgnd 5)) gives LHS = leaf 0# 8, but mapŴ-proj₂'s reading of
--- the RHS = leaf 0# 3. Reading it off with `mapŴ (λ(r1,r2)→r1+r2)`
--- instead -- summing BOTH the leaf payload g reports and the accumulator
--- collectX built from e's own root -- reproduces leaf 0# 8 on that same
--- instance, and is provably equal in general (below): bump only ever
--- adds into collectX's own accumulator slot, so once RootZero(g) has
--- zeroed g's own root, that accumulator IS e's own contribution outright,
--- and adding it to g's payload afterwards is the same sum `Esem(thenE
--- ...)` itself computes, up to `+`'s own commutativity.
+-- RootZero-mapŴ-sum-bump/lemma-fl-l1v-match were built to prove
+-- Lemma 7.5/B.5(1) (see git history for that derivation, and the
+-- machine-checked counterexample showing the OLD `mapŴ proj₂`-based
+-- reading was false: e := lossE(val(vgnd 3)), g := vabs(val(vgnd 5))
+-- gave LHS = leaf 0# 8 against RHS = leaf 0# 3, fixed by summing both
+-- components instead of discarding one). Domains.agda's R̂-of has SINCE
+-- been redefined to route through collectX/mapŴ directly (the same fix,
+-- pushed into R̂-of itself), which makes B.5(1) below purely definitional
+-- (see its own comment) -- these two lemmas are no longer part of ITS
+-- proof, but are kept: still consumed further down (fk/l1v matching).
 RootZero-mapŴ-sum-bump : ∀ {ε} (r1 : R) (D : Ŵ ε R) → RootZero D
   → mapŴ (λ { (x , r2) → x + r2 }) (bump r1 (collectX D)) ≡ mapŴ (r1 +_) D
 RootZero-mapŴ-sum-bump r1 (leaf r0 v) rz =
@@ -1775,21 +1698,15 @@ lemma-fl-l1v-match W δ' rzδ' =
   where
   h = λ { (x , r1) → x + r1 }
 
+-- Lemma 7.5/B.5(1): now purely definitional. R̂-of (Esem e ρ) ⌊g⌋[sub,ρ]
+-- unfolds (R̂-of's own new definition) to EXACTLY the same
+-- bind̂ (collectX (Esem e ρ γ')) (λ(a,r1)→mapŴ(r1+_)(γ'a)) expression
+-- Esem(thenE...)'s own clause computes, since ⌊g⌋[sub,ρ] a and
+-- Vsem g ρ a (λ_→η̂0#) already agree via Lsem's own definition -- no
+-- RootZero, no induction, no wrapper needed at all.
 lemma-B5-1-RootZero : ∀ {Γ σ ε ε₁} (sub : ε₁ ⊆ᵉ ε) (e : Γ ⊢ σ ! ε) (g : LC Γ σ ε₁) (ρ : Env Γ)
-                     → (∀ a → RootZero (Vsem g ρ a (λ _ → η̂ 0#)))
-                     → Esem (thenE sub e g) ρ
-                       ≡ (λ γ1 → mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (R̂-of (Esem e ρ) ⌊ g ⌋[ sub , ρ ])))
-lemma-B5-1-RootZero {σ = σ} {ε = ε} sub e g ρ rzg = funext lemma
-  where
-  γ' : ⟦ σ ⟧ → Ŵ ε R
-  γ' = ⌊ g ⌋[ sub , ρ ]
-
-  rzγ' : ∀ a → RootZero (γ' a)
-  rzγ' a = RootZero-widenŴ sub (Vsem g ρ a (λ _ → η̂ 0#)) (rzg a)
-
-  lemma : ∀ γ1 → Esem (thenE sub e g) ρ γ1
-        ≡ mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (R̂-of (Esem e ρ) γ'))
-  lemma γ1 = sym (lemma-fl-l1v-match (Esem e ρ γ') γ' rzγ')
+                     → Esem (thenE sub e g) ρ ≡ (λ γ1 → R̂-of (Esem e ρ) ⌊ g ⌋[ sub , ρ ])
+lemma-B5-1-RootZero sub e g ρ = refl
 
 -- ---------------------------------------------------------------------
 -- Lemma 7.5/B.5(2), RootZero-restricted, and read at the canonical zero
@@ -1829,23 +1746,16 @@ lemma-B5-2-RootZero : ∀ {Γ σ ε} (g : LC Γ σ ε) (ρ : Env Γ) (a : ⟦ σ
                      → Lsem g ρ a ≡ Vsem g ρ a (λ _ → η̂ 0#)
 lemma-B5-2-RootZero g ρ a rz = refl
 
--- Lemma 7.5/B.5(3), fixed the same way B.5(1) was: comparing
--- `Lsem(vabs(thenE...))` against the RAW `R̂-of(...)` is exactly the
--- old, `collapse`-shaped reading (equivalent to reading B.5(1) off with
--- `mapŴ proj₂`, which the counterexample above already refutes) --
--- unconditionally false via the same e-gets-stuck-with-nonzero-own-loss
--- instance, regardless of g. Reading it off with the SAME `mapŴ
--- (λ(r1,r2)→r1+r2) ∘ collectX` wrapper B.5(1) needed instead, this is
--- now a one-line corollary of lemma-B5-1-RootZero: Lsem(vabs(thenE...))
--- ρx unfolds (Lsem/Vsem(vabs _)'s own definitions) to exactly
--- `Esem(thenE sub e g)(ρ,,x)(λ_→η̂0#)`, and lemma-B5-1-RootZero already
--- gives Esem(thenE...)'s value at EVERY continuation, this one included.
+-- Lemma 7.5/B.5(3): now that R̂-of itself routes through collectX/mapŴ
+-- (Domains.agda), lemma-B5-1-RootZero already relates Esem(thenE...) to
+-- R̂-of directly, with no wrapper and no RootZero hypothesis needed --
+-- and this is the exact same fact, applied at Lsem/Vsem(vabs _)'s own
+-- canonical continuation (λ_→η̂0#): Lsem(vabs(thenE sub e g))ρx unfolds
+-- definitionally to Esem(thenE sub e g)(ρ,,x)(λ_→η̂0#).
 lemma-B5-3-RootZero : ∀ {Γ σ α ε ε₁} (sub : ε₁ ⊆ᵉ ε) (e : (Γ , σ) ⊢ α ! ε) (g : LC (Γ , σ) α ε₁)
                      (ρ : Env Γ) (x : ⟦ σ ⟧)
-                   → (∀ a → RootZero (Vsem g (ρ ,, x) a (λ _ → η̂ 0#)))
-                   → Lsem (vabs (thenE sub e g)) ρ x
-                     ≡ mapŴ (λ { (r1 , r2) → r1 + r2 }) (collectX (R̂-of (Esem e (ρ ,, x)) ⌊ g ⌋[ sub , (ρ ,, x) ]))
-lemma-B5-3-RootZero sub e g ρ x rzg = cong (λ F → F (λ _ → η̂ 0#)) (lemma-B5-1-RootZero sub e g (ρ ,, x) rzg)
+                   → Lsem (vabs (thenE sub e g)) ρ x ≡ R̂-of (Esem e (ρ ,, x)) ⌊ g ⌋[ sub , (ρ ,, x) ]
+lemma-B5-3-RootZero sub e g ρ x = refl
 
 -- The "companion-free" special case of Lemma 7.7/B.7: whenever a regular
 -- frame's F[x] reduces to a *bare value transport* η̂ˢ(φ x) -- i.e. F has
@@ -1895,7 +1805,7 @@ miniB7-value {σ = σ} {τ = τ} sub g ρ φ bodyE bodyEq a = trans step2 step5
 -- B.5(3)). The remaining shapes -- F-pairL, F-pairR, F-appL, F-appR (each
 -- has a companion subexpression whose own discarded loss is exactly what
 -- breaks the general Lemma B.7 route), F-loss (whose Lemma B.6 case
--- already rests on postulate-Ŝ-tell-naturality), and F-handleP
+-- already rests on Ŝ-tell-naturality), and F-handleP
 -- (handler-shaped, comparable in difficulty to (S1)/(R5)) -- are
 -- collected in theorem-B9-F-companion, declared here (ahead of
 -- theorem-B9-F's own body below) so its clauses can delegate to it.
@@ -2367,7 +2277,7 @@ theorem-B9-gen (R5 sub' h v1 m op v2 k nh) ρ γ = theorem-B9-R5-gen sub' h v1 m
 -- theorem-B9-F-companion, DISCHARGED (no longer a postulate): a direct
 -- corollary of theorem-B9-F-gen, instantiated at γ:=⌊g⌋[sub,ρ]. This
 -- covers ALL of F-pairL/F-pairR/F-appL/F-appR/F-loss/F-handleP uniformly
--- (F-loss inherits its dependence on postulate-Ŝ-tell-naturality via
+-- (F-loss inherits its dependence on Ŝ-tell-naturality via
 -- lemma-B6's own F-loss case; F-handleP is fully unconditional; the
 -- other four are now fully unconditional too) -- contingent only on the
 -- still-open theorem-B9-S1-gen/theorem-B9-R5-gen postulates above.

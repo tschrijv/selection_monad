@@ -32,7 +32,7 @@ open import Data.List using (List; []; _∷_; _++_)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.List.Membership.Propositional.Properties using (∈-++⁺ˡ)
 open import Data.Product using (_×_; _,_)
-open import Relation.Binary.PropositionalEquality using (_≡_; cong; trans; sym)
+open import Relation.Binary.PropositionalEquality using (_≡_; cong; trans; sym; refl)
 open import Relation.Nullary using (Dec)
 open import Data.Unit using (⊤; tt)
 open import Axiom.Extensionality.Propositional using (Extensionality)
@@ -202,7 +202,8 @@ module WHat (Effect Base : Set) (⟦_⟧ᵇ : Base → Set) (R : Set) (0# : R) (
 
   -- R̂_ε(F ∣ γ) := γ†Ŵ(F(γ)), the loss associated to a selection function.
   R̂-of : ∀ {ε Y} → Ŝ ε Y → (Y → R̂ ε) → R̂ ε
-  R̂-of F γ = ext̂ Ŵ-alg γ (F γ)
+  R̂-of F γ = 
+    bind̂ (collectX (F γ)) (λ{ (a , r1) → mapŴ (r1 +_) (γ a) })
 
   -- Kleisli extension of Ŝ (equation (6) of the source note).
   bind̂ˢ : ∀ {ε X Y} → (X → Ŝ ε Y) → Ŝ ε X → Ŝ ε Y
@@ -313,6 +314,74 @@ module ŴMonad (Sg : Sig) where
     trans (tell-bind̂-comm r (node m op 0# o (λ a → bind̂ (κ a) f)) g)
           (cong (tell r) (trans (tell-0 _) (cong (node m op 0# o) (funext (λ a → bind̂-assoc (κ a) f g)))))
 
+  -- ---------------------------------------------------------------------
+  -- bump/collectX/mapŴ interchange laws (ported from Proofs.agda, where
+  -- they originally lived -- needed here now that R̂-of routes through
+  -- collectX/mapŴ instead of a plain bind̂, so bindˢ-assoc's proof below
+  -- needs them too).
+  -- ---------------------------------------------------------------------
+
+  bump-fusion : ∀ {ε X} (r s : R) (T : Ŵ ε (X × R)) → bump r (bump s T) ≡ bump (r + s) T
+  bump-fusion r s (leaf r₀ (x , y))  = cong (λ z → leaf r₀ (x , z)) (sym (+-assoc r s y))
+  bump-fusion r s (node m op r₀ o κ) = cong (node m op r₀ o) (funext (λ a → bump-fusion r s (κ a)))
+
+  bump-0 : ∀ {ε X} (T : Ŵ ε (X × R)) → bump 0# T ≡ T
+  bump-0 (leaf r₀ (x , y))  = cong (λ z → leaf r₀ (x , z)) (+-identityˡ y)
+  bump-0 (node m op r₀ o κ) = cong (node m op r₀ o) (funext (λ a → bump-0 (κ a)))
+
+  bump-collectX-comm : ∀ {ε X} (r : R) (S : Ŵ ε X) → bump r (collectX S) ≡ collectX (tell r S)
+  bump-collectX-comm r (leaf r₀ x)        = refl
+  bump-collectX-comm r (node m op r₀ o κ) = cong (node m op 0# o) (funext (λ a → bump-fusion r r₀ (collectX (κ a))))
+
+  bump-shift : ∀ {ε X Y} (bumpAmt : R) (T : Ŵ ε (X × R)) (h : X → R → Ŵ ε Y)
+    → bind̂ (bump bumpAmt T) (λ { (a , r1) → h a r1 }) ≡ bind̂ T (λ { (a , r1) → h a (bumpAmt + r1) })
+  bump-shift bumpAmt (leaf r₀ (x , y)) h = refl
+  bump-shift bumpAmt (node m op r₀ o κ) h =
+    cong (tell r₀) (cong (node m op 0# o) (funext (λ a → bump-shift bumpAmt (κ a) h)))
+
+  tell-mapŴ-comm : ∀ {ε X Y} (r : R) (f : X → Y) (W : Ŵ ε X) → tell r (mapŴ f W) ≡ mapŴ f (tell r W)
+  tell-mapŴ-comm r f (leaf r₀ x)        = refl
+  tell-mapŴ-comm r f (node m op r₀ o κ) = refl
+
+  mapŴ-∘ : ∀ {ε X Y Z} (f : Y → Z) (g : X → Y) (W : Ŵ ε X) → mapŴ f (mapŴ g W) ≡ mapŴ (λ x → f (g x)) W
+  mapŴ-∘ f g (leaf r x)        = refl
+  mapŴ-∘ f g (node m op r o κ) = cong (node m op r o) (funext (λ a → mapŴ-∘ f g (κ a)))
+
+  bind̂-mapŴ-after : ∀ {ε X Y Z} (T : Ŵ ε X) (k : X → Ŵ ε Y) (f : Y → Z) → bind̂ T (λ x → mapŴ f (k x)) ≡ mapŴ f (bind̂ T k)
+  bind̂-mapŴ-after (leaf r x) k f = tell-mapŴ-comm r f (k x)
+  bind̂-mapŴ-after (node m op r o κ) k f =
+    trans (cong (tell r) (cong (node m op 0# o) (funext (λ a → bind̂-mapŴ-after (κ a) k f))))
+          (tell-mapŴ-comm r f (node m op 0# o (λ a → bind̂ (κ a) k)))
+
+  collectX-bind̂-fusion-gen : ∀ {ε X Y} (off : R) (w : Ŵ ε X) (f : X → Ŵ ε Y)
+    → bind̂ (collectX w) (λ { (a , r1) → bump (off + r1) (collectX (f a)) }) ≡ bump off (collectX (bind̂ w f))
+  collectX-bind̂-fusion-gen off (leaf r x) f =
+    trans (tell-0 _) (trans (sym (bump-fusion off r (collectX (f x)))) (cong (bump off) (bump-collectX-comm r (f x))))
+  collectX-bind̂-fusion-gen off (node m op r o κ) f = trans lhsEq (sym rhsEq)
+    where
+    lhsEq : bind̂ (collectX (node m op r o κ)) (λ { (a , r1) → bump (off + r1) (collectX (f a)) })
+          ≡ node m op 0# o (λ a → bump (off + r) (collectX (bind̂ (κ a) f)))
+    lhsEq = trans (tell-0 _)
+                  (cong (node m op 0# o) (funext (λ a →
+                    trans (bump-shift r (collectX (κ a)) (λ a' r1 → bump (off + r1) (collectX (f a'))))
+                          (trans (cong (bind̂ (collectX (κ a)))
+                                       (funext (λ { (a' , r1) → cong (λ z → bump z (collectX (f a'))) (sym (+-assoc off r r1)) })))
+                                 (collectX-bind̂-fusion-gen (off + r) (κ a) f)))))
+    rhsEq : bump off (collectX (bind̂ (node m op r o κ) f))
+          ≡ node m op 0# o (λ a → bump (off + r) (collectX (bind̂ (κ a) f)))
+    rhsEq = trans (cong (bump off) (sym (bump-collectX-comm r (node m op 0# o (λ a → bind̂ (κ a) f)))))
+                  (cong (node m op 0# o) (funext (λ a →
+                    trans (cong (bump off) (bump-fusion r 0# (collectX (bind̂ (κ a) f))))
+                          (trans (bump-fusion off (r + 0#) (collectX (bind̂ (κ a) f)))
+                                 (cong (λ z → bump z (collectX (bind̂ (κ a) f))) (cong (off +_) (+-identityʳ r)))))))
+
+  collectX-bind̂-fusion : ∀ {ε X Y} (w : Ŵ ε X) (f : X → Ŵ ε Y)
+    → collectX (bind̂ w f) ≡ bind̂ (collectX w) (λ { (a , r1) → bump r1 (collectX (f a)) })
+  collectX-bind̂-fusion w f =
+    trans (sym (bump-0 _))
+          (trans (sym (collectX-bind̂-fusion-gen 0# w f))
+                 (cong (bind̂ (collectX w)) (funext (λ { (a , r1) → cong (λ z → bump z (collectX (f a))) (+-identityˡ r1) }))))
+
 -- ---------------------------------------------------------------------
 -- Monad laws for Ŝ_ε (§3.4's selection monad): bind̂ˢ's left/right unit
 -- and associativity. Ported from/extending Proofs.agda, where only the
@@ -332,27 +401,40 @@ module ŜMonad (Sg : Sig) where
   bindˢ-unitˡ : ∀ {ε X Y} (f : X → Ŝ ε Y) (x : X) → bind̂ˢ f (η̂ˢ x) ≡ f x
   bindˢ-unitˡ f x = funext (λ γ → tell-0 (f x γ))
 
-  -- Right unit: bind̂ˢ η̂ˢ F = F. R̂-of (η̂ˢ x) γ reduces to tell 0# (γ x) ≡
-  -- γ x (tell-0 again), so the selection-function argument bind̂ˢ passes to
-  -- F collapses back to γ itself; what remains is exactly bind̂'s own
-  -- right unit law.
+  -- mapŴ (0# +_) is the identity -- mapŴ only ever touches leaf payloads,
+  -- so no root/node-structure subtlety arises here at all. Needed below
+  -- to show R̂-of (η̂ˢ x) γ ≡ γ x now that R̂-of routes through
+  -- collectX/mapŴ instead of a plain bind̂.
+  mapŴ-plus-0 : ∀ {ε} (T : Ŵ ε R) → mapŴ (0# +_) T ≡ T
+  mapŴ-plus-0 (leaf r x)        = cong (leaf r) (+-identityˡ x)
+  mapŴ-plus-0 (node m op r o κ) = cong (node m op r o) (funext (λ a → mapŴ-plus-0 (κ a)))
+
+  -- Right unit: bind̂ˢ η̂ˢ F = F. R̂-of (η̂ˢ x) γ = bind̂ (collectX (η̂ x))
+  -- (λ(a,r1)→mapŴ(r1+_)(γa)), which computes (leaf case, r1=0#) to
+  -- tell 0# (mapŴ (0#+_) (γ x)) ≡ γ x via tell-0/mapŴ-plus-0, so the
+  -- selection-function argument bind̂ˢ passes to F collapses back to γ
+  -- itself; what remains is exactly bind̂'s own right unit law.
   bindˢ-unitʳ : ∀ {ε X} (F : Ŝ ε X) → bind̂ˢ η̂ˢ F ≡ F
   bindˢ-unitʳ F = funext (λ γ →
-    trans (cong (λ h → bind̂ (F h) η̂) (funext (λ x → tell-0 (γ x))))
+    trans (cong (λ h → bind̂ (F h) η̂) (funext (λ x → trans (tell-0 _) (mapŴ-plus-0 (γ x)))))
           (bind̂-unitʳ (F γ)))
 
   -- Associativity: bind̂ˢ g (bind̂ˢ f F) = bind̂ˢ (λ x → bind̂ˢ g (f x)) F.
-  -- Both sides unfold to a `bind̂ (F h) κ` for the same continuation κ; the
-  -- two loss-continuation arguments (h vs h') passed to F agree because
-  -- R̂-of's own unfolding of bind̂ˢ g (f x) γ is exactly ŴMonad's bind̂-assoc,
-  -- applied once to line up κ and once more to line up h/h'.
+  -- Both sides unfold to a `bind̂ (F h) κ` for the same continuation κ (the
+  -- OUTER bind̂-assoc, unaffected by R̂-of's own redefinition); what remains
+  -- is R̂-of(f x)ψ ≡ R̂-of(bind̂ˢ g (f x))γ for every x. Now that R̂-of routes
+  -- through collectX/mapŴ (not a plain bind̂), BOTH sides of that further
+  -- reduce to the SAME normal form -- bind̂ (collectX (f x ψ)) (λ(y,r1') →
+  -- bind̂ (collectX (g y γ)) (λ(a,r1) → mapŴ ((r1'+r1)+_) (γ a))) -- via
+  -- collectX-bind̂-fusion/bind̂-assoc/bump-shift on one side and
+  -- bind̂-mapŴ-after/mapŴ-∘/+-assoc on the other, so no new axioms.
   bindˢ-assoc : ∀ {ε X Y Z} (F : Ŝ ε X) (f : X → Ŝ ε Y) (g : Y → Ŝ ε Z)
               → bind̂ˢ g (bind̂ˢ f F) ≡ bind̂ˢ (λ x → bind̂ˢ g (f x)) F
   bindˢ-assoc {ε} {X} {Y} {Z} F f g = funext lemma
     where
     lemma : ∀ γ → bind̂ˢ g (bind̂ˢ f F) γ ≡ bind̂ˢ (λ x → bind̂ˢ g (f x)) F γ
     lemma γ = trans (bind̂-assoc (F h) (λ x → f x ψ) m)
-                     (cong (λ w → bind̂ w κ) (cong F (funext (λ x → sym (bind̂-assoc (f x ψ) m γ)))))
+                     (cong (λ w → bind̂ w κ) (cong F (funext R̂-of-eq)))
       where
       ψ : Y → R̂ ε
       ψ y = R̂-of (g y) γ
@@ -362,3 +444,24 @@ module ŜMonad (Sg : Sig) where
       h x = R̂-of (f x) ψ
       κ : X → Ŵ ε Z
       κ x = bind̂ (f x ψ) m
+
+      R̂-of-eq : ∀ x → R̂-of (f x) ψ ≡ R̂-of (bind̂ˢ g (f x)) γ
+      R̂-of-eq x = trans stepB (sym stepA)
+        where
+        inner : Y → R → Ŵ ε R
+        inner y r1' = bind̂ (collectX (g y γ)) (λ { (a , r1) → mapŴ ((r1' + r1) +_) (γ a) })
+
+        stepA : R̂-of (bind̂ˢ g (f x)) γ ≡ bind̂ (collectX (f x ψ)) (λ { (y , r1') → inner y r1' })
+        stepA = trans (cong (λ w → bind̂ w (λ { (a , r1) → mapŴ (r1 +_) (γ a) })) (collectX-bind̂-fusion (f x ψ) m))
+                      (trans (bind̂-assoc (collectX (f x ψ)) (λ { (y , r1') → bump r1' (collectX (m y)) }) (λ { (a , r1) → mapŴ (r1 +_) (γ a) }))
+                             (cong (bind̂ (collectX (f x ψ)))
+                                   (funext (λ { (y , r1') → bump-shift r1' (collectX (m y)) (λ a r1 → mapŴ (r1 +_) (γ a)) }))))
+
+        stepB : R̂-of (f x) ψ ≡ bind̂ (collectX (f x ψ)) (λ { (y , r1') → inner y r1' })
+        stepB = cong (bind̂ (collectX (f x ψ)))
+                     (funext (λ { (y , r1') →
+                       trans (sym (bind̂-mapŴ-after (collectX (g y γ)) (λ { (a , r1) → mapŴ (r1 +_) (γ a) }) (r1' +_)))
+                             (cong (bind̂ (collectX (g y γ)))
+                                   (funext (λ { (a , r1) →
+                                     trans (mapŴ-∘ (r1' +_) (r1 +_) (γ a))
+                                           (cong (λ h' → mapŴ h' (γ a)) (funext (λ w → sym (+-assoc r1' r1 w)))) }))) }))
