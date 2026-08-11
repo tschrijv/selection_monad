@@ -213,4 +213,5 @@ mutual
   -- bug against the paper's own construction, not a bug in the paper.
   handlerSem : ∀ {Γ ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Env Γ → ⟦ gnd par ⟧ → Ŝ (ε ,ℓ ℓ) ⟦ σ ⟧ → Ŝ ε ⟦ σ' ⟧
   handlerSem h ρ p G γ =
-    ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (G (λ _ → η̂ 0#)) p
+    -- ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (G (λ _ → η̂ 0#)) p
+    ext̂ (handlerAlg h ρ γ) (handlerRet h ρ γ) (G (λ a → widenŴ ⊆ᵉ-,ℓ (R̂-of (Esem (ret h) ((ρ ,, p) ,, a)) γ))) p

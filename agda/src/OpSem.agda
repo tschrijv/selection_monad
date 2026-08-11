@@ -153,11 +153,20 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε �
   R1 : ∀ {ε εg γ δ} {g : LC Γ (gnd δ) εg} (f : PrimFun γ δ) (x : ⟦ γ ⟧ᴳ)
      → g ⊢ fun {ε = ε} f (val (vgnd x)) -[ 0# ]→ val (vgnd (⟦ f ⟧f x))
 
-  -- (R2) g ⊢ (v1,v2).i --0--> vi
+  -- (R2a) g ⊢ (v1,v2) --0--> vpair(v1,v2)   (pair values coalesce; this is
+  -- what makes the *expression*-former `pair` reach a genuine value, so
+  -- that a value-level product built via `pair e1 e2` can flow through a
+  -- variable -- e.g. after R3 substitutes it in -- and still be
+  -- projectable below, exactly as R5's own pArg/yArg construction
+  -- (fst/snd of a freshly bound z) needs.)
+  R2-pair : ∀ {ε εg σ τ} {g : LC Γ (σ `× τ) εg} (v : Val Γ σ) (w : Val Γ τ)
+          → g ⊢ pair {ε = ε} (val v) (val w) -[ 0# ]→ val (vpair v w)
+
+  -- (R2) g ⊢ vpair(v1,v2).i --0--> vi
   R2-fst : ∀ {ε εg σ τ} {g : LC Γ σ εg} (v : Val Γ σ) (w : Val Γ τ)
-         → g ⊢ fst {ε = ε} (pair (val v) (val w)) -[ 0# ]→ val v
+         → g ⊢ fst {ε = ε} (val (vpair v w)) -[ 0# ]→ val v
   R2-snd : ∀ {ε εg σ τ} {g : LC Γ τ εg} (v : Val Γ σ) (w : Val Γ τ)
-         → g ⊢ snd {ε = ε} (pair (val v) (val w)) -[ 0# ]→ val w
+         → g ⊢ snd {ε = ε} (val (vpair v w)) -[ 0# ]→ val w
 
   -- (R3) g ⊢ (λ^ε x:σ.e) v --0--> e[v/x]
   R3 : ∀ {ε εg σ τ} {g : LC Γ τ εg} (e : (Γ , σ) ⊢ τ ! ε) (v : Val Γ σ)
