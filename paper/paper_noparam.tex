@@ -1,0 +1,450 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+% ---------------------------------------------------------------------
+% Macros
+% ---------------------------------------------------------------------
+\newcommand{\Ssem}[1]{\mathsf{S}[\![#1]\!]}
+\newcommand{\Lsem}[1]{\mathsf{L}[\![#1]\!]}
+\newcommand{\Vsem}[1]{\mathsf{V}[\![#1]\!]}
+
+\newcommand{\Wm}[1]{\widehat{W}_{#1}}
+\newcommand{\Rm}[1]{\widehat{R}_{#1}}
+\newcommand{\Sm}[1]{\widehat{S}_{#1}}
+
+\newcommand{\eps}{\epsilon}
+\newcommand{\dg}[1]{^{\dagger #1}}
+\newcommand{\op}{\mathit{op}}
+\newcommand{\then}{\mathrel{\blacktriangleright}}
+\newcommand{\loc}[1]{\langle #1 \rangle} % local construct, decorated separately
+\newcommand{\hoist}{\mathsf{hoist}}
+\newcommand{\tell}{\mathsf{tell}}
+\newcommand{\censor}{\mathsf{censor}_0}
+\newcommand{\collect}{\triangle}
+\newcommand{\collectX}[1]{\mathsf{collect}_{#1}}
+\newcommand{\bump}{\mathsf{bump}}
+\newcommand{\Rx}[1]{\widehat{\mathcal R}_{#1}}
+\newcommand{\lC}{\lambda_C}
+
+\title{A Denotational Semantics for $\lC$ without Handler Parameters}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We give a denotational semantics for a fragment of the effect calculus $\lC$: an
+expression language with algebraic effect operations, a distinguished \texttt{loss}
+effect used to record real-valued costs, and effect handlers of the form $\mathtt{with}\
+h\ \mathtt{from}\ v\ \mathtt{handle}\ e$ that carry no separately threaded parameter.
+Types are interpreted by a family of \emph{selection monads}
+$\widehat S_\eps(X) = (X\to \Rm\eps)\to \Wm\eps(X)$, where the auxiliary monad
+$\Wm\eps$ is obtained by applying the free monad transformer for the effect signature at
+level $\eps$ to the writer monad for a loss monoid $R$. Concretely, this attaches a loss
+contribution to \emph{every} node of an effect tree, rather than combining all recorded
+loss into a single value at each leaf. Operation signatures are restricted to ground
+(first-order) types, which lets $\Wm\eps$ be defined by ordinary structural recursion. We
+develop the monad structure of $\Wm\eps$, the selection monad $\widehat S_\eps$, the
+semantics of expressions, and the semantics of handlers, and discuss the one significant
+consequence of attaching loss at every node rather than only at leaves: loss no longer
+commutes with operation calls.
+\end{abstract}
+
+\section{Introduction}
+
+$\lC$ interprets terms via a family of \emph{augmented selection monads}
+\[
+  \widehat S_\eps(X) = (X\to \Rm\eps)\to \Wm\eps(X),
+\]
+where $\Wm\eps$ is an auxiliary monad of \emph{effect trees decorated with loss} and
+$\Rm\eps = \Wm\eps(R)$ is the type of loss continuations, for $R$ the (additive) monoid in
+which losses are recorded. Intuitively, a value of $\widehat S_\eps(X)$ takes a \emph{loss
+continuation} $\gamma:X\to\Rm\eps$ -- an estimate of the eventual loss incurred by each
+possible result -- and produces an effect tree of type $\Wm\eps(X)$: an unevaluated
+computation that may call operations from the ambient effect signature and record loss
+along the way.
+
+We build $\Wm\eps$ by applying the \emph{free monad transformer} for the effect signature
+at level $\eps$ to the \emph{writer monad} $\mathsf{Writer}_R = R\times({-})$:
+\[
+  \Wm\eps(X) = \mathsf{FreeT}_\eps(\mathsf{Writer}_R)(X),
+\]
+threading a writer layer through \emph{every} constructor of the effect tree, so that a
+loss contribution is attached at every node rather than combined into a single pair at the
+leaves. Had loss instead been combined once at each leaf, the resulting monad would
+validate a commutativity law under which a recorded loss can be freely reordered past any
+neighbouring operation call; attaching loss at every node gives up this law, since the
+relative order of a $\tell$ and an operation call becomes part of the data of the tree.
+
+Effects are eliminated by handlers $\mathtt{with}\ h\ \mathtt{from}\ v\ \mathtt{handle}\
+e$: $h$ supplies one clause $\op_j\mapsto\lambda^\eps z\!:\!\mathit{in}.\,e_j$ for each
+operation $\op_j$ it handles and a $\mathit{return}$ clause; $v$ supplies the initial loss
+estimate the handled body runs under. Handlers here carry no additional threaded
+parameter -- no running accumulator carried across successive resumptions of a delimited
+continuation. Section~5 gives the resulting handler semantics.
+
+We additionally restrict operation and argument types to \emph{ground} (first-order)
+types: no operation may take or return a value of function type. (The object language's
+\emph{expressions} remain fully higher-order throughout -- functions may be passed to and
+returned from handlers, and values may have arbitrary function types -- only an
+operation's own $\mathit{out}$/$\mathit{in}$ signature may not itself mention
+$\Rightarrow$.) This keeps $\Wm\eps$ an ordinary, non-mutually-recursive inductive
+definition: with only ground argument and result types, $\Wm\eps$ never needs the general
+type semantics $\Ssem{-}$, only a ground one, so it does not need to be defined
+simultaneously with $\Ssem{-}$. Lifting this restriction to allow higher-order operation
+signatures is left for future work.
+
+Section~2 recalls the semantics of types. Section~3 develops the monad $\Wm\eps$ and the
+resulting selection monad $\widehat S_\eps$. Section~4 gives the semantics of expressions.
+Section~5 gives the semantics of handlers.
+
+\section{Semantics of Types}
+
+Types $\sigma,\tau$ are built from base types, tuples, and function types
+$\sigma\to\tau\,!\,\eps$ decorated with an effect context $\eps$ (a multiset of effect
+labels available to the function body). A signature $\Sigma$ fixes, for each effect label
+$\ell$, a family of operations $\op:\mathit{out}\xrightarrow{\ell}\mathit{in}$ with
+$\mathit{out},\mathit{in}$ ground types. Expressions $e$ may call these operations, record
+loss via $\mathtt{loss}(e)$, sequence a loss-continuation via $(\then)$ and a local
+construct $\loc{e}_g^\eps$, discard recorded loss via $\mathtt{reset}$, and be handled by
+handlers $h$ with clauses $\op_i\mapsto\dots$ and $\mathit{return}\mapsto\dots$, carrying
+no separate parameter.
+
+The semantics of types, $\Ssem\sigma$, is given by
+\[
+  \Ssem{b} = [\![b]\!], \qquad
+  \Ssem{(\sigma_1,\dots,\sigma_n)} = \Ssem{\sigma_1}\times\cdots\times\Ssem{\sigma_n}, \qquad
+  \Ssem{\sigma\to\tau\,!\,\eps} = \Ssem{\sigma}\to \Sm\eps(\Ssem{\tau}),
+\]
+where $\Sm\eps$ is the selection-monad family developed in Section~3.
+
+\section{The Monad $\Wm\eps$}
+
+\subsection{The carrier $\Wm\eps$}
+
+An $\eps$-algebra is a set $X$ with maps
+$\varphi_{\ell,\op,i} : \Ssem{\mathit{out}}\times X^{\Ssem{\mathit{in}}}\to X$ for each
+$\ell\in\eps$, $\op:\mathit{out}\xrightarrow{\ell}\mathit{in}$, $0<i\le\eps(\ell)$; the free
+such algebra on a set $X$ is written $F_\eps(X)$. Because the writer layer here is woven
+through every node of an effect tree rather than paired only at its leaves, a single
+family $\Wm\eps$ suffices where a leaves-only construction would instead need two separate
+operators.
+
+\begin{definition}[The monad $\Wm\eps$]
+For a set $X$, let $\Wm\eps(X)$ be the least set $Y$ such that
+\[
+  Y \;=\; R \times \left(X \;+\; \sum_{\substack{\ell\in\eps,\ \op:\mathit{out}\xrightarrow{\ell}\mathit{in}\\ 0<i\le\eps(\ell)}}
+        \Ssem{\mathit{out}} \times Y^{\Ssem{\mathit{in}}}\right).
+\]
+We write an element as a pair $(r,n)$ with $r\in R$ (the loss recorded \emph{at this node})
+and $n$ either a leaf $\iota_1(x)$ for $x\in X$, or an internal node
+$\iota_2\big((\ell,\op,i),(o,\kappa)\big)$ decorated exactly as in $F_\eps$.
+\end{definition}
+
+This is exactly the least-fixpoint reading of $\mathsf{FreeT}_\eps(\mathsf{Writer}_R)(X)$:
+unrolling the usual defining equation of a free monad transformer,
+$\mathsf{FreeT}\,\Sigma\,M\,(X) \cong M\big(X + \Sigma(\mathsf{FreeT}\,\Sigma\,M\,(X))\big)$,
+at $M = \mathsf{Writer}_R = R\times(-)$ and $\Sigma$ the $\eps$-effect signature, gives
+exactly the equation above. (As with any such construction, $\Wm\eps$ and the selection
+monad $\widehat S_\eps$ of Section~3.4 are mutually recursive across decreasing effect
+contexts; we take well-foundedness of this recursion for granted.)
+
+We write $\Rm\eps := \Wm\eps(R)$ for the type of \emph{loss continuations}. $\Rm\eps$
+retains the full tree shape of $\Wm\eps$ (an unhandled operation can still be pending at
+any depth); it merely has $R$, rather than an arbitrary $X$, as its leaf-value type, so
+$\Rm\eps$ is not isomorphic in general to any simpler, non-recursive type of accumulated
+losses.
+
+\subsection{Free layered $\eps$-algebras}
+
+\begin{definition}[Layered $\eps$-algebra]
+A \emph{layered $\eps$-algebra} is a set $Y$ equipped with an $\eps$-algebra structure $\psi$
+and an additive action $\cdot: R\times Y \to Y$ ($0\cdot y = y$, $r\cdot(s\cdot y)=(r+s)\cdot y$), with \emph{no} requirement that $\cdot$
+commute with $\psi$.
+\end{definition}
+
+\begin{definition}[Free layered $\eps$-algebra]
+$\Wm\eps(X)$ is the free layered $\eps$-algebra on $X$: its own structure is
+\[
+  \widehat\varphi_{\ell,\op,i}(o,\kappa) =_{\mathrm{def}} \big(0,\, \iota_2((\ell,\op,i),(o,\kappa))\big),
+  \qquad
+  r\cdot(r_0,n) =_{\mathrm{def}} (r+r_0,\,n),
+\]
+with unit $\eta^{\Wm\eps}(x) = (0,\iota_1(x))$; and for any layered $\eps$-algebra
+$(Y,\psi,\cdot)$ and function $f:X\to Y$, the unique homomorphic extension
+$f\dg{\Wm\eps}: \Wm\eps(X)\to Y$ is given by
+\[
+  f\dg{\Wm\eps}(r_0,\iota_1(x)) = r_0\cdot f(x),
+  \qquad
+  f\dg{\Wm\eps}\big(r_0,\iota_2((\ell,\op,i),(o,\kappa))\big)
+     = r_0\cdot \psi_{\ell,\op,i}\big(o,\ f\dg{\Wm\eps}\circ\kappa\big).
+\]
+\end{definition}
+
+Both clauses are well defined by structural recursion since $\Wm\eps(X)$ is a least
+(hence well-founded, finitely-branching-and-depth) set. One checks directly that
+$f\dg{\Wm\eps}\circ\eta^{\Wm\eps} = f$ and that $f\dg{\Wm\eps}$ is a
+homomorphism of layered $\eps$-algebras, using only the additive action law of $Y$ -- no
+commutation between $\psi$ and $\cdot$ is needed anywhere in the argument, which is precisely
+why $\widehat\varphi$ and the action need not commute for the recursion to be well founded.
+
+\begin{remark}
+Instantiating $(Y,\psi,\cdot) := (\Wm\eps(Z),\widehat\varphi,\cdot)$ for a function
+$f : X\to \Wm\eps(Z)$ turns the homomorphic-extension formula above into the
+\emph{Kleisli extension} (bind) of $\Wm\eps$: writing $\mathsf{let}_{\Wm\eps}\,
+x\in X\ \mathsf{be}\ u\ \mathsf{in}\ f(x) := f\dg{\Wm\eps}(u)$,
+\[
+  \mathsf{let}_{\Wm\eps}\ x\in X\ \mathsf{be}\ (r_0,\iota_1(x'))\ \mathsf{in}\ f(x)
+     = r_0\cdot f(x'),
+\]
+\begin{multline*}
+  \mathsf{let}_{\Wm\eps}\ x\in X\ \mathsf{be}\ (r_0,\iota_2((\ell,\op,i),(o,\kappa)))\ \mathsf{in}\ f(x) \\
+     = \Big(r_0,\ \iota_2\big((\ell,\op,i),\ (o,\ \lambda a.\ \mathsf{let}_{\Wm\eps}\ x\in X\ \mathsf{be}\ \kappa(a)\ \mathsf{in}\ f(x))\big)\Big).
+\end{multline*}
+That is: at a leaf, the node's own loss $r_0$ is \emph{added} to whatever the continuation
+produces (via the action); at an internal node, $r_0$ is left exactly where it is and only the
+children are rebound. This is exactly the standard bind for a monad transformer stacked over
+$\mathsf{Writer}_R$.
+\end{remark}
+
+\subsection{Loss, commutativity, and node-local combinators}
+
+Because a loss is recorded at the specific node at which it occurs, the order of a loss
+relative to a neighbouring operation is part of the data of $\Wm\eps(X)$: $\widehat\varphi$
+applied first and then $\tell$ (defined below) applied to the result is a \emph{different}
+element from $\tell$ applied first and then $\widehat\varphi$. Here we simply record the
+combinators we will need:
+\[
+  \tell(r)(r_0,n) =_{\mathrm{def}} (r+r_0,\,n) \qquad(\text{i.e. } \tell(r) = r\cdot(-)),
+\]
+\[
+  \censor(r_0,n) =_{\mathrm{def}}
+  \begin{cases}
+    (0,\iota_1(x)) & n=\iota_1(x)\\
+    (0,\iota_2((\ell,\op,i),(o,\lambda a.\,\censor(\kappa(a))))) & n=\iota_2((\ell,\op,i),(o,\kappa)),
+  \end{cases}
+\]
+the latter recursively zeroing every recorded loss throughout the tree while leaving its
+shape and leaves untouched, and
+\[
+  \collect(r_0,n) =_{\mathrm{def}}
+  \begin{cases}
+    (0,\iota_1(r_0)) & n = \iota_1(())\\
+    \tell(r_0)\big(0,\iota_2((\ell,\op,i),(o,\lambda a.\,\collect(\kappa(a))))\big) & n = \iota_2((\ell,\op,i),(o,\kappa)),
+  \end{cases}
+\]
+a map $\Wm\eps(1)\to \Wm\eps(R)$ that recursively \emph{sums} all losses along
+each root-to-leaf path into that leaf's now $R$-valued payload, while zeroing every node's own
+recorded loss along the way (note that unlike $\censor$, $\collect$ leaves a node's own loss
+$r_0$ in place and only ever zeroes leaves). We also need the evident generalisation to
+arbitrary payload type $X$, which pairs each leaf value with the total accumulated loss on
+its path rather than discarding it:
+\begin{align*}
+  \collectX X(r_0,\iota_1(x)) &= (0,\iota_1((x,r_0))), \\
+  \collectX X\big(r_0,\iota_2((\ell,\op,i),(o,\kappa))\big)
+     &= \Big(0,\ \iota_2\big((\ell,\op,i),\ (o,\ \lambda a.\ \bump_{r_0}(\collectX X(\kappa(a))))\big)\Big),
+\end{align*}
+where $\bump_r : \Wm\eps(X\times R)\to\Wm\eps(X\times R)$ adds $r$ into the
+recorded total at \emph{every} leaf beneath the current node (needed because, unlike $\tell$,
+$\collectX X$ must push a node's loss down into leaves that may be arbitrarily deep, not just
+combine it at the top):
+\begin{align*}
+  \bump_r\big(0,\iota_1((x,s))\big) &= \big(0,\iota_1((x,r+s))\big), \\
+  \bump_r\big(0,\iota_2((\ell,\op,i),(o,\kappa))\big) &= \big(0,\iota_2((\ell,\op,i),(o,\lambda a.\,\bump_r(\kappa(a))))\big)
+\end{align*}
+(the outer loss is always $0$ on the nose in the argument of $\bump_r$, since $\collectX X$
+zeroes it just before recursing). One checks $\bump_0 = \mathrm{id}$ and
+$\bump_r\circ\bump_s = \bump_{r+s}$ directly from these clauses. Finally
+$\collect = \Wm\eps(\pi_2)\circ\collectX 1 : \Wm\eps(1)\to\Wm\eps(R)$, i.e.\
+$\collect$ is $\collectX 1$ followed by forgetting the (unit-typed) leaf value and keeping only
+the accumulated loss.
+
+\subsection{The selection monad $\Sm\eps$}
+
+With $\Wm\eps$ and $\Rm\eps=\Wm\eps(R)$ in hand (Section~3.1), define
+\[
+  \widehat S_\eps(X) = (X\to \Rm\eps)\to \Wm\eps(X), \qquad
+  \eta^{\widehat S_\eps}(x) = \lambda\gamma.\ \eta^{\Wm\eps}(x).
+\]
+$\Rm\eps$ is itself a layered $\eps$-algebra (being $\Wm\eps(R)$), with action
+$r\cdot u = \tell(r)(u)$. For $F\in\widehat S_\eps(Y)$ and a loss function
+$\gamma:Y\to\Rm\eps$, define
+\[
+  \Rx\eps(F\mid\gamma) =_{\mathrm{def}}
+     \mathsf{let}_{\Wm\eps}\ (a,r_1)\in Y\times R\ \mathsf{be}\ \collectX Y(F(\gamma))\ \mathsf{in}\
+     \Wm\eps(r_1+{-})\big(\gamma(a)\big) \ \in\ \Rm\eps.
+\]
+\begin{remark}
+A natural first attempt would be the plain homomorphic extension
+$\gamma\dg{\Wm\eps}(F(\gamma))$: it typechecks, since $\gamma:Y\to\Rm\eps$ and
+$F(\gamma):\Wm\eps(Y)$. It is not, however, what we want, because $\gamma\dg{\Wm\eps}$
+simply replaces each leaf value $x$ of $F(\gamma)$ by $\gamma(x)$, discarding the loss
+$r_1$ recorded along the path to that leaf rather than combining it with $\gamma(x)$. The
+$\collectX{}$-based definition above instead extracts, at each leaf of $F(\gamma)$, the pair
+of that leaf's own value $a$ and the total loss $r_1$ recorded along the path to it, and adds
+$r_1$ into \emph{every} leaf of $\gamma(a)$ (via $\Wm\eps(r_1+{-})$) rather than trying to fold
+$r_1$ into $\gamma(a)$'s own root via a single top-level $\tell$. The two coincide whenever
+$\gamma(a)$ happens to be a bare leaf, but not in general once $\gamma(a)$ may itself be a
+tree with a pending operation at arbitrary depth.
+\end{remark}
+Then the Kleisli extension of $f:X\to\widehat S_\eps(Y)$ is, verbatim,
+\[
+  f\dg{\widehat S_\eps}(F) = \lambda\gamma\in Y\to\Rm\eps.\
+     \mathsf{let}_{\Wm\eps}\ x\in X\ \mathsf{be}\ F\big(\lambda x\in X.\ \Rx\eps(fx\mid\gamma)\big)\ \mathsf{in}\ fx\,\gamma,
+\]
+and $\widehat S_\eps(X)$ is itself an $\eps$-algebra via
+\[
+  \widehat\varphi^X_{\ell,\op,i}(o,f)(\gamma) = \widehat\varphi_{\ell,\op,i}\big(o,\ \lambda x\in\mathit{in}.\ f(x)(\gamma)\big).
+\]
+All bookkeeping of losses is delegated to the fact that $\Wm\eps$ itself already carries
+$R$ at every node: the $\varphi$ used in the last equation is the one-argument
+$\widehat\varphi$ of $\Wm\eps(X)$ directly, and nothing in this subsection ever needs to
+mention $R\times -$ explicitly.
+
+\section{Semantics of Expressions}
+
+The semantics of expressions is given compositionally, largely in terms of the abstract
+monad interface of $\widehat S_\eps$ ($\eta$, Kleisli extension $\dg{\widehat S_\eps}$, and
+the algebra maps $\widehat\varphi^X$). The clauses for variables, constants, tuples,
+projection, abstraction, application, and operation calls read
+\[
+  \Ssem{\op(e)}(\rho) = \mathsf{let}_{\widehat S_\eps}\ a\in\Ssem{\mathit{out}}\ \mathsf{be}\ \Ssem{e}(\rho)
+     \ \mathsf{in}\ \widehat\varphi^X_{\ell,\op,\eps(\ell)}\big(a,(\eta^{\widehat S_\eps})^{\Ssem{\mathit{in}}}\big),
+\]
+with the remaining constructs (variables, constants, tuples, projection, abstraction,
+application) the evident generic clauses of a monadic semantics with algebra structure
+$\widehat\varphi^X$. The four constructs that manipulate the shape of $\Wm\eps$
+directly -- \texttt{loss}, $(\then)$, the local construct $\loc{e}_g^\eps$, and
+\texttt{reset} -- together with the auxiliary loss-function semantics $\mathcal L$, are
+given below.
+
+\paragraph{\texttt{loss(e)}.} Since a bare $\tell$ is already available as a
+$\widehat S_\eps$-level operation, the semantics of \texttt{loss(e)} needs no pattern
+matching on the shape of $\Ssem e$:
+\[
+  \Ssem{\mathtt{loss}(e)}(\rho) = \lambda\gamma.\
+    \mathsf{let}_{\Wm\eps}\ a\in R\ \mathsf{be}\ \Ssem{e}(\rho)(\gamma)\ \mathsf{in}\
+    \tell(a)\big(\eta^{\Wm\eps}(())\big).
+\]
+
+\paragraph{Loss-function semantics $\mathcal L$.} For $\Gamma,x\!:\!\sigma\vdash e:\mathtt{loss}\,!\,\eps$,
+define $\Lsem{\lambda^\eps x\!:\!\sigma.\,e} : \Sm\Gamma \to \Sm\sigma \to \Rm\eps$ by
+\[
+  \Lsem{\lambda^\eps x\!:\!\sigma.\,e}(\rho)(a) = \Ssem{e}(\rho[a/x])(\gamma_0),
+  \qquad \gamma_0 = \lambda r{\in}R.\,\eta^{\Wm\eps}(()).
+\]
+Because $\Rm\eps=\Wm\eps(R)$ and $\Ssem{e}(\rho[a/x]):\widehat S_\eps(R) =
+(R\to\Wm\eps(R))\to\Wm\eps(R)$ for $e:\mathtt{loss}\,!\,\eps$, applying it to $\gamma_0$
+already produces a value of exactly $\Rm\eps$.
+
+\paragraph{$e_1\then\lambda^{\eps_1} x\!:\!\sigma_1.\,e_2$.} Run $e_1$ under the hypothetical
+continuation $\Lsem{\lambda x.\,e_2}(\rho)$, obtaining a value $a$ together with the loss $r_1$
+this incurred (via $\collectX{}$); then bump $\Lsem{\lambda x.\,e_2}(\rho)(a)$'s own leaves by
+$r_1$:
+\begin{multline*}
+  \Ssem{e_1\then\lambda^{\eps_1}x\!:\!\sigma_1.\,e_2}(\rho) = \lambda\gamma.\
+    \mathsf{let}_{\Wm{\eps_1}}\ (a,r_1)\in\Ssem{\sigma_1}\times R\ \mathsf{be}\ \\
+      \mathsf{collect}_{\Ssem{\sigma_1}}\big(\Ssem{e_1}(\rho)(\Lsem{\lambda x.\,e_2}(\rho))\big)\ \mathsf{in}\
+      \Wm{\eps_1}(r_1+{-})\big(\Lsem{\lambda x.\,e_2}(\rho)(a)\big).
+\end{multline*}
+\begin{remark}
+A two-stage decomposition -- extract $(a,r_1)$ from $e_1$'s evaluation, separately extract
+$(r_3,r_2)$ from $\Lsem{g}(\rho)(a)$'s own recorded loss versus returned value via a second
+$\collectX{}$, then $\tell(r_2)$ the sum $r_1+r_3$ -- is unnecessary: since $\Lsem
+g(\rho)(a)$ is already the finished $\Rm{\eps_1}$-value one wants (per $\mathcal L$'s
+definition above), there is nothing left to extract from it a second time -- bumping every
+one of its leaves by $r_1$ (via a $\Wm{\eps_1}$-map, not a second $\collectX{}/\tell$
+round-trip) already produces the right tree \emph{whatever shape} $\Lsem g(\rho)(a)$ has,
+including a pending stuck operation at arbitrary depth, whereas re-extracting and
+re-\texttt{tell}-ing would silently redistribute $g$'s own recorded loss down past such a
+stuck node. Both formulations agree when $\Lsem g(\rho)(a)$ happens to be a bare leaf.
+\end{remark}
+As before, this is constant in $\gamma$, matching ``$\then$ disregards $g$''; $\Lsem g(\rho)$
+has codomain $\Rm{\eps_1}$ for $g$'s own (possibly smaller) effect context, so the left-hand
+side's ambient $\eps$ and $g$'s own $\eps_1\subseteq\eps$ are related by the same kind of
+sub-effecting inclusion (left implicit here, as throughout) that Section~5 needs for the
+handler formula below.
+
+\paragraph{$\loc{e}_g^{\eps_1}$.} This clause only substitutes a different loss continuation
+and is oblivious to the concrete shape of $\Wm\eps$:
+\[
+  \Ssem{\loc{e}_g^{\eps_1}}(\rho) = \lambda\gamma.\ \Ssem{e}(\rho)\big(\Lsem{g}(\rho)\big).
+\]
+
+\paragraph{\texttt{reset}\,$e$.} Run $e$ under $\gamma$, then discard all recorded loss
+while keeping the value, which is exactly $\censor$ from Section~3.3:
+\[
+  \Ssem{\mathtt{reset}\ e}(\rho) = \lambda\gamma.\ \censor\big(\Ssem{e}(\rho)(\gamma)\big).
+\]
+
+\section{Semantics of Handlers}
+
+Fix $\rho\in\Sm\Gamma$ and $\gamma\in\Sm{\sigma'}\to\Rm\eps$, and build a layered
+$\eps\ell$-algebra structure directly on
+\[
+  A = \Wm\eps(\Sm{\sigma'}).
+\]
+With no handler parameter, $A$ carries no exponent at all -- it is exactly
+$\Wm\eps(\Sm{\sigma'})$, the \emph{same} shape as $\Wm\eps(X)$'s own native algebra from
+Section~3.2. For the operations \emph{not} handled by $h$ ($\ell_1\in\eps$, i.e.\ shallower
+than the newly-introduced occurrence of $\ell$), pass-through:
+\[
+  \psi_{\ell_1,\op,i}(o,k) = \widehat\varphi_{\ell_1,\op,i}(o,\ k).
+\]
+(With no $p$ to abstract over, this is $\widehat\varphi$ itself, applied directly to the
+already-recursed continuation $k$ -- there is nothing left to do beyond re-wrapping.) For the
+handler's own clauses $\op_j\mapsto\lambda^\eps z\!:\!\mathit{in}.\,e_j$, at the newly
+introduced occurrence ($i = \eps(\ell)+1$):
+\[
+  \psi_{\ell,\op_j,i}(o,k) = \Ssem{e_j}\big(\rho[(o,l_1,k_1)/z]\big)(\gamma),
+\]
+where the delimited continuation is $k_1(a) = k(a)$ (no $p$ to re-thread), and the choice
+continuation is
+\[
+  l_1(a) = \lambda\gamma_1.\ \mathsf{let}_{\Wm\eps}\ (r_1,r_2)\in R\times R\ \mathsf{be}\
+    \mathsf{collect}_R\big(\gamma\dg{\Wm\eps}(k(a))\big)\ \mathsf{in}\ \eta^{\Wm\eps}(r_1+r_2)
+  \quad \in \widehat S_\eps(R),
+\]
+i.e.\ it \emph{ignores} its nominal continuation $\gamma_1$, runs the delimited
+continuation under the ambient $\gamma$, extends $\gamma$ homomorphically over the result
+to obtain a value of $\Wm\eps(R)=\Rm\eps$, and then sums each leaf's own value against the
+total loss recorded along the path to it -- $\collectX R$ generalising plain $\collect$
+here for the same reason $\Rx\eps$'s own definition does (Section~3.4): the tree
+$\gamma\dg{\Wm\eps}(k(a))$ already has genuinely $R$-valued leaves (from $\gamma$), not
+unit-valued ones, so a leaf's own value must be \emph{added} to the path total rather than
+replaced by it.
+
+The return clause needs no multiplication by an accumulated loss either -- because
+$\Wm\eps$ already threads it -- and, with no $p$ to abstract over, is simply
+\[
+  s(a) = \Ssem{e_r}\big(\rho[a/z]\big)(\gamma) \ \in A.
+\]
+Finally, using the free-algebra property of $\Wm{\eps\ell}(\Sm\sigma)$ over $A$
+(Section~3.2, instantiated directly at $X = \Sm\sigma$, with no $R\times$ pairing needed to
+seed the extension):
+\[
+  \Ssem{h}(\rho)(G)(\gamma) = s\dg{\Wm{\eps\ell}}\Big(G\big(\lambda a\in\Sm\sigma.\
+    \Rx\eps(s(a)\mid\gamma)\big)\Big),
+\]
+where the loss fed to $G$'s own continuation is $\Rx\eps(s(a)\mid\gamma)$ -- $\Rx\eps$ from
+Section~3.4, \emph{not} a plain $\gamma\dg{\Wm\eps}(s(a))$, since $\Rx\eps$ is itself
+$\collectX{}$-based rather than a plain homomorphic extension: $s(a)$ is a selection
+function $\widehat S_\eps(\Sm{\sigma'})$, not a bare tree, so it is $\Rx\eps$ and not
+$\dg{\Wm\eps}$ that applies to it in the first place -- and the inclusion
+$\Rm\eps\hookrightarrow\Rm{\eps\ell}$ (from $\eps\subseteq\eps\ell$) is left implicit,
+exactly as sub-effect inclusions are left implicit throughout.
+
+\end{document}
