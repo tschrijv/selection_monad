@@ -1,0 +1,7 @@
+# Agda build cache
+_build/
+
+# LaTeX build intermediates
+*.aux
+*.log
+*.out
