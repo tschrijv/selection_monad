@@ -140,18 +140,35 @@ yArg = snd (val zP)
 -- ---------------------------------------------------------------------
 -- Fig. 6 / Fig. 11: the small-step judgment g ⊢_ε e --r--> e'.
 --
--- σ, ε (of e,e') and ε_g (of g) are kept as separate indices: the paper's
--- own statements (e.g. Theorem 3.2) only ever relate them via a *side
--- hypothesis* ε_g ⊆ ε, never bake it into the judgment itself.
+-- Unlike the source (and unlike agda/, agda_noparam), εg⊆ᵉε is carried
+-- HERE as its own (implicit) INDEX of the family, rather than only ever
+-- being supplied separately, downstream, as a side hypothesis (the
+-- paper's own Theorem 3.2 does the latter). The payoff: whenever a proof
+-- pattern-matches a step derivation, unification forces its OWN εg⊆ᵉε
+-- witness to coincide with whichever witness that same derivation
+-- carries internally (e.g. R5's own `sub`, used to build fk/fl) --
+-- eliminating the need for an ⊆ᵉ-irrelevant-style postulate to bridge
+-- two independently-supplied witnesses after the fact (see
+-- Proofs.agda's own theorem-B9). The cost: since this new index isn't
+-- otherwise determined by any rule's own explicit arguments, EVERY
+-- constructor's conclusion must tie it in explicitly via named-implicit
+-- application (`_⊢_-[_]→_ {sub = ...} g e r e'`) -- plain infix
+-- application leaves it an unsolved meta, even where the rule doesn't
+-- otherwise care what it is (confirmed by direct experiment: Agda does
+-- not auto-unify an implicit against an in-scope variable merely because
+-- they share a name).
 -- ---------------------------------------------------------------------
 
 infix 3 _⊢_-[_]→_
 
-data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε → R → Γ ⊢ σ ! ε → Set where
+data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} → LC Γ σ εg → Γ ⊢ σ ! ε → R → Γ ⊢ σ ! ε → Set where
 
-  -- (R1) g ⊢ f(v) --0--> v'   (f(v) → v')
-  R1 : ∀ {ε εg γ δ} {g : LC Γ (gnd δ) εg} (f : PrimFun γ δ) (x : ⟦ γ ⟧ᴳ)
-     → g ⊢ fun {ε = ε} f (val (vgnd x)) -[ 0# ]→ val (vgnd (⟦ f ⟧f x))
+  -- (R1) g ⊢ f(v) --0--> v'   (f(v) → v'). εg⊆ᵉε plays no role in this
+  -- rule (nor in R2-*/R3/R4/R6/R8/R9/S2/S4/R7 below) -- its own `sub` is
+  -- left universally quantified and unused, purely to satisfy the
+  -- family's own indexing.
+  R1 : ∀ {ε εg γ δ} {sub : εg ⊆ᵉ ε} {g : LC Γ (gnd δ) εg} (f : PrimFun γ δ) (x : ⟦ γ ⟧ᴳ)
+     → _⊢_-[_]→_ {sub = sub} g (fun {ε = ε} f (val (vgnd x))) 0# (val (vgnd (⟦ f ⟧f x)))
 
   -- (R2a) g ⊢ (v1,v2) --0--> vpair(v1,v2)   (pair values coalesce; this is
   -- what makes the *expression*-former `pair` reach a genuine value, so
@@ -159,76 +176,86 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε �
   -- variable -- e.g. after R3 substitutes it in -- and still be
   -- projectable below, exactly as R5's own pArg/yArg construction
   -- (fst/snd of a freshly bound z) needs.)
-  R2-pair : ∀ {ε εg σ τ} {g : LC Γ (σ `× τ) εg} (v : Val Γ σ) (w : Val Γ τ)
-          → g ⊢ pair {ε = ε} (val v) (val w) -[ 0# ]→ val (vpair v w)
+  R2-pair : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ (σ `× τ) εg} (v : Val Γ σ) (w : Val Γ τ)
+          → _⊢_-[_]→_ {sub = sub} g (pair {ε = ε} (val v) (val w)) 0# (val (vpair v w))
 
   -- (R2) g ⊢ vpair(v1,v2).i --0--> vi
-  R2-fst : ∀ {ε εg σ τ} {g : LC Γ σ εg} (v : Val Γ σ) (w : Val Γ τ)
-         → g ⊢ fst {ε = ε} (val (vpair v w)) -[ 0# ]→ val v
-  R2-snd : ∀ {ε εg σ τ} {g : LC Γ τ εg} (v : Val Γ σ) (w : Val Γ τ)
-         → g ⊢ snd {ε = ε} (val (vpair v w)) -[ 0# ]→ val w
+  R2-fst : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} (v : Val Γ σ) (w : Val Γ τ)
+         → _⊢_-[_]→_ {sub = sub} g (fst {ε = ε} (val (vpair v w))) 0# (val v)
+  R2-snd : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ τ εg} (v : Val Γ σ) (w : Val Γ τ)
+         → _⊢_-[_]→_ {sub = sub} g (snd {ε = ε} (val (vpair v w))) 0# (val w)
 
   -- (R3) g ⊢ (λ^ε x:σ.e) v --0--> e[v/x]
-  R3 : ∀ {ε εg σ τ} {g : LC Γ τ εg} (e : (Γ , σ) ⊢ τ ! ε) (v : Val Γ σ)
-     → g ⊢ app (val (vabs e)) (val v) -[ 0# ]→ (e [ v ])
+  R3 : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ τ εg} (e : (Γ , σ) ⊢ τ ! ε) (v : Val Γ σ)
+     → _⊢_-[_]→_ {sub = sub} g (app (val (vabs e)) (val v)) 0# (e [ v ])
 
   -- (R4) g ⊢ loss(r) --r--> ()
-  R4 : ∀ {ε εg} {g : LC Γ UnitTy εg} (r : R)
-     → g ⊢ lossE {ε = ε} (val (vgnd r)) -[ r ]→ val (vgnd _)
+  R4 : ∀ {ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ UnitTy εg} (r : R)
+     → _⊢_-[_]→_ {sub = sub} g (lossE {ε = ε} (val (vgnd r))) r (val (vgnd _))
 
   -- (R6) g ⊢ with h from v1 handle v2 --0--> v_r(v1,v2)   (return ↦ vr ∈ h)
-  R6 : ∀ {ε εg ℓ par σ σ'} {g : LC Γ σ' εg} (h : Handler Γ ℓ par σ σ' ε) (v1 : Val Γ (gnd par)) (v2 : Val Γ σ)
-     → g ⊢ handleE h (val v1) (val v2) -[ 0# ]→ subE (cons v2 (cons v1 idSub)) (ret h)
+  R6 : ∀ {ε εg ℓ par σ σ'} {sub : εg ⊆ᵉ ε} {g : LC Γ σ' εg} (h : Handler Γ ℓ par σ σ' ε) (v1 : Val Γ (gnd par)) (v2 : Val Γ σ)
+     → _⊢_-[_]→_ {sub = sub} g (handleE h (val v1) (val v2)) 0# (subE (cons v2 (cons v1 idSub)) (ret h))
 
   -- (R7) g ⊢ v ▶ λ^εg x:σ.e --0--> ⟨e[v/x]⟩^εg_{λ^εg x:σ.0}
   -- (GLOCAL's own natural effect ε₁ is taken to be εg itself here, so its
   -- ε₂⊆ε₁ obligation for the fresh zero-continuation is reflexivity, and
-  -- its ε₁⊆ε obligation is exactly THEN's own `sub`.)
-  R7 : ∀ {ε εg εamb σ} (sub : εg ⊆ᵉ ε) {g : LC Γ Loss εamb} (v : Val Γ σ) (e : (Γ , σ) ⊢ Loss ! εg)
-     → g ⊢ thenE sub (val v) (vabs e) -[ 0# ]→ glocalE ⊆ᵉ-refl sub (e [ v ]) zeroLC
+  -- its ε₁⊆ε obligation is exactly THEN's own `sub`.) NOTE: this `sub`
+  -- relates e's OWN εg to ε -- the AMBIENT g's own εamb (hence the
+  -- family's own new index, for THIS rule) remains unconstrained, since
+  -- R7 disregards the ambient g entirely.
+  R7 : ∀ {ε εg εamb σ} (sub : εg ⊆ᵉ ε) {subamb : εamb ⊆ᵉ ε} {g : LC Γ Loss εamb} (v : Val Γ σ) (e : (Γ , σ) ⊢ Loss ! εg)
+     → _⊢_-[_]→_ {sub = subamb} g (thenE sub (val v) (vabs e)) 0# (glocalE ⊆ᵉ-refl sub (e [ v ]) zeroLC)
 
   -- (R8) g ⊢ ⟨v⟩^ε₁_g1 --0--> v
-  R8 : ∀ {ε ε₂ ε₁ εamb σ} (sub1 : ε₂ ⊆ᵉ ε₁) (sub2 : ε₁ ⊆ᵉ ε) {g : LC Γ σ εamb} (v : Val Γ σ) (g1 : LC Γ σ ε₂)
-     → g ⊢ glocalE sub1 sub2 (val v) g1 -[ 0# ]→ val v
+  R8 : ∀ {ε ε₂ ε₁ εamb σ} (sub1 : ε₂ ⊆ᵉ ε₁) (sub2 : ε₁ ⊆ᵉ ε) {sub : εamb ⊆ᵉ ε} {g : LC Γ σ εamb} (v : Val Γ σ) (g1 : LC Γ σ ε₂)
+     → _⊢_-[_]→_ {sub = sub} g (glocalE sub1 sub2 (val v) g1) 0# (val v)
 
   -- (R9) g ⊢ reset v --0--> v
-  R9 : ∀ {ε εg σ} {g : LC Γ σ εg} (v : Val Γ σ)
-     → g ⊢ resetE {ε = ε} (val v) -[ 0# ]→ val v
+  R9 : ∀ {ε εg σ} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} (v : Val Γ σ)
+     → _⊢_-[_]→_ {sub = sub} g (resetE {ε = ε} (val v)) 0# (val v)
 
   -- (F) regular-frame congruence, adjusting the loss continuation to
-  -- λ^ε x:α.(F[x]▶g) exactly as the source rule does.
+  -- λ^ε x:α.(F[x]▶g) exactly as the source rule does. Ties the family's
+  -- own index to F-rule's OWN `sub` directly -- it already plays exactly
+  -- this role (relating the ambient g's εg to ε), used internally to
+  -- build the premise's own rewritten continuation.
   F-rule : ∀ {ε εg α σ} (sub : εg ⊆ᵉ ε) {g : LC Γ σ εg} (f : Frame Γ α ε σ ε) {e e' : Γ ⊢ α ! ε} {r : R}
-         → vabs (thenE sub (plugF (weaken1F f) (val (vvar Z))) (weaken1V g)) ⊢ e -[ r ]→ e'
-         → g ⊢ plugF f e -[ r ]→ plugF f e'
+         → _⊢_-[_]→_ {sub = ⊆ᵉ-refl} (vabs (thenE sub (plugF (weaken1F f) (val (vvar Z))) (weaken1V g))) e r e'
+         → _⊢_-[_]→_ {sub = sub} g (plugF f e) r (plugF f e')
 
   -- (S1) operation-under-handler congruence: switch to the return-clause
   -- continuation λ^ε x:σ.(vr(v,x)▶g) while evaluating the handled body.
+  -- Ties the index to S1's own `sub`, same reasoning as (F).
   S1 : ∀ {ε εamb ℓ par σ σ'} (sub : εamb ⊆ᵉ ε) {g : LC Γ σ' εamb} (h : Handler Γ ℓ par σ σ' ε) (v : Val Γ (gnd par))
        {e e' : Γ ⊢ σ ! (ε ,ℓ ℓ)} {r : R}
-     → vabs (thenE sub (retApplied h v) (weaken1V g)) ⊢ e -[ r ]→ e'
-     → g ⊢ handleE h (val v) e -[ r ]→ handleE h (val v) e'
+     → _⊢_-[_]→_ {sub = ⊆ᵉ-,ℓ} (vabs (thenE sub (retApplied h v) (weaken1V g))) e r e'
+     → _⊢_-[_]→_ {sub = sub} g (handleE h (val v) e) r (handleE h (val v) e')
 
   -- (S2) g₁ ⊢ e --r--> e' ⟹ g ⊢ (e▶g₁) --0--> r + (e'▶g₁); ▶ disregards
   -- the ambient g entirely and evaluates under its own g₁ instead. "r + e"
   -- (a runtime-only artifact, not source syntax) is realised as
   -- loss(r) ▶ (λ_:().e) -- run loss(r) (which immediately reports r, R4),
-  -- then continue as e.
-  S2 : ∀ {ε εg εamb} (sub : εg ⊆ᵉ ε) {g : LC Γ Loss εamb} (g1 : LC Γ Loss εg) {e e' : Γ ⊢ Loss ! ε} {r : R}
-     → g1 ⊢ e -[ r ]→ e'
-     → g ⊢ thenE sub e g1 -[ 0# ]→ thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub e' g1)))
+  -- then continue as e. `sub` relates g1's OWN εg to ε, not the ambient
+  -- g's εamb (unconstrained, per R7's own note above).
+  S2 : ∀ {ε εg εamb} (sub : εg ⊆ᵉ ε) {subamb : εamb ⊆ᵉ ε} {g : LC Γ Loss εamb} (g1 : LC Γ Loss εg) {e e' : Γ ⊢ Loss ! ε} {r : R}
+     → _⊢_-[_]→_ {sub = sub} g1 e r e'
+     → _⊢_-[_]→_ {sub = subamb} g (thenE sub e g1) 0# (thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub e' g1))))
 
   -- (S3) ⟨e⟩^ε₁_g1 evaluates e under g1 (disregarding the ambient g),
-  -- keeping the frame's own effect ε₁, and re-wraps the result.
+  -- keeping the frame's own effect ε₁, and re-wraps the result. The
+  -- ambient g : LC Γ σ ε already lives at ε directly (no separate εg),
+  -- so the family's own index is trivially ⊆ᵉ-refl here.
   S3 : ∀ {ε ε₂ ε₁ σ} (sub1 : ε₂ ⊆ᵉ ε₁) (sub2 : ε₁ ⊆ᵉ ε) {g : LC Γ σ ε} (g1 : LC Γ σ ε₂) {e e' : Γ ⊢ σ ! ε₁} {r : R}
-     → g1 ⊢ e -[ r ]→ e'
-     → g ⊢ glocalE sub1 sub2 e g1 -[ r ]→ glocalE sub1 sub2 e' g1
+     → _⊢_-[_]→_ {sub = sub1} g1 e r e'
+     → _⊢_-[_]→_ {sub = ⊆ᵉ-refl} g (glocalE sub1 sub2 e g1) r (glocalE sub1 sub2 e' g1)
 
   -- (S4) reset evaluates its body under the *same* ambient g, but
   -- contributes no loss of its own (whatever loss e produced is discarded
   -- once evaluation completes, matching censor at the value level).
-  S4 : ∀ {ε εg σ} {g : LC Γ σ εg} {e e' : Γ ⊢ σ ! ε} {r : R}
-     → g ⊢ e -[ r ]→ e'
-     → g ⊢ resetE e -[ 0# ]→ resetE e'
+  S4 : ∀ {ε εg σ} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e e' : Γ ⊢ σ ! ε} {r : R}
+     → _⊢_-[_]→_ {sub = sub} g e r e'
+     → _⊢_-[_]→_ {sub = sub} g (resetE e) 0# (resetE e')
 
   -- (R5) operation call under a handler that does not yet handle it:
   -- jump directly to h's clause, applied to (param, arg, choice-cont,
@@ -236,7 +263,8 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε �
   -- wrapper is essential (paper.tex §8 / the arXiv paper's own erratum
   -- discussion) so that the reified delimited continuation denotes a
   -- single, γ-independent element rather than depending on whatever loss
-  -- continuation it is later supplied with.
+  -- continuation it is later supplied with. Ties the index to R5's own
+  -- `sub` directly -- fk/fl are built from exactly this witness.
   R5 : ∀ {ε εamb ℓ par σ σ' εop} (sub : εamb ⊆ᵉ ε) {g : LC Γ σ' εamb}
        (h : Handler Γ ℓ par σ σ' ε) (v1 : Val Γ (gnd par))
        (m : ℓ ∈ εop) (op : Op ℓ) (v2 : Val Γ (gnd (out op)))
@@ -249,8 +277,8 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε �
            handled = handleE h' pArg (plugK k' yArg)
            fk  = vabs {σ = gnd par `× gnd (in′ op)} (glocalE sub ⊆ᵉ-refl handled g')
            fl  = vabs {σ = gnd par `× gnd (in′ op)} (thenE sub handled g')
-       in g ⊢ handleE h (val v1) (plugK k (opE m op (val v2)))
-            -[ 0# ]→ subE (cons fk (cons fl (cons v2 (cons v1 idSub)))) (clause h op)
+       in _⊢_-[_]→_ {sub = sub} g (handleE h (val v1) (plugK k (opE m op (val v2))))
+            0# (subE (cons fk (cons fl (cons v2 (cons v1 idSub)))) (clause h op))
 
 -- ---------------------------------------------------------------------
 -- Fig. 7: the big-step judgment g ⊢ e ⇒r w.
@@ -261,5 +289,5 @@ infix 3 _⊢_⇒[_]_
 data _⊢_⇒[_]_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε → R → Γ ⊢ σ ! ε → Set where
   done : ∀ {σ ε εg} {g : LC Γ σ εg} (w : Γ ⊢ σ ! ε)
        → g ⊢ w ⇒[ 0# ] w
-  step : ∀ {σ ε εg} {g : LC Γ σ εg} {e1 e2 w : Γ ⊢ σ ! ε} {r s : R}
-       → g ⊢ e1 -[ r ]→ e2 → g ⊢ e2 ⇒[ s ] w → g ⊢ e1 ⇒[ r + s ] w
+  step : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e1 e2 w : Γ ⊢ σ ! ε} {r s : R}
+       → _⊢_-[_]→_ {sub = sub} g e1 r e2 → g ⊢ e2 ⇒[ s ] w → g ⊢ e1 ⇒[ r + s ] w
