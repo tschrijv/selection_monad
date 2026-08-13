@@ -1,0 +1,514 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{mathtools}
+\usepackage{enumitem}
+\usepackage{hyperref}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{remark}[theorem]{Remark}
+
+% ---------------------------------------------------------------------
+% Macros
+% ---------------------------------------------------------------------
+\newcommand{\Ssem}[1]{\mathsf{S}[\![#1]\!]}
+\newcommand{\Lsem}[1]{\mathsf{L}[\![#1]\!]}
+\newcommand{\Vsem}[1]{\mathsf{V}[\![#1]\!]}
+
+\newcommand{\Fm}[1]{F_{#1}}
+\newcommand{\Rm}[1]{\widehat{R}_{#1}}
+\newcommand{\Sm}[1]{\widehat{S}_{#1}}
+\newcommand{\Stepm}[1]{\widehat{\mathit{Step}}_{#1}}
+
+\newcommand{\eps}{\epsilon}
+\newcommand{\op}{\mathit{op}}
+\newcommand{\then}{\mathrel{\blacktriangleright}}
+\newcommand{\loc}[1]{\langle #1 \rangle} % local construct, decorated separately
+\newcommand{\tell}{\mathsf{tell}}
+\newcommand{\censor}{\mathsf{censor}_0}
+\newcommand{\up}{\mathsf{up}}
+\newcommand{\glocalOp}{\mathsf{glocal}}
+\newcommand{\rpt}[2]{\lfloor #1\rfloor_{#2}}
+\newcommand{\lC}{\lambda_C}
+
+\title{A Denotational Semantics for $\lC$ with Parameterized Handlers}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+We give a denotational semantics for a fragment of the effect calculus $\lC$: an
+expression language with algebraic effect operations, a distinguished \texttt{loss}
+effect used to record real-valued costs, and effect handlers
+$\mathtt{with}\ h\ \mathtt{from}\ e_1\ \mathtt{handle}\ e_2$ that thread a running
+\emph{parameter} across successive resumptions of a handled computation's delimited
+continuation. Types are interpreted by a family of selection functions
+$\Sm\eps(X) = (X\to\Rm\eps)\to R\times\Stepm\eps(X)$, built over an ordinary, loss-free
+free monad $\Fm\eps$ of ground-typed effect trees. Unlike a construction that attaches a
+loss contribution to every node of a single tree monad, here the accumulated loss is
+produced exactly once at each step of unfolding a selection function, entirely separately
+from the pending-computation tree, and a node's own children are themselves selection
+functions rather than bare trees. We develop $\Fm\eps$, $\Sm\eps$, the semantics of
+expressions, and, in particular, the semantics of parameterized handlers, which we define
+by a direct structural recursion on a selection function's own step-by-step unfolding --
+dispatching on whether the next pending operation belongs to the handler being applied --
+rather than by extending an algebra map homomorphically. We motivate this choice: once
+handlers carry a running parameter, a clause may resume its own delimited continuation at
+a parameter different from the one under which the handler was itself invoked, and a
+nested handler's own choice continuation may leak a value computed under such a
+resumption into an enclosing computation; together these defeat the uniform-in-the-
+parameter homomorphism property that an extension-based account would need, whereas a
+direct recursion on one pending step at a time requires no such property.
+\end{abstract}
+
+\section{Introduction}
+
+$\lC$ interprets terms via a family of \emph{selection functions}
+\[
+  \Sm\eps(X) = (X\to \Rm\eps)\to R\times\Stepm\eps(X),
+\]
+for $R$ the (additive) monoid in which losses are recorded. Intuitively, a value of
+$\Sm\eps(X)$ takes a \emph{loss continuation} $\gamma:X\to\Rm\eps$ -- an estimate of the
+eventual loss incurred by each possible result -- and, run against it, produces a pair: the
+loss $r\in R$ incurred at this one step of the computation, together with either a final
+value or one further pending operation call, whose own continuations are again selection
+functions run against the same $\gamma$. Two design choices distinguish this construction
+from one in which the accumulated loss is instead attached to every node of a single
+effect-tree monad, with handler semantics obtained as the (unique) homomorphic extension of
+an algebra map:
+
+\begin{enumerate}
+\item The accumulated loss is kept entirely separate from the pending-computation tree, as
+  a plain pair produced once at each step of unfolding a selection function, rather than
+  woven into the tree's own recursive structure. The auxiliary monad $\Fm\eps$ used to
+  represent finished loss \emph{reports} is consequently an entirely ordinary, loss-free
+  free monad: no loss is attached to any of its own nodes, at all.
+\item Handler semantics is defined by a direct structural recursion on a selection
+  function's own step-by-step unfolding, dispatching on whether the next pending operation
+  belongs to the handler being applied, rather than by first building an algebra structure
+  and appealing to its universal (homomorphic-extension) property.
+\end{enumerate}
+
+The second choice matters once handlers carry a running parameter. A handler's clause may
+resume its own delimited continuation at a parameter \emph{different} from the one under
+which the handler was itself invoked -- choosing, at each resumption, both a fresh
+parameter value and a point to resume at. Independently, a nested handler's own choice
+continuation -- the value it reports back describing what loss it \emph{would} incur, were
+a given resumption selected -- may itself leak a value computed under such a resumption
+into an enclosing computation. Together, these two features defeat the
+uniform-in-the-parameter algebra-homomorphism property that an extension-based account of
+handler semantics would need: the map obtained by extending an algebra homomorphically is
+only guaranteed to behave well when it is applied \emph{uniformly}, and a resumption at a
+freshly chosen parameter is precisely a non-uniform use of the extension. A direct
+recursion on one pending step at a time never needs to state, let alone prove, any such
+uniform property in the first place: each case of the recursion only ever inspects the
+selection function's immediately next step, dispatches or recurses into a strictly smaller
+subtree, and the whole definition is well founded by ordinary structural recursion on that
+unfolding -- mirroring, step for step, how a handled computation is itself reduced
+operationally, one pending operation at a time.
+
+As with any construction that restricts attention to \emph{ground} (first-order) operation
+signatures -- no operation may take or return a value of function type, though the object
+language's expressions remain fully higher-order throughout, and handler clauses may
+themselves return functions -- this keeps the auxiliary monad $\Fm\eps$ an ordinary,
+non-mutually-recursive inductive definition, needing only the ground-type interpretation
+of types, not the general one (which is defined mutually with $\Sm\eps$ itself, via the
+interpretation of function types).
+
+Section~2 recalls the syntax and semantics of types, including parameterized handlers.
+Section~3 develops the monads $\Fm\eps$ and $\Sm\eps$. Section~4 gives the semantics of
+expressions. Section~5 gives the semantics of handlers.
+
+\section{Syntax and Semantics of Types}
+
+Types $\sigma,\tau$ are built from ground (first-order) base types, tuples, and function
+types $\sigma\to\tau\,!\,\eps$ decorated with an effect context $\eps$ (a multiset of
+effect labels available to the function body, written additively: $\eps(\ell)$ counts the
+occurrences of $\ell$ in $\eps$, and $\eps\ell$ denotes $\eps$ extended by one further,
+outermost occurrence of $\ell$). A signature $\Sigma$ fixes, for each effect label $\ell$, a
+family of operations $\op:\mathit{out}\xrightarrow{\ell}\mathit{in}$ with
+$\mathit{out},\mathit{in}$ ground types, and a distinguished ground type $\mathtt{loss}$ of
+loss constants $r\in R$.
+
+Values include variables, ground constants (base constants, loss constants $r:\mathtt{loss}$,
+and $()$), pairs, and abstractions $\lambda^\eps x{:}\sigma.\,e$. Expressions $e$ include
+values, applications of a primitive (first-order) function, tuples, projections, function
+application, an operation call $\op(e)$ (typed against a witness that $\ell\in\eps$),
+$\mathtt{loss}(e)$ to record a loss, a $(\then)$-construct $e_1\then\lambda^{\eps_1}
+x{:}\sigma_1.\,e_2$ that sequences a hypothetical loss continuation, a local construct
+$\loc{e}_g^{\eps_1}$ that substitutes a different loss continuation while evaluating $e$,
+$\mathtt{reset}\ e$ to discard recorded loss, and handling
+$\mathtt{with}\ h\ \mathtt{from}\ e_1\ \mathtt{handle}\ e_2$.
+
+A handler $h$ for effect label $\ell$, parameter type $\mathit{par}$, body type $\sigma$,
+and result type $\sigma'$ at ambient effect context $\eps$, supplies, for each operation
+$\op:\mathit{out}\xrightarrow{\ell}\mathit{in}$, a \emph{clause} $e_\op$, typed in a context
+extended by four variables -- the \emph{running parameter} $z_p{:}\mathit{par}$, the
+operation's own argument $z_v{:}\mathit{out}$, a \emph{choice continuation}
+$l:(\mathit{par}\times\mathit{in})\Rightarrow\mathtt{loss}\,!\,\eps$, and a \emph{delimited
+continuation} $k:(\mathit{par}\times\mathit{in})\Rightarrow\sigma'\,!\,\eps$ -- of result
+type $\sigma'\,!\,\eps$; and a \emph{return clause} $e_r$, typed in a context extended by
+the running parameter $z_p{:}\mathit{par}$ and a result variable $z_x{:}\sigma$, likewise
+of type $\sigma'\,!\,\eps$. Both $l$ and $k$ take a \emph{pair} $(p',a)$ of a freshly chosen
+parameter value and an operation-result value: a clause resumes the handled computation by
+supplying, at each resumption, both the parameter the handler should continue running
+under and the point in the operation's result type to resume at. In
+$\mathtt{with}\ h\ \mathtt{from}\ e_1\ \mathtt{handle}\ e_2$, the expression
+$e_1:\mathit{par}\,!\,\eps$ supplies the \emph{initial} parameter value under which $h$
+begins running $e_2:\sigma\,!\,\eps\ell$.
+
+The semantics of types, $\Ssem\sigma$, is given by
+\[
+  \Ssem{b} = [\![b]\!], \qquad
+  \Ssem{(\sigma_1,\dots,\sigma_n)} = \Ssem{\sigma_1}\times\cdots\times\Ssem{\sigma_n}, \qquad
+  \Ssem{\sigma\to\tau\,!\,\eps} = \Ssem{\sigma}\to \Sm\eps(\Ssem{\tau}),
+\]
+where $\Sm\eps$ is the selection-function family developed in Section~3.
+
+\section{The Monads $\Fm\eps$ and $\Sm\eps$}
+
+\subsection{The carrier $\Fm\eps$}
+
+An $\eps$-algebra is a set $X$ with maps
+$\varphi_{\ell,\op,i} : \Ssem{\mathit{out}}\times X^{\Ssem{\mathit{in}}}\to X$ for each
+$\ell\in\eps$, $\op:\mathit{out}\xrightarrow{\ell}\mathit{in}$, $0<i\le\eps(\ell)$; the free
+such algebra on a set $X$ is written $\Fm\eps(X)$.
+
+\begin{definition}[The monad $\Fm\eps$]
+For a set $X$, let $\Fm\eps(X)$ be the least set $Y$ such that
+\[
+  Y \;=\; X \;+\; \sum_{\substack{\ell\in\eps,\ \op:\mathit{out}\xrightarrow{\ell}\mathit{in}\\ 0<i\le\eps(\ell)}}
+        \Ssem{\mathit{out}} \times Y^{\Ssem{\mathit{in}}}.
+\]
+We write an element as either a leaf $\iota_1(x)$ for $x\in X$, or an internal node
+$\iota_2\big((\ell,\op,i),(o,\kappa)\big)$; $\Fm\eps$ is the ordinary free monad for the
+$\eps$-signature, with unit $\eta^{\Fm\eps}(x)=\iota_1(x)$, algebra structure
+$\varphi_{\ell,\op,i}(o,\kappa)=\iota_2((\ell,\op,i),(o,\kappa))$, and Kleisli extension
+$f\dg{}:\Fm\eps(X)\to\Fm\eps(Y)$ for $f:X\to\Fm\eps(Y)$ given, as usual, by structural
+recursion:
+\[
+  f\dg{}(\iota_1(x)) = f(x), \qquad
+  f\dg{}\big(\iota_2((\ell,\op,i),(o,\kappa))\big) = \iota_2\big((\ell,\op,i),\,(o,\ f\dg{}\circ\kappa)\big).
+\]
+No loss is attached to any node of $\Fm\eps(X)$ at all: unlike a construction in which the
+accumulated loss is embedded throughout a single tree monad, here $\Fm\eps$ is kept
+entirely free of $R$, and is used solely to represent \emph{finished} computations --
+values, or trees of pending operation calls with no further loss bookkeeping of their own.
+\end{definition}
+
+For $\mathit{sub}:\eps_1\subseteq\eps$ (every occurrence available in $\eps_1$ is also
+available in $\eps$), write $(\mathit{sub})_*:\Fm{\eps_1}(X)\to\Fm\eps(X)$ for the evident
+structural relabelling of occurrence witnesses, leaving values and tree shape untouched.
+
+We write $\Rm\eps := \Fm\eps(R)$ for the type of \emph{loss reports}: a finished
+computation whose leaves carry an accumulated loss value rather than an ordinary result.
+
+\subsection{Selection functions $\Sm\eps$}
+
+\begin{definition}[The mutual family $\Sm\eps,\Stepm\eps$]
+For a set $X$, let $\Sm\eps(X)$ and $\Stepm\eps(X)$ be given by the simultaneous least
+solution of
+\[
+  \Sm\eps(X) \;=\; (X\to\Rm\eps)\to R\times\Stepm\eps(X), \qquad
+  \Stepm\eps(X) \;=\; X \;+\; \sum_{\substack{\ell\in\eps,\ \op:\mathit{out}\xrightarrow{\ell}\mathit{in}\\ 0<i\le\eps(\ell)}}
+        \Ssem{\mathit{out}} \times \Sm\eps(X)^{\Ssem{\mathit{in}}}.
+\]
+As with $\Fm\eps$ we write an element of $\Stepm\eps(X)$ as either $\mathrm{leaf}(x)$ or
+$\mathrm{node}\big((\ell,\op,i),(o,\kappa)\big)$; since $\Sm\eps(X)$ is a function type, we
+apply it directly, writing $p(\gamma)$ for a selection function $p$ run against a loss
+continuation $\gamma$.
+\end{definition}
+
+\begin{remark}
+$\Stepm\eps(X)$ is defined by exactly the same equation as one unfolding of $\Fm\eps$'s
+own defining equation -- except that its recursive occurrences are of $\Sm\eps(X)$ itself,
+not of $\Stepm\eps(X)$. A node's children are therefore \emph{further selection
+functions}, not bare trees: unfolding one step of $p\in\Sm\eps(X)$ against $\gamma$ yields
+either a finished value or one pending operation call, whose continuations must again be
+run against a (possibly different) loss continuation to make further progress. This is the
+structural feature that makes $\Sm\eps$ genuinely different from a family built as
+$(X\to\Rm\eps)\to \Fm\eps(R\times X)$ or similar: there, once a loss continuation is
+supplied, the resulting tree is an ordinary, loss-free value of a plain monad, independent
+of $\Sm\eps$ itself. Here the recursive structure of $\Sm\eps$ and $\Stepm\eps$ never
+bottoms out into a monad independent of $\Sm\eps$; the accumulated loss $R$ that
+\emph{does} appear is produced once per step of the unfolding, sitting entirely outside
+$\Stepm\eps(X)$, rather than being threaded through the recursive datatype at all.
+
+One consequence: because a selection function's children are again selection functions
+rather than plain trees, $\Sm{\eps_1}(X)$ cannot simply be reinterpreted as an instance of
+$\Sm\eps(X)$ the way $\Fm{\eps_1}(X)$ can be relabelled into $\Fm\eps(X)$ by
+$(\mathit{sub})_*$: changing the ambient effect context changes the domain of every loss
+continuation nested inside it. Section~3.3 gives the genuine combinator, $\glocalOp$, that
+this requires.
+\end{remark}
+
+\subsection{The combinators of $\Sm\eps$}
+
+\paragraph{Unit and operation calls.}
+\[
+  \eta^{\Sm\eps}(x)(\gamma) = (0,\,\mathrm{leaf}(x)), \qquad
+  \varphi_{\ell,\op,i}(o,\kappa)(\gamma) = (0,\,\mathrm{node}((\ell,\op,i),(o,\kappa))).
+\]
+
+\paragraph{Collapsing a selection function to a report.} For $p\in\Sm\eps(X)$ and a loss
+continuation $\gamma:X\to\Rm\eps$, define $\rpt{p}{\gamma}\in\Rm\eps$, the result of running
+$p$ against $\gamma$ \emph{throughout} -- at $p$ itself and at every one of its own pending
+continuations -- and collapsing the result into a single finished report:
+\[
+  \rpt{p}{\gamma} =
+  \begin{cases}
+    \Fm\eps(r+{-})\big(\gamma(x)\big) & p(\gamma) = (r,\mathrm{leaf}(x)) \\[2pt]
+    \Fm\eps(r+{-})\Big(\varphi_{\ell,\op,i}\big(o,\ \lambda a.\ \rpt{\kappa(a)}{\gamma}\big)\Big) & p(\gamma) = (r,\mathrm{node}((\ell,\op,i),(o,\kappa))),
+  \end{cases}
+\]
+where $\Fm\eps(r+{-})$ denotes the functorial action of $\Fm\eps$ applying $r+{-}$ at every
+leaf. That is: at a finished value, add this step's own loss $r$ into whatever $\gamma$
+reports there; at a pending operation, leave the node itself untouched, add $r$ into every
+leaf beneath it, and recurse into each child under the same $\gamma$.
+
+\paragraph{Kleisli extension.} For $f:X\to\Sm\eps(Y)$, define
+$f\dg{}:\Sm\eps(X)\to\Sm\eps(Y)$, writing $\mathsf{let}_{\Sm\eps}\ x\in X\ \mathsf{be}\ p\
+\mathsf{in}\ f(x) := f\dg{}(p)$, by first running
+\[
+  p\big(\lambda x.\,\rpt{f(x)}{\gamma}\big) = (r_1,w)
+\]
+and then, by cases on $w$,
+\[
+  \big(\mathsf{let}_{\Sm\eps}\ x\in X\ \mathsf{be}\ p\ \mathsf{in}\ f(x)\big)(\gamma) = (r_1+r_2,\,s_2), \qquad (r_2,s_2)=f(x')(\gamma), \qquad \text{if } w=\mathrm{leaf}(x'),
+\]
+\begin{multline*}
+  \big(\mathsf{let}_{\Sm\eps}\ x\in X\ \mathsf{be}\ p\ \mathsf{in}\ f(x)\big)(\gamma) = \big(r_1,\ \mathrm{node}((\ell,\op,i),(o,\lambda a.\ \mathsf{let}_{\Sm\eps}\ x\in X\ \mathsf{be}\ \kappa(a)\ \mathsf{in}\ f(x)))\big), \\
+  \text{if } w=\mathrm{node}((\ell,\op,i),(o,\kappa)).
+\end{multline*}
+That is: run $p$ under the hypothetical continuation $\lambda x.\rpt{f(x)}{\gamma}$ (what
+$f$ would eventually report, at each possible $x$, run to completion against $\gamma$); if
+$p$ is already finished at some $x'$, the whole computation continues as $f(x')$ run
+directly against $\gamma$, with $p$'s own step-loss $r_1$ added on; if $p$ has a pending
+operation, that operation is left exactly in place -- with loss $r_1$ untouched -- and only
+its children are rebound.
+
+\paragraph{Adding loss.} For $r\in R$, $\tell(r):\Sm\eps(X)\to\Sm\eps(X)$ adds $r$ into a
+selection function's own next step, wherever that step occurs:
+\[
+  \tell(r)(p)(\gamma) = \big(r+r_1,\ s_1\big), \qquad (r_1,s_1) = p(\gamma).
+\]
+
+\paragraph{Promoting a report.} $\up:\Fm\eps(X)\to\Sm\eps(X)$ promotes a finished,
+$\gamma$-independent report into a selection function that ignores whatever continuation it
+is later run against:
+\[
+  \up(\iota_1(x))(\gamma) = (0,\mathrm{leaf}(x)), \qquad
+  \up\big(\iota_2((\ell,\op,i),(o,\kappa))\big)(\gamma) = \big(0,\ \mathrm{node}((\ell,\op,i),(o,\lambda a.\,\up(\kappa(a))))\big).
+\]
+
+\paragraph{Fixing a loss continuation.} For $\mathit{sub}:\eps_1\subseteq\eps$ and
+$\gamma_1:X\to\Rm{\eps_1}$, define $\glocalOp(\mathit{sub},\gamma_1,-):\Sm{\eps_1}(X)\to\Sm\eps(X)$,
+which runs $p$ against the fixed continuation $\gamma_1$ throughout -- ignoring whatever
+$\gamma$ it is itself later run against -- while relabelling every occurrence witness along
+the way via $\mathit{sub}$:
+\[
+  \glocalOp(\mathit{sub},\gamma_1,p)(\gamma) = (r,\mathrm{leaf}(x)), \qquad \text{if } p(\gamma_1) = (r,\mathrm{leaf}(x)),
+\]
+\begin{multline*}
+  \glocalOp(\mathit{sub},\gamma_1,p)(\gamma) = \big(r,\ \mathrm{node}(\mathit{sub}(\ell,\op,i),(o,\lambda a.\ \glocalOp(\mathit{sub},\gamma_1,\kappa(a))))\big), \\
+  \text{if } p(\gamma_1) = (r,\mathrm{node}((\ell,\op,i),(o,\kappa))).
+\end{multline*}
+
+\paragraph{Discarding recorded loss.} $\censor:\Sm\eps(X)\to\Sm\eps(X)$ recursively zeroes
+the loss recorded at every step of $p$'s own unfolding (run against a caller-supplied
+$\gamma$), leaving values and tree shape untouched:
+\[
+  \censor(p)(\gamma) = (0,\mathrm{leaf}(x)), \qquad \text{if } p(\gamma) = (r,\mathrm{leaf}(x)),
+\]
+\begin{multline*}
+  \censor(p)(\gamma) = \big(0,\ \mathrm{node}((\ell,\op,i),(o,\lambda a.\,\censor(\kappa(a))))\big), \\
+  \text{if } p(\gamma) = (r,\mathrm{node}((\ell,\op,i),(o,\kappa))).
+\end{multline*}
+
+\section{Semantics of Expressions}
+
+\subsection{Values}
+
+\[
+  \Vsem{x}(\rho) = \rho(x), \qquad
+  \Vsem{c}(\rho) = [\![c]\!], \qquad
+  \Vsem{(v,w)}(\rho) = (\Vsem{v}(\rho),\Vsem{w}(\rho)),
+\]
+\[
+  \Vsem{\lambda^\eps x{:}\sigma.\,e}(\rho) = \lambda a.\ \Ssem{e}(\rho[a/x]).
+\]
+
+\subsection{The auxiliary loss-function semantics $\mathcal L$}
+
+For $\Gamma,x{:}\sigma\vdash e:\mathtt{loss}\,!\,\eps$, define
+$\Lsem{\lambda^\eps x{:}\sigma.\,e}:\Sm\Gamma\to\Sm\sigma\to\Rm\eps$ by
+\[
+  \Lsem{\lambda^\eps x{:}\sigma.\,e}(\rho)(a) = \rpt{\Vsem{\lambda^\eps x{:}\sigma.\,e}(\rho)(a)}{\eta^{\Fm\eps}}.
+\]
+
+\begin{remark}
+The loss function $g=\lambda^\eps x{:}\sigma.\,e$ is itself an ordinary value of function
+type $\sigma\to\mathtt{loss}\,!\,\eps$; its own body may call operations, sequence further
+loss continuations, and eventually produce a value of type $\mathtt{loss}$, i.e.\ an $r\in
+R$. That eventual value \emph{is itself} a further loss contribution -- $g$ is being run
+purely to find out what loss it would report, so whatever it eventually returns must be
+folded into the total, not discarded. Collapsing $\Vsem g(\rho)(a)$ under the loss
+continuation $\eta^{\Fm\eps}:R\to\Rm\eps$ (which embeds a returned loss value as itself)
+does exactly this, via $\rpt{-}{-}$'s own leaf case ($\Fm\eps(r+{-})(\gamma(x))$, here with
+$\gamma(x)=\eta^{\Fm\eps}(x)$). Collapsing instead under a continuation that
+\emph{discards} its argument (e.g.\ $\lambda r.\,\eta^{\Fm\eps}(0)$) would silently drop
+$g$'s own returned value whenever $g$'s body ends in something other than a bare
+$\mathtt{loss}(-)$ call -- for instance a loss function that simply evaluates to a constant
+$r_0:\mathtt{loss}$ without ever calling $\mathtt{loss}(-)$ explicitly would then be
+indistinguishable from one reporting no loss at all, which is not the intended reading of
+$\mathcal L$.
+\end{remark}
+
+\subsection{Core constructs}
+
+\[
+  \Ssem{v}(\rho) = \eta^{\Sm\eps}(\Vsem{v}(\rho)), \qquad
+  \Ssem{f(e)}(\rho) = \mathsf{let}_{\Sm\eps}\ a\in\Ssem\gamma\ \mathsf{be}\ \Ssem e(\rho)\ \mathsf{in}\ \eta^{\Sm\eps}([\![f]\!](a)),
+\]
+\[
+  \Ssem{(e_1,e_2)}(\rho) = \mathsf{let}_{\Sm\eps}\ a\in\Ssem{\sigma_1}\ \mathsf{be}\ \Ssem{e_1}(\rho)\ \mathsf{in}\ \mathsf{let}_{\Sm\eps}\ b\in\Ssem{\sigma_2}\ \mathsf{be}\ \Ssem{e_2}(\rho)\ \mathsf{in}\ \eta^{\Sm\eps}((a,b)),
+\]
+with $\mathtt{fst}$, $\mathtt{snd}$, and application $e_1\,e_2$ the evident generic clauses
+of a monadic semantics ($\Ssem{v\,e}(\rho) = \mathsf{let}_{\Sm\eps}\ a\in\Ssem\sigma\
+\mathsf{be}\ \Ssem e(\rho)\ \mathsf{in}\ \Vsem v(\rho)(a)$), and
+\[
+  \Ssem{\op(e)}(\rho) = \mathsf{let}_{\Sm\eps}\ a\in\Ssem{\mathit{out}}\ \mathsf{be}\ \Ssem{e}(\rho)
+     \ \mathsf{in}\ \varphi_{\ell,\op,\eps(\ell)}\big(a,\,(\eta^{\Sm\eps})^{\Ssem{\mathit{in}}}\big).
+\]
+
+\paragraph{\texttt{loss(e)}.} A bare $\tell$ is directly available on $\Sm\eps$, so no
+pattern matching on the shape of $\Ssem e$ is needed:
+\[
+  \Ssem{\mathtt{loss}(e)}(\rho) = \mathsf{let}_{\Sm\eps}\ r\in R\ \mathsf{be}\ \Ssem{e}(\rho)\ \mathsf{in}\ \tell(r)\big(\eta^{\Sm\eps}(())\big).
+\]
+
+\paragraph{$e_1\then\lambda^{\eps_1} x{:}\sigma_1.\,e_2$.} Collapse $e_1$ to a report using
+$g=\lambda x.e_2$'s (widened) semantics as the loss continuation throughout, then promote
+that report back into a selection function via $\up$:
+\[
+  \Ssem{e_1\then\lambda^{\eps_1}x{:}\sigma_1.\,e_2}(\rho) = \up\Big(\rpt{\Ssem{e_1}(\rho)}{\lambda a.\ (\mathit{sub})_*\big(\Lsem{\lambda x.\,e_2}(\rho)(a)\big)}\Big),
+\]
+for $\mathit{sub}:\eps_1\subseteq\eps$ (left implicit in the surface notation, as
+throughout). Because $\up$ ignores whatever continuation it is itself later run against,
+$\Ssem{e_1\then g}(\rho)$ does not depend on the ambient loss continuation the surrounding
+computation eventually supplies -- $\then$ has already fixed its own loss accounting via
+$g$ by the time it produces a value.
+
+\paragraph{$\loc{e}_g^{\eps_1}$.} For $e:\sigma\,!\,\eps_1$ and $g:\sigma\to\mathtt{loss}\,!\,\eps_2$
+with $\eps_2\subseteq\eps_1\subseteq\eps$ (again left implicit), this substitutes a
+different loss continuation while evaluating $e$, using $\glocalOp$ (Section~3.3) rather
+than a bare application, since $\Sm{\eps_1}(\sigma)$ is not literally reusable as a value of
+$\Sm\eps(\sigma)$:
+\[
+  \Ssem{\loc{e}_g^{\eps_1}}(\rho) = \glocalOp\Big(\mathit{sub}_2,\ \lambda a.\ (\mathit{sub}_1)_*\big(\Lsem g(\rho)(a)\big),\ \Ssem e(\rho)\Big).
+\]
+
+\paragraph{\texttt{reset}\,$e$.} Discard all loss recorded while evaluating $e$, keeping
+its value, via $\censor$:
+\[
+  \Ssem{\mathtt{reset}\ e}(\rho) = \censor\big(\Ssem e(\rho)\big).
+\]
+
+\paragraph{Handling.} Evaluate $e_1$ to obtain the initial parameter value, then dispatch to
+the handler semantics developed in Section~5:
+\[
+  \Ssem{\mathtt{with}\ h\ \mathtt{from}\ e_1\ \mathtt{handle}\ e_2}(\rho) = \mathsf{let}_{\Sm\eps}\ p\in\Ssem{\mathit{par}}\ \mathsf{be}\ \Ssem{e_1}(\rho)\ \mathsf{in}\ \mathcal H_h(\rho,p,\Ssem{e_2}(\rho)).
+\]
+
+\section{Semantics of Handlers}
+
+Fix a handler $h$ for effect label $\ell$, and an environment $\rho\in\Sm\Gamma$. We define
+$\mathcal H_h(\rho,p,G) \in \Sm\eps(\Ssem{\sigma'})$ for a running parameter value
+$p\in\Ssem{\mathit{par}}$ and a computation $G\in\Sm{\eps\ell}(\Ssem\sigma)$ still to be
+handled, by direct structural recursion on $G$'s own next unfolding step -- \emph{not} by
+building an $\eps\ell$-algebra structure and taking a homomorphic extension.
+
+\paragraph{The return clause.} Write
+\[
+  s(\rho,p,a) = \Ssem{e_r}\big(\rho[p/z_p,a/z_x]\big) \in \Sm\eps(\Ssem{\sigma'})
+\]
+for the semantics of $h$'s return clause, at running parameter $p$ and result value $a$.
+
+\paragraph{The handler semantics.} Running $\mathcal H_h(\rho,p,G)$ against a loss
+continuation $\gamma:\Ssem{\sigma'}\to\Rm\eps$ first runs $G$ itself against the
+hypothetical continuation $\lambda a.\ \iota\big(\rpt{s(\rho,p,a)}{\gamma}\big)$ -- what the
+return clause would eventually report, at each possible result $a$, were $G$ to finish
+there -- where $\iota:\Rm\eps\hookrightarrow\Rm{\eps\ell}$ is the evident inclusion induced
+by $\eps\subseteq\eps\ell$ (needed since $G$ itself lives at the wider context $\eps\ell$).
+The resulting step is then dispatched by $\Delta_h(\rho,\gamma,p)$:
+\[
+  \mathcal H_h(\rho,p,G)(\gamma) = \Delta_h(\rho,\gamma,p)\Big(G\big(\lambda a.\ \iota(\rpt{s(\rho,p,a)}{\gamma})\big)\Big).
+\]
+
+\paragraph{Dispatch.} $\Delta_h(\rho,\gamma,p)$ takes a step $(r,w)\in R\times
+\Stepm{\eps\ell}(\Ssem\sigma)$ of $G$'s own unfolding to a step of $\Sm\eps(\Ssem{\sigma'})$,
+by cases on $w$:
+\begin{itemize}
+\item \emph{$G$ is already finished}, $w=\mathrm{leaf}(x)$: invoke the return clause at the
+  running parameter and the produced value, and combine the loss $r_2$ this incurs with
+  whatever loss $r$ $G$ had already accumulated on the way to $x$:
+  \[
+    \Delta_h(\rho,\gamma,p)(r,\mathrm{leaf}(x)) = (r+r_2,\,s_2), \qquad (r_2,s_2) = s(\rho,p,x)(\gamma).
+  \]
+\item \emph{$G$'s next step is an operation not handled by $h$} (i.e.\ at an occurrence
+  already present in $\eps$, shallower than the newly introduced occurrence of $\ell$ that
+  $G$ was typed against): pass the step through unchanged, demoting its occurrence witness,
+  and recurse into each of its continuations:
+  \begin{multline*}
+    \Delta_h(\rho,\gamma,p)\big(r,\mathrm{node}((\ell_1,\op,i),(o,\kappa))\big) \\
+      = \big(r,\ \mathrm{node}((\ell_1,\op,i),(o,\lambda a.\ \mathcal H_h(\rho,p,\kappa(a))))\big), \qquad \ell_1\ne \ell.
+  \end{multline*}
+\item \emph{$G$'s next step is one of $h$'s own operations} $\op_j$, at the newly
+  introduced occurrence: dispatch directly to the corresponding object-language clause,
+  instantiated at the running parameter, the operation's own argument, and the choice and
+  delimited continuations $l_1,k_1$ built from $\kappa$ below, and run it against $\gamma$;
+  again combine its own freshly incurred loss $r_2$ with $G$'s own accumulated $r$:
+  \begin{multline*}
+    \Delta_h(\rho,\gamma,p)\big(r,\mathrm{node}(\op_j,(o,\kappa))\big) = (r+r_2,\,s_2), \qquad \\
+    (r_2,s_2) = \Ssem{e_j}\big(\rho[p/z_p,\,o/z_v,\,l_1/l,\,k_1/k]\big)(\gamma).
+  \end{multline*}
+\end{itemize}
+
+\paragraph{Choice and delimited continuations.} At each freshly chosen parameter $p'$ and
+resumption point $a$ offered by $\kappa$, the delimited continuation $k_1$ resumes the same
+handler, running under the caller's own ambient loss continuation $\gamma$ throughout (via
+$\glocalOp$ at the identity inclusion); the choice continuation $l_1$ reports what loss that
+same resumption \emph{would} incur, collapsed to a bare report and promoted back into a
+selection function that ignores whatever continuation it is itself later run against (via
+$\up\circ\rpt{-}{\gamma}$), so that it can be used as an ordinary value of type
+$\mathtt{loss}$ inside the clause body:
+\[
+  k_1(p',a) = \glocalOp\big(\mathrm{id},\ \gamma,\ \mathcal H_h(\rho,p',\kappa(a))\big), \qquad
+  l_1(p',a) = \up\Big(\rpt{\mathcal H_h(\rho,p',\kappa(a))}{\gamma}\Big).
+\]
+
+\begin{remark}
+Every recursive call above -- inside $\Delta_h$'s pass-through case, and inside $k_1,l_1$ --
+is made on $\kappa(a)$, one of $G$'s own children, for some $a$ chosen by $G$ itself: the
+recursion is on $G$'s own unfolding, one pending step at a time, and never on the running
+parameter $p$. This is exactly what lets $k_1$ and $l_1$ resume the handler at a freshly
+chosen $p'$, different at each call, with no obligation to relate the behaviour of
+$\mathcal H_h(\rho,p,-)$ and $\mathcal H_h(\rho,p',-)$ as $p$ ranges over
+$\Ssem{\mathit{par}}$: nothing in the definition is stated, or needs to be proved, uniformly
+in $p$. An account built instead by first fixing a single algebra structure on
+$\Rm\eps(\Ssem{\sigma'})^{\Ssem{\mathit{par}}}$ and then extending a generator map
+homomorphically would need exactly such a uniform property -- the extension's own defining
+property is a statement about the map's behaviour at \emph{every} parameter value
+simultaneously -- which a clause resuming at a freshly chosen $p'\ne p$, combined with a
+nested handler's own choice continuation reporting a value computed under such a
+resumption, need not respect.
+\end{remark}
+
+\end{document}
