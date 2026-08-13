@@ -1,0 +1,3 @@
+name: lambdaC
+depend: standard-library
+include: src
