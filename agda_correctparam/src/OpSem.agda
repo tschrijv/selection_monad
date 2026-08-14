@@ -291,3 +291,21 @@ data _⊢_⇒[_]_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε →
        → g ⊢ w ⇒[ 0# ] w
   step : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e1 e2 w : Γ ⊢ σ ! ε} {r s : R}
        → _⊢_-[_]→_ {sub = sub} g e1 r e2 → g ⊢ e2 ⇒[ s ] w → g ⊢ e1 ⇒[ r + s ] w
+
+-- ---------------------------------------------------------------------
+-- Terminal expressions: the two shapes a well-typed big-step evaluation
+-- (_⊢_⇒[_]_ above) can terminate at, since -[_]→ has no further rule to
+-- apply from either. A plain value is (trivially) terminal; the
+-- interesting case is a term of the form K[op(v)] -- an operation call,
+-- plugged into a continuation context K, none of whose special frames
+-- (S-handleB's) handle op's own label ℓ anywhere along K, i.e.
+-- ¬ Handles K ℓ. Unlike agda_noparam, opE carries no σeq proof, so
+-- terminalOp needs no `refl` argument to line its own hole type up with
+-- opE's codomain.
+-- ---------------------------------------------------------------------
+
+data Terminal : ∀ {Γ σ ε} → Γ ⊢ σ ! ε → Set where
+  terminalVal : ∀ {Γ σ ε} (v : Val Γ σ) → Terminal {Γ} {σ} {ε} (val v)
+  terminalOp  : ∀ {Γ σ ε εop ℓ} (m : ℓ ∈ εop) (op : Op ℓ) (v : Val Γ (gnd (out op)))
+                (K : ContCxt Γ (gnd (in′ op)) εop σ ε) (nh : ¬ Handles K ℓ)
+              → Terminal (plugK K (opE m op (val v)))
