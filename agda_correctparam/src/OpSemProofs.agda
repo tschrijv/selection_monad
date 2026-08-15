@@ -26,17 +26,18 @@ open import Subst Sg
 open import OpSem Sg
 
 open import Data.List.Membership.Propositional using (_∈_)
-open import Data.Empty using (⊥)
+open import Data.Empty using (⊥; ⊥-elim)
 open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Data.Unit using (⊤; tt)
 open import Data.Bool using (Bool; true; false)
 open import Data.Maybe using (Maybe; just; nothing; _<∣>_)
 open import Data.Maybe.Properties using (just-injective)
-open import Data.Product using (Σ; _,_; proj₁; proj₂)
+open import Data.Product using (Σ; _,_; proj₁; proj₂; _×_)
 open import Data.Product.Properties using (Σ-≡,≡←≡)
 open import Relation.Nullary using (¬_)
+open import Function using (_∘_)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym; trans; subst)
-open import Relation.Binary.HeterogeneousEquality using (_≅_)
+open import Relation.Binary.HeterogeneousEquality using (_≅_; ≡-to-≅) renaming (refl to ≅-refl; sym to ≅-sym; trans to ≅-trans)
 
 -- ---------------------------------------------------------------------
 -- Shape lemmas: no Frame/SFrame ever plugs into a `val` at the top.
@@ -72,6 +73,9 @@ plugK-op-not-val ▫       w ()
 plugK-op-not-val (F∘ k f) w eq = plugF-not-val f _ w eq
 plugK-op-not-val (S∘ k s) w eq = plugS-not-val s _ w eq
 
+val-inj : ∀ {Γ σ ε} {v1 v2 : Val Γ σ} → val {ε = ε} v1 ≡ val v2 → v1 ≡ v2
+val-inj refl = refl
+
 pair-inj1 : ∀ {Γ σ τ ε} {x1 y1 : Γ ⊢ σ ! ε} {x2 y2 : Γ ⊢ τ ! ε} → pair x1 x2 ≡ pair y1 y2 → x1 ≡ y1
 pair-inj1 refl = refl
 
@@ -97,6 +101,26 @@ plugK-op-not-pairvv (S∘ k S-reset)          v1 v2 ()
 -- an equation at once.
 fun-inj2 : ∀ {Γ γ δ ε} {f1 f2 : PrimFun γ δ} {e1 e2 : Γ ⊢ gnd γ ! ε} → fun f1 e1 ≡ fun f2 e2 → e1 ≡ e2
 fun-inj2 refl = refl
+
+-- fun-inj1/handleE-inj: fully generalized companions (extracting EVERY
+-- component, not just one, unlike the "one shared/one varying" lemmas
+-- above) -- needed by R5-cont-unique's own same-shape K-pairings below,
+-- where BOTH sides' fixed components (PrimFun, Handler, ...) are
+-- independently fresh per side, not already known equal. Safe to use
+-- `refl` directly here (unlike fun-inj2's own comment above about R1-
+-- vs-F-op): by the time these are called, go's own clause head has
+-- ALREADY unified the surrounding σ1≡σ2/β1≡β2 (hence e.g. γ,δ here) via
+-- the same "refl refl refl refl" reduction confirmed safe throughout
+-- go's induction. (thenE/glocalE don't need an analogous fully-
+-- generalized version: their own ⊆ᵉ-witnesses get unified up front, by
+-- go's own unthen-key/unglocal-key Σ-packing, before the EXISTING
+-- single-sub thenE-arg-inj/glocalE-arg-inj are used at all.)
+fun-inj1 : ∀ {Γ γ δ ε} {f1 f2 : PrimFun γ δ} {e1 e2 : Γ ⊢ gnd γ ! ε} → fun f1 e1 ≡ fun f2 e2 → f1 ≡ f2
+fun-inj1 refl = refl
+
+handleE-inj : ∀ {Γ ℓ par σ σ' ε} {h1 h2 : Handler Γ ℓ par σ σ' ε} {p1 p2 : Γ ⊢ gnd par ! ε} {b1 b2 : Γ ⊢ σ ! (ε ,ℓ ℓ)}
+            → handleE h1 p1 b1 ≡ handleE h2 p2 b2 → h1 ≡ h2 × p1 ≡ p2 × b1 ≡ b2
+handleE-inj refl = refl , refl , refl
 
 -- `fun`'s own domain γ is a *hidden* parameter -- it appears in `f`'s and
 -- `e`'s types but not in `fun f e`'s own conclusion type (gnd δ). So an
@@ -148,6 +172,22 @@ unfst-arg : ∀ {Γ σ0 ε} → Γ ⊢ σ0 ! ε → Maybe (Σ Ty (λ τ → Γ �
 unfst-arg (fst {τ = τ} e) = just (τ , e)
 unfst-arg _               = nothing
 
+-- unfun-key: Σ-packages fun's hidden domain γ together with its PrimFun
+-- ONLY (dropping the argument entirely) -- ε/Γ-independent, so its own
+-- commutation is trivial homogeneous equality (no generic-atE dance
+-- needed). Used by R5-cont-unique's own F-fun case: since γ isn't part
+-- of F-fun's own visible codomain (only δ is), it survives as a
+-- genuinely independent hidden type on each side -- but, unlike the
+-- gnd(in′op1) vs gnd(in′op2) case earlier, γA/γB here are NOT tied to
+-- any outer, rigid value (they're fresh per this clause's own F-fun
+-- pattern), so γAeq itself can be pattern-matched to refl directly
+-- (safe: a single, homogeneous GTy equality) -- once done, kA/kB share
+-- the exact same type and go recurses on them with no further casting
+-- at all, sidestepping the whole wrapF∘-fst-style machinery.
+unfun-key : ∀ {Γ δ0 ε} → Γ ⊢ gnd δ0 ! ε → Maybe (Σ GTy (λ γ → PrimFun γ δ0))
+unfun-key (fun {γ = γ} pf e) = just (γ , pf)
+unfun-key _                  = nothing
+
 -- subst doesn't reduce through constructors unless the equality is
 -- literally refl, so extracting a `val`-shaped witness after a subst
 -- (as the two Σ-second-component fixes below need) goes through these
@@ -170,6 +210,44 @@ subst-val-pair-fst refl v1 w1 = refl
 unapp-fn : ∀ {Γ τ0 ε} → Γ ⊢ τ0 ! ε → Σ Ty (λ σδ → Γ ⊢ σδ ! ε)
 unapp-fn {τ0 = τ0} (app fn arg) = _ , fn
 unapp-fn {τ0 = τ0} t             = τ0 , t
+
+-- app's own hidden argument type σ (shared between the function
+-- position's own σ⇒τ0!ε and the argument position's own σ, but not
+-- part of app's own codomain τ0) -- same "hidden, but genuinely fresh
+-- per this clause's own pattern" situation as unfun-key's γ above, so
+-- σAeq can likewise be pattern-matched to refl directly, after which
+-- app-inj1/app-inj2 apply to `eq` normally.
+unapp-key : ∀ {Γ τ0 ε} → Γ ⊢ τ0 ! ε → Maybe (Σ Ty (λ σ → Γ ⊢ (σ ⇒ τ0 ! ε) ! ε))
+unapp-key (app {σ = σ} fn arg) = just (σ , fn)
+unapp-key _                    = nothing
+
+-- handleE's own hidden ℓ/par/σ (not part of its own codomain σ0',
+-- which is all F-handleP/S-handleB's own outer wrapping exposes) --
+-- packaged as ONE combined, Γ/ε-independent-except-for-h key, so the
+-- WHOLE thing (including h itself) can be pattern-matched to refl in
+-- one shot, exactly like unfun-key's (γ,pf) pair above.
+unhandle-key : ∀ {Γ σ0' ε} → Γ ⊢ σ0' ! ε → Maybe (Σ Effect (λ ℓ → Σ GTy (λ par → Σ Ty (λ σ → Handler Γ ℓ par σ σ0' ε))))
+unhandle-key (handleE {ℓ = ℓ} {par = par} {σ = σ} h p b) = just (ℓ , par , σ , h)
+unhandle-key _                                           = nothing
+
+-- thenE's codomain is ALWAYS Loss (no σ dependency at all), so its own
+-- hole type σ and its LC body's own effect context ε₁ are both hidden
+-- from the outer match, same situation as unfun-key's γ. Kept GENERIC
+-- in its own input's type σ0 (rather than fixing it to Loss directly)
+-- -- fixing it gets Agda's coverage checker stuck the same way
+-- opE-absurd's own comment above describes (Loss, like UnitTy, is
+-- gnd-headed too, so comparing it against an opE clause's own opaque
+-- gnd(in′op) is undecidable) -- confirmed by direct experiment.
+unthen-key : ∀ {Γ σ0 ε} → Γ ⊢ σ0 ! ε → Maybe (Σ Ty (λ σ → Σ EffCxt (λ ε₁ → Σ (ε₁ ⊆ᵉ ε) (λ sub → LC Γ σ ε₁))))
+unthen-key (thenE {σ = σ} {ε₁ = ε₁} sub e g) = just (σ , ε₁ , sub , g)
+unthen-key _                                 = nothing
+
+-- glocalE's codomain shares its own σ with the hole's domain (so σ IS
+-- visible via the outer match), but its own domain ε₁ (the hole's
+-- ambient effect context) and the LC body's own ε₂ are both hidden.
+unglocal-key : ∀ {Γ σ0 ε} → Γ ⊢ σ0 ! ε → Maybe (Σ EffCxt (λ ε₁ → Σ EffCxt (λ ε₂ → Σ (ε₂ ⊆ᵉ ε₁) (λ sub1 → Σ (ε₁ ⊆ᵉ ε) (λ sub2 → LC Γ σ0 ε₂)))))
+unglocal-key (glocalE {ε₂ = ε₂} {ε₁ = ε₁} sub1 sub2 e g) = just (ε₁ , ε₂ , sub1 , sub2 , g)
+unglocal-key _                                           = nothing
 
 -- fst's argument is now a single (vpair-carrying) value rather than two
 -- separately-recursed pieces glued by `pair`, so there's no more K-shape
@@ -444,6 +522,219 @@ generic-at-tag refl X = refl
 shape-absurd : ∀ {Γ σ ε Xty} (τeq : σ ≡ Xty) (X : Γ ⊢ Xty ! ε) {e : Γ ⊢ σ ! ε}
              → e ≡ generic-at τeq X → (exprTag e ≡ exprTag X → ⊥) → ⊥
 shape-absurd τeq X eq neq = neq (trans (cong exprTag eq) (generic-at-tag τeq X))
+
+-- Two-sided version, needed for R5-cont-unique below (below, BOTH sides
+-- of the comparison are generic-at-wrapped, since NEITHER K1's nor K2's
+-- own codomain can be allowed to unify DIRECTLY against the other's --
+-- confirmed by direct experiment: even the K1=K2=▫ base case gets
+-- Agda's coverage checker stuck if their codomains are compared
+-- directly, since ContCxt's own HOLE type (σ,ε, e.g. gnd(in′op1) here)
+-- is a PARAMETER (shared, unchanging, across a whole continuation), NOT
+-- an index -- so it is NEVER "re-examined" while peeling frames, but
+-- their shared CODOMAIN (R5's own σ) genuinely is, and comparing two
+-- independently-opaque candidates for it is exactly opE-at's own
+-- original problem, just on both sides at once here).
+shape-absurd2 : ∀ {Γ σ ε Xty1 Xty2} (τeq1 : σ ≡ Xty1) (X1 : Γ ⊢ Xty1 ! ε) (τeq2 : σ ≡ Xty2) (X2 : Γ ⊢ Xty2 ! ε)
+              → generic-at τeq1 X1 ≡ generic-at τeq2 X2 → (exprTag X1 ≡ exprTag X2 → ⊥) → ⊥
+shape-absurd2 τeq1 X1 τeq2 X2 eq neq = neq (trans (sym (generic-at-tag τeq1 X1)) (trans (cong exprTag eq) (generic-at-tag τeq2 X2)))
+
+-- Effect-generalizing variants, needed because ContCxt's own codomain
+-- is a PAIR (Ty, EffCxt) that varies together -- unlike theorem-A4-1-
+-- op's own use of generic-at, where only the Ty-index ever moved (the
+-- ambient EffCxt was always shared/fixed there). Here, peeling S-
+-- handleB/S-glocal off a ContCxt genuinely changes the outer EffCxt
+-- too (they add/remove effect labels), so R5-cont-unique's own
+-- induction needs both indices kept independently free per side.
+generic-atE : ∀ {Γ τ Xty ε Xε} (τeq : τ ≡ Xty) (εeq : ε ≡ Xε) → Γ ⊢ Xty ! Xε → Γ ⊢ τ ! ε
+generic-atE refl refl X = X
+
+generic-atE-tag : ∀ {Γ τ Xty ε Xε} (τeq : τ ≡ Xty) (εeq : ε ≡ Xε) (X : Γ ⊢ Xty ! Xε) → exprTag (generic-atE τeq εeq X) ≡ exprTag X
+generic-atE-tag refl refl X = refl
+
+-- generic-atE-fst-cast/-snd-cast: bridges unfst-arg/unsnd-arg's own raw
+-- `subst` (along the PROJECTED τ/σ motive) directly to generic-atE's
+-- own shape, needed to feed go's own recursive call -- proven directly
+-- via τeq's own refl-match (single-sided, safe, mirroring every other
+-- commutation lemma above) rather than by trying to unfold generic-atE
+-- itself (which, for an OPAQUE τeq/εeq, never reduces to a raw subst
+-- form at all -- confirmed by direct experiment).
+generic-atE-fst-cast : ∀ {Γ σ0 τ1 τ2 ε} (τeq : τ1 ≡ τ2) (e : Γ ⊢ (σ0 `× τ1) ! ε)
+                      → generic-atE (sym (cong (λ τ → σ0 `× τ) τeq)) refl e ≡ subst (λ τ → Γ ⊢ (σ0 `× τ) ! ε) τeq e
+generic-atE-fst-cast refl e = refl
+
+generic-atE-snd-cast : ∀ {Γ τ0 σ1 σ2 ε} (σeq : σ1 ≡ σ2) (e : Γ ⊢ (σ1 `× τ0) ! ε)
+                      → generic-atE (sym (cong (λ σ → σ `× τ0) σeq)) refl e ≡ subst (λ σ → Γ ⊢ (σ `× τ0) ! ε) σeq e
+generic-atE-snd-cast refl e = refl
+
+generic-atE-fst-cast2 : ∀ {Γ σ0 τ1 τ2 ε} (τeq : τ1 ≡ τ2) (e : Γ ⊢ (σ0 `× τ2) ! ε)
+                       → generic-atE (cong (λ τ → σ0 `× τ) τeq) refl e ≡ subst (λ τ → Γ ⊢ (σ0 `× τ) ! ε) (sym τeq) e
+generic-atE-fst-cast2 refl e = refl
+
+generic-atE-snd-cast2 : ∀ {Γ τ0 σ1 σ2 ε} (σeq : σ1 ≡ σ2) (e : Γ ⊢ (σ2 `× τ0) ! ε)
+                       → generic-atE (cong (λ σ → σ `× τ0) σeq) refl e ≡ subst (λ σ → Γ ⊢ (σ `× τ0) ! ε) (sym σeq) e
+generic-atE-snd-cast2 refl e = refl
+
+subst-sym-cancel : ∀ {A : Set} (P : A → Set) {a b : A} (eq : a ≡ b) (x : P a) → subst P (sym eq) (subst P eq x) ≡ x
+subst-sym-cancel P refl x = refl
+
+-- Single-sided version, used throughout R5-cont-unique's own induction
+-- below (go's own clauses always pattern-match τeq1/εeq1 to refl in the
+-- clause head -- safe, since resultTy/resultEff are go's own fresh
+-- metas at that point, unconstrained except via τeq1/εeq1 themselves --
+-- confirmed by direct experiment. This reduces `eq` to `X1 ≡ generic-
+-- atE τeq2 εeq2 X2` with X1 fully concrete, sidestepping the need to
+-- ever compare K1'/K2''s own codomains as TWO independent opaque
+-- proofs at once).
+shape-absurdE : ∀ {Γ σ ε Xty Xε} (τeq : σ ≡ Xty) (εeq : ε ≡ Xε) (X : Γ ⊢ Xty ! Xε) {e : Γ ⊢ σ ! ε}
+              → e ≡ generic-atE τeq εeq X → (exprTag e ≡ exprTag X → ⊥) → ⊥
+shape-absurdE τeq εeq X eq neq = neq (trans (cong exprTag eq) (generic-atE-tag τeq εeq X))
+
+-- pack2: Σ-packages an expression's own (Ty, EffCxt, expression) triple
+-- into ONE, CLOSED type, independent of any external σ/ε -- unlike a
+-- direct `_≡_`/`_≅_` comparison of two K-shape-dependent expressions
+-- (which gets Agda's unifier stuck deciding TYPE-level equality first,
+-- e.g. gnd(in′op1) ≟ gnd(in′op2)), comparing two pack2-VALUES is an
+-- ordinary, homogeneous `_≡_` -- Agda accepts refl on it via ordinary
+-- constructor injectivity (confirmed by direct experiment: this
+-- correctly recovers op1≡op2 even though `in′` is abstract, AS LONG AS
+-- the two sides' own "rest" (the recursively-varying sub-expression)
+-- is fully atomic on both sides -- e.g. both `val`-headed. When one or
+-- both sides embed a further plugK-wrapped sub-continuation at the
+-- point of comparison, pack2's own refl-match gets stuck too (plugK
+-- isn't a constructor, so Agda can't peel through an unmatched k) --
+-- confirmed by direct experiment -- so those cases instead peel ONE
+-- matching outer constructor via ordinary injectivity (fun-inj2, pair-
+-- inj1/2, opE-arg-inj, etc. -- ALL of which DO work through an
+-- unmatched plugK-wrapped sub-term, since the OUTER constructor's own
+-- injectivity doesn't require reducing its argument) and recurse.
+pack2 : ∀ {Γ σ ε} → Γ ⊢ σ ! ε → Σ Ty (λ σ' → Σ EffCxt (λ ε' → Γ ⊢ σ' ! ε'))
+pack2 {σ = σ} {ε = ε} e = σ , ε , e
+
+pack2-substE : ∀ {Γ τ Xty ε Xε} (τeq : τ ≡ Xty) (εeq : ε ≡ Xε) (e : Γ ⊢ Xty ! Xε)
+             → pack2 (generic-atE τeq εeq e) ≡ pack2 e
+pack2-substE refl refl e = refl
+
+-- unOpEShallow: like unOpE, but drops the argument entirely (keeping
+-- only ℓ, op, the ambient EffCxt, and the ∈-witness, ALL Σ-packaged so
+-- the codomain never mentions any external ε) -- needed for the tOp
+-- cases (S1/S9), where the argument itself may be a further plugK-
+-- wrapped sub-continuation (S9) that a FULL pack2/unOpE-style match
+-- can't safely unify (see comment on pack2 above) -- unOpEShallow lets
+-- us recover op-identity (and εop-identity) WITHOUT ever touching the
+-- argument, homogeneously.
+unOpEShallow : ∀ {Γ σ ε} → Γ ⊢ σ ! ε → Maybe (Σ Effect (λ ℓ' → Σ (Op ℓ') (λ op' → Σ EffCxt (λ ε' → ℓ' ∈ ε'))))
+unOpEShallow (opE {ℓ = ℓ'} {ε = ε'} m' op' _) = just (ℓ' , op' , ε' , m')
+unOpEShallow _                                = nothing
+
+unOpEShallow-substE : ∀ {Γ τ Xty ε Xε} (τeq : τ ≡ Xty) (εeq : ε ≡ Xε) (e : Γ ⊢ Xty ! Xε)
+                     → unOpEShallow (generic-atE τeq εeq e) ≡ unOpEShallow e
+unOpEShallow-substE refl refl e = refl
+
+-- generic-atK: the ContCxt analogue of generic-atE, casting along its
+-- own "hole" (domain) parameters -- used to thread op1≡op2/εop1≡εop2
+-- (established once, at go's own base case) upward through its
+-- induction as ORDINARY `_≡_` facts, sidestepping the need to combine
+-- heterogeneous ≅ values across recursive calls (confirmed by direct
+-- experiment that lifting kA≅kB to (F∘ kA f)≅(F∘ kB f) directly, via
+-- icong or similar, needs an index equality that isn't otherwise
+-- available at that point -- generic-atK avoids ever needing it: go's
+-- own recursion works entirely in `_≡_` until R5-cont-unique's own
+-- top-level wrapper converts to `_≅_` exactly once, at the very end).
+generic-atK : ∀ {Γ dty ddty deff ddeff σ ε} (dtyeq : dty ≡ ddty) (deffeq : deff ≡ ddeff) → ContCxt Γ ddty ddeff σ ε → ContCxt Γ dty deff σ ε
+generic-atK refl refl K = K
+
+generic-atK-≅ : ∀ {Γ dty ddty deff ddeff σ ε} (dtyeq : dty ≡ ddty) (deffeq : deff ≡ ddeff) (K : ContCxt Γ ddty ddeff σ ε)
+              → generic-atK dtyeq deffeq K ≅ K
+generic-atK-≅ refl refl K = ≅-refl
+
+-- generic-atK2: casts BOTH the domain (dty,deff) AND codomain (σ,ε)
+-- parameters at once -- needed for go's own TYPE DECLARATION (as
+-- opposed to its individual clause bodies), since σ1/σ2 (K1'/K2''s own
+-- codomains) are only unified per-clause (once both are pattern-
+-- matched to a matching shape) -- generically, before any clause is
+-- picked, they're independent. Within a same-shape clause matching
+-- τeq1,εeq1 to refl, the codomain-cast arguments (trans (sym τeq1)
+-- τeq2, trans (sym εeq1) εeq2) become τeq2,εeq2 themselves; even where
+-- those stay opaque (S1,S1's own pack2-mediated match, which doesn't
+-- pattern-match τeq2/εeq2 directly), their type becomes `X ≡ X` post-
+-- unification, so Axiom K makes them definitionally refl anyway.
+generic-atK2 : ∀ {Γ dty ddty deff ddeff σ dσ ε dε} (dtyeq : dty ≡ ddty) (deffeq : deff ≡ ddeff) (σeq : σ ≡ dσ) (εeq : ε ≡ dε)
+             → ContCxt Γ ddty ddeff dσ dε → ContCxt Γ dty deff σ ε
+generic-atK2 refl refl refl refl K = K
+
+generic-atK2-≅ : ∀ {Γ dty ddty deff ddeff σ dσ ε dε} (dtyeq : dty ≡ ddty) (deffeq : deff ≡ ddeff) (σeq : σ ≡ dσ) (εeq : ε ≡ dε) (K : ContCxt Γ ddty ddeff dσ dε)
+               → generic-atK2 dtyeq deffeq σeq εeq K ≅ K
+generic-atK2-≅ refl refl refl refl K = ≅-refl
+
+generic-atK2-refl-refl : ∀ {Γ dty ddty deff ddeff σ ε} (dtyeq : dty ≡ ddty) (deffeq : deff ≡ ddeff) (K : ContCxt Γ ddty ddeff σ ε)
+                        → generic-atK2 dtyeq deffeq refl refl K ≡ generic-atK dtyeq deffeq K
+generic-atK2-refl-refl refl refl K = refl
+
+generic-atK-F∘ : ∀ {Γ dty ddty deff ddeff α β σ ε} (dtyeq : dty ≡ ddty) (deffeq : deff ≡ ddeff) (k : ContCxt Γ ddty ddeff α β) (f : Frame Γ α β σ ε)
+                → generic-atK dtyeq deffeq (F∘ k f) ≡ F∘ (generic-atK dtyeq deffeq k) f
+generic-atK-F∘ refl refl k f = refl
+
+generic-atK-S∘ : ∀ {Γ dty ddty deff ddeff α β σ ε} (dtyeq : dty ≡ ddty) (deffeq : deff ≡ ddeff) (k : ContCxt Γ ddty ddeff α β) (s : SFrame Γ α β σ ε)
+                → generic-atK dtyeq deffeq (S∘ k s) ≡ S∘ (generic-atK dtyeq deffeq k) s
+generic-atK-S∘ refl refl k s = refl
+
+-- wrapF∘/wrapS∘: the "wrap-up" step of go's own peel-and-recurse
+-- pattern -- given the recursive call's own result (kB, cast down to
+-- kA's domain, equals kA), lifts this ONE F∘/S∘ layer, producing
+-- exactly the shape go's own type declaration expects at the OUTER
+-- level (generic-atK2 ... refl refl (F∘/S∘ kB f/s) ≡ F∘/S∘ kA f/s).
+wrapF∘ : ∀ {Γ dty ddty deff ddeff α β σ ε} (X : dty ≡ ddty) (Y : deff ≡ ddeff)
+       {kA : ContCxt Γ dty deff α β} {kB : ContCxt Γ ddty ddeff α β} (f : Frame Γ α β σ ε)
+     → generic-atK X Y kB ≡ kA
+     → generic-atK2 X Y refl refl (F∘ kB f) ≡ F∘ kA f
+wrapF∘ X Y {kB = kB} f keq = trans (generic-atK2-refl-refl X Y (F∘ kB f)) (trans (generic-atK-F∘ X Y kB f) (cong (λ k → F∘ k f) keq))
+
+wrapS∘ : ∀ {Γ dty ddty deff ddeff α β σ ε} (X : dty ≡ ddty) (Y : deff ≡ ddeff)
+       {kA : ContCxt Γ dty deff α β} {kB : ContCxt Γ ddty ddeff α β} (s : SFrame Γ α β σ ε)
+     → generic-atK X Y kB ≡ kA
+     → generic-atK2 X Y refl refl (S∘ kB s) ≡ S∘ kA s
+wrapS∘ X Y {kB = kB} s keq = trans (generic-atK2-refl-refl X Y (S∘ kB s)) (trans (generic-atK-S∘ X Y kB s) (cong (λ k → S∘ k s) keq))
+
+-- Bridges an all-refl recursive go call's own return shape
+-- (generic-atK2 X Y refl refl kB ≡ kA, since go's own return type
+-- literally mentions generic-atK2 even when the extra σ/ε casts
+-- collapse to refl syntactically -- trans (sym refl) refl reduces to
+-- refl computationally, but generic-atK2 itself stays stuck on the
+-- still-opaque domain casts X,Y) down to wrapF∘/wrapS∘'s own expected
+-- generic-atK (2-param) shape.
+generic-atK2-refl-refl-inv : ∀ {Γ dty ddty deff ddeff σ ε} (X : dty ≡ ddty) (Y : deff ≡ ddeff) {kA : ContCxt Γ dty deff σ ε} {kB : ContCxt Γ ddty ddeff σ ε}
+                            → generic-atK2 X Y refl refl kB ≡ kA → generic-atK X Y kB ≡ kA
+generic-atK2-refl-refl-inv X Y {kB = kB} keq = trans (sym (generic-atK2-refl-refl X Y kB)) keq
+
+-- F-fst/F-snd's own wrap-up: unlike every other Frame, their hidden
+-- second/first component isn't pinned by the outer refl refl refl refl
+-- match at all (F-fst/F-snd forget it entirely from their own
+-- codomain), so the recursive call's own comparison of kA,kB genuinely
+-- needs an extra codomain-level cast (τeq) that the plain wrapF∘ above
+-- doesn't carry -- but since F-fst/F-snd discard that component in
+-- their OWN codomain too, the cast becomes irrelevant again exactly
+-- one layer up, which is what these two lemmas capture.
+generic-atK-fst-forget : ∀ {Γ dty ddty deff ddeff ρ τ1 τ2 ε} (X : dty ≡ ddty) (Y : deff ≡ ddeff) (τeq : τ1 ≡ τ2) (k : ContCxt Γ ddty ddeff (ρ `× τ2) ε)
+                        → generic-atK X Y (F∘ k F-fst) ≡ F∘ (generic-atK2 X Y (cong (λ τ → ρ `× τ) τeq) refl k) F-fst
+generic-atK-fst-forget refl refl refl k = refl
+
+wrapF∘-fst : ∀ {Γ dty ddty deff ddeff ρ τ1 τ2 ε} (X : dty ≡ ddty) (Y : deff ≡ ddeff) (τeq : τ1 ≡ τ2)
+           {kA : ContCxt Γ dty deff (ρ `× τ1) ε} {kB : ContCxt Γ ddty ddeff (ρ `× τ2) ε}
+         → generic-atK2 X Y (cong (λ τ → ρ `× τ) τeq) refl kB ≡ kA
+         → generic-atK2 X Y refl refl (F∘ kB F-fst) ≡ F∘ kA F-fst
+wrapF∘-fst X Y τeq {kB = kB} keq =
+  trans (generic-atK2-refl-refl X Y (F∘ kB F-fst)) (trans (generic-atK-fst-forget X Y τeq kB) (cong (λ k → F∘ k F-fst) keq))
+
+generic-atK-snd-forget : ∀ {Γ dty ddty deff ddeff τ0 σ1 σ2 ε} (X : dty ≡ ddty) (Y : deff ≡ ddeff) (σeq : σ1 ≡ σ2) (k : ContCxt Γ ddty ddeff (σ2 `× τ0) ε)
+                        → generic-atK X Y (F∘ k F-snd) ≡ F∘ (generic-atK2 X Y (cong (λ σ → σ `× τ0) σeq) refl k) F-snd
+generic-atK-snd-forget refl refl refl k = refl
+
+wrapF∘-snd : ∀ {Γ dty ddty deff ddeff τ0 σ1 σ2 ε} (X : dty ≡ ddty) (Y : deff ≡ ddeff) (σeq : σ1 ≡ σ2)
+           {kA : ContCxt Γ dty deff (σ1 `× τ0) ε} {kB : ContCxt Γ ddty ddeff (σ2 `× τ0) ε}
+         → generic-atK2 X Y (cong (λ σ → σ `× τ0) σeq) refl kB ≡ kA
+         → generic-atK2 X Y refl refl (F∘ kB F-snd) ≡ F∘ kA F-snd
+wrapF∘-snd X Y σeq {kB = kB} keq =
+  trans (generic-atK2-refl-refl X Y (F∘ kB F-snd)) (trans (generic-atK-snd-forget X Y σeq kB) (cong (λ k → F∘ k F-snd) keq))
 
 -- unLossE/unLossE-subst: lossE's own argument extraction, needed by
 -- BOTH R4 (whose own conclusion is ALSO lossE-headed, matching the F-
@@ -1203,6 +1494,427 @@ theorem-A4-1 : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e e'
              → Terminal e → _⊢_-[_]→_ {sub = sub} g e r e' → ⊥
 theorem-A4-1 (terminalVal v)          stp = theorem-A4-1-val stp
 theorem-A4-1 (terminalOp m op v K nh) stp = theorem-A4-1-op m op v K nh stp
+
+-- ---------------------------------------------------------------------
+-- R5-cont-unique: the one genuinely new lemma theorem-A4-2 needs beyond
+-- what theorem-A4-1 already built. R5 dispatches to whichever operation
+-- call is innermost-and-unhandled inside its own K; determinism's R5-
+-- vs-R5 case needs that this choice is UNIQUE -- given two (K,op,m,v2)
+-- triples whose plugK-wrapped forms coincide, and NEITHER K handles its
+-- own op's label, the triples themselves coincide.
+--
+-- Note ℓ is SHARED here (not separately quantified per side): R5's own
+-- `m : ℓ ∈ εop`/`op : Op ℓ` sit at the SAME ℓ as the ambient handler h
+-- (R5 fires when a further-out handler for h's own ℓ is needed), so by
+-- the time theorem-A4-2's own R5-vs-R5 case reaches this lemma, ℓ is
+-- already pinned by h1≡h2 (ordinary handleE-arg-inj-style injectivity,
+-- no opacity involved -- h is a direct argument, not buried inside a
+-- plugK application). Only op's OWN identity is what genuinely needs
+-- recovering here.
+--
+-- Proof sketch (not yet carried out below -- this is the formulation):
+-- induction on K1, case-split on K2 within each shape.
+--   • K1 = K2 = ▫: both sides reduce DEFINITIONALLY to a direct,
+--     unwrapped opE application (no subst-wrapping at all, unlike
+--     opE-at's own situation in theorem-A4-1) -- op1,m1,v2-1 vs
+--     op2,m2,v2-2 should unify via a single `refl` pattern-match on the
+--     hypothesis directly, the same mechanism confirmed to work for
+--     opE-vs-opE comparisons throughout theorem-A4-1 (e.g. unOpE-
+--     success's own `packed | refl` step) -- genuinely the easy case.
+--   • K1 = ▫, K2 = F∘k2 f2 (or S∘k2 s2) and vice versa: need
+--     `val v2-1 ≠ plugK k2 (opE m2 op2 (val v2-2))` when f2 = F-op
+--     (via opE-arg-inj + the EXISTING plugK-op-not-val), or an outright
+--     shape clash otherwise (opE vs fun/pair/fst/snd/app/lossE/
+--     handleE/thenE/glocalE/resetE) -- EASY when the colliding
+--     constructor's own codomain is free (F-fun's gnd δ, F-fst's σ,
+--     etc.), but reproduces theorem-A4-1's own STUCK issue whenever it
+--     is concrete (F-loss/UnitTy, any S-then-rooted branch/Loss) --
+--     same fix, shape-absurd/generic-at, expected to carry over
+--     directly.
+--   • K1 = F∘k1 f1, K2 = F∘k2 f2 (both non-empty, same top-level
+--     family F∘ or S∘): need f1's own "family" (which of the 10 Frame/
+--     4 SFrame constructors) to match f2's, via the SAME shape
+--     discrimination as above, THEN recurse via the inductive
+--     hypothesis on k1,k2 once f1≡f2 is established (reusing weaken1F/
+--     weaken1K-style reasoning is NOT needed here, unlike F-rule's own
+--     construction -- K1/K2 are compared directly, not rewritten).
+--
+-- The output is packaged as a flat conjunction (rather than nested Σ)
+-- since `_≅_`'s own inhabitation ALREADY forces the underlying type
+-- indices (εop1≡εop2 from m1≅m2, the codomain gnd(in′op1)≡gnd(in′op2)
+-- from K1≅K2) as a consequence, mirroring theorem-A4-2's own top-level
+-- statement -- no need to state those separately.
+R5-cont-unique :
+  ∀ {Γ σ ε ℓ} {εop1 εop2} {op1 op2 : Op ℓ}
+    {m1 : ℓ ∈ εop1} {m2 : ℓ ∈ εop2}
+    {v2-1 : Val Γ (gnd (out op1))} {v2-2 : Val Γ (gnd (out op2))}
+    (K1 : ContCxt Γ (gnd (in′ op1)) εop1 σ (ε ,ℓ ℓ))
+    (K2 : ContCxt Γ (gnd (in′ op2)) εop2 σ (ε ,ℓ ℓ))
+  → ¬ Handles K1 ℓ → ¬ Handles K2 ℓ
+  → plugK K1 (opE m1 op1 (val v2-1)) ≡ plugK K2 (opE m2 op2 (val v2-2))
+  → op1 ≡ op2 × K1 ≅ K2 × m1 ≅ m2 × v2-1 ≅ v2-2
+R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1} {v2-2} K1 K2 nh1 nh2 eq = final
+  where
+    -- go's own return type threads op1≡op2/εop1≡εop2 as ORDINARY,
+    -- explicit `_≡_` facts (rather than folding straight into K1'≅K2'),
+    -- letting the induction cast K2' down to K1's own (op1,εop1)-typed
+    -- "hole" via generic-atK and compare HOMOGENEOUSLY at every level --
+    -- confirmed by direct experiment that lifting a recursively-obtained
+    -- kA≅kB straight to (F∘ kA f)≅(F∘ kB f) needs an index equality
+    -- that isn't otherwise available; this sidesteps that entirely,
+    -- only converting to `_≅_` once, here, at the very top.
+    go : ∀ {resultTy resultEff σ1 β1 σ2 β2}
+           (K1' : ContCxt Γ (gnd (in′ op1)) εop1 σ1 β1) (τeq1 : resultTy ≡ σ1) (εeq1 : resultEff ≡ β1)
+           (K2' : ContCxt Γ (gnd (in′ op2)) εop2 σ2 β2) (τeq2 : resultTy ≡ σ2) (εeq2 : resultEff ≡ β2)
+        → ¬ Handles K1' ℓ → ¬ Handles K2' ℓ
+        → generic-atE τeq1 εeq1 (plugK K1' (opE m1 op1 (val v2-1))) ≡ generic-atE τeq2 εeq2 (plugK K2' (opE m2 op2 (val v2-2)))
+        → Σ (op1 ≡ op2) (λ opeq → Σ (εop1 ≡ εop2) (λ εopeq →
+            generic-atK2 (cong (λ o → gnd (in′ o)) opeq) εopeq (trans (sym τeq1) τeq2) (trans (sym εeq1) εeq2) K2' ≡ K1' × m1 ≅ m2 × v2-1 ≅ v2-2))
+    go (▫) refl refl (▫) τeq2 εeq2 nh1 nh2 eq
+      with trans (cong pack2 eq) (pack2-substE τeq2 εeq2 (opE m2 op2 (val v2-2)))
+    ... | refl with τeq2 | εeq2
+    ...   | refl | refl = refl , refl , refl , ≅-refl , ≅-refl
+    go (▫) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq
+      with just-injective (trans (cong unOpEShallow eq) (unOpEShallow-substE τeq2 εeq2 (opE mB opB (plugK kB (opE m2 op2 (val v2-2))))))
+    ... | refl
+      with τeq2 | εeq2
+    ...   | refl | refl = ⊥-elim (plugK-op-not-val kB v2-1 (sym (opE-arg-inj eq)))
+    go (▫) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-fun pfB)) refl refl nh1 nh2 eq
+      with Σ-≡,≡←≡ (just-injective (cong unfun-key eq))
+    ... | (γAeq , pfEq)
+      with γAeq | pfEq
+    ...   | refl | refl
+      with go kA refl refl kB refl refl nh1 nh2 (fun-inj2 eq)
+    ...     | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-fun pfA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-pairL e2B)) refl refl nh1 nh2 eq
+      with pair-inj2 eq
+    ... | refl
+      with go kA refl refl kB refl refl nh1 nh2 (pair-inj1 eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-pairL e2A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-pairR vB)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kA vB (pair-inj1 eq))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-pairL e2B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kB vA (sym (pair-inj1 eq)))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-pairR vB)) refl refl nh1 nh2 eq
+      with val-inj (pair-inj1 eq)
+    ... | refl
+      with go kA refl refl kB refl refl nh1 nh2 (pair-inj2 eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-pairR vA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB F-fst) refl refl nh1 nh2 eq
+      with Σ-≡,≡←≡ (just-injective (cong unfst-arg eq))
+    ... | (τAeq , restEq)
+      with go kA refl refl kB (cong (λ τ → _ `× τ) τAeq) refl nh1 nh2
+             (trans (trans (sym (subst-sym-cancel (λ τ → _ ⊢ (_ `× τ) ! _) τAeq (plugK kA (opE m1 op1 (val v2-1))))) (cong (subst (λ τ → _ ⊢ (_ `× τ) ! _) (sym τAeq)) restEq)) (sym (generic-atE-fst-cast2 τAeq (plugK kB (opE m2 op2 (val v2-2))))))
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘-fst (cong (λ o → gnd (in′ o)) opeq) εopeq τAeq keq , meq , veq
+    go (F∘ kA F-fst) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB F-snd) refl refl nh1 nh2 eq
+      with Σ-≡,≡←≡ (just-injective (cong unsnd-arg eq))
+    ... | (σAeq , restEq)
+      with go kA refl refl kB (cong (λ σ → σ `× _) σAeq) refl nh1 nh2
+             (trans (trans (sym (subst-sym-cancel (λ σ → _ ⊢ (σ `× _) ! _) σAeq (plugK kA (opE m1 op1 (val v2-1))))) (cong (subst (λ σ → _ ⊢ (σ `× _) ! _) (sym σAeq)) restEq)) (sym (generic-atE-snd-cast2 σAeq (plugK kB (opE m2 op2 (val v2-2))))))
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘-snd (cong (λ o → gnd (in′ o)) opeq) εopeq σAeq keq , meq , veq
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-appL e2B)) refl refl nh1 nh2 eq
+      with Σ-≡,≡←≡ (just-injective (cong unapp-key eq))
+    ... | (σAeq , fnEq)
+      with σAeq
+    ...   | refl
+      with app-inj2 eq
+    ...     | refl
+      with go kA refl refl kB refl refl nh1 nh2 (app-inj1 eq)
+    ...       | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-appL e2A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-appR vB)) refl refl nh1 nh2 eq
+      with Σ-≡,≡←≡ (just-injective (cong unapp-key eq))
+    ... | (σAeq , fnEq)
+      with σAeq
+    ...   | refl = ⊥-elim (plugK-op-not-val kA vB (app-inj1 eq))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-appL e2B)) refl refl nh1 nh2 eq
+      with Σ-≡,≡←≡ (just-injective (cong unapp-key eq))
+    ... | (σAeq , fnEq)
+      with σAeq
+    ...   | refl = ⊥-elim (plugK-op-not-val kB vA (sym (app-inj1 eq)))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-appR vB)) refl refl nh1 nh2 eq
+      with Σ-≡,≡←≡ (just-injective (cong unapp-key eq))
+    ... | (σAeq , fnEq)
+      with σAeq
+    ...   | refl
+      with val-inj (app-inj1 eq)
+    ... | refl
+      with go kA refl refl kB refl refl nh1 nh2 (app-inj2 eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-appR vA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq
+      with just-injective (trans (cong unOpEShallow eq) (unOpEShallow-substE τeq2 εeq2 (opE m2 op2 (val v2-2))))
+    ... | refl
+      with τeq2 | εeq2
+    ...   | refl | refl = ⊥-elim (plugK-op-not-val kA v2-2 (opE-arg-inj eq))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq
+      with just-injective (trans (cong unOpEShallow eq) (unOpEShallow-substE τeq2 εeq2 (opE mB opB (plugK kB (opE m2 op2 (val v2-2))))))
+    ... | refl
+      with τeq2 | εeq2
+    ...   | refl | refl
+        with go kA refl refl kB refl refl nh1 nh2 (opE-arg-inj eq)
+    ...     | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-op mA opA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB F-loss) refl refl nh1 nh2 eq
+      with go kA refl refl kB refl refl nh1 nh2 (lossE-inj eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq F-loss (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-handleP hB bB)) refl refl nh1 nh2 eq
+      with just-injective (cong unhandle-key eq)
+    ... | refl
+      with handleE-inj eq
+    ...   | (_ , pEq , bEq)
+        with bEq
+    ...     | refl
+          with go kA refl refl kB refl refl nh1 nh2 pEq
+    ...       | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-handleP hA bA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-handleP hA bA)) refl refl (S∘ kB (S-handleB hB vB)) refl refl nh1 nh2 eq
+      with just-injective (cong unhandle-key eq)
+    ... | refl
+      with handleE-inj eq
+    ...   | (_ , pEq , bEq) = ⊥-elim (plugK-op-not-val kA vB pEq)
+    go (F∘ kA (F-handleP hA bA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-handleP hB bB)) refl refl nh1 nh2 eq
+      with just-injective (cong unhandle-key eq)
+    ... | refl
+      with handleE-inj eq
+    ...   | (_ , pEq , bEq) = ⊥-elim (plugK-op-not-val kB vA (sym pEq))
+    go (S∘ kA (S-handleB hA vA)) refl refl (S∘ kB (S-handleB hB vB)) refl refl nh1 nh2 eq
+      with just-injective (cong unhandle-key eq)
+    ... | refl
+      with handleE-inj eq
+    ...   | (_ , pEq , bEq)
+        with val-inj pEq
+    ...     | refl
+          with go kA refl refl kB refl refl (nh1 ∘ inj₂) (nh2 ∘ inj₂) bEq
+    ...       | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapS∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (S-handleB hA vA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (S∘ kA (S-handleB hA vA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (S∘ kB (S-then subB gB)) refl refl nh1 nh2 eq
+      with just-injective (cong unthen-key eq)
+    ... | refl
+      with go kA refl refl kB refl refl nh1 nh2 (thenE-arg-inj eq)
+    ...   | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapS∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (S-then subA gA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (S∘ kA (S-then subA gA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) refl refl nh1 nh2 eq
+      with just-injective (cong unglocal-key eq)
+    ... | refl
+      with go kA refl refl kB refl refl nh1 nh2 (glocalE-arg-inj eq)
+    ...   | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapS∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (S-glocal sub1A sub2A gA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (S∘ kB S-reset) refl refl nh1 nh2 eq
+      with go kA refl refl kB refl refl nh1 nh2 (resetE-inj eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapS∘ (cong (λ o → gnd (in′ o)) opeq) εopeq S-reset (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+
+    final : op1 ≡ op2 × K1 ≅ K2 × m1 ≅ m2 × v2-1 ≅ v2-2
+    final with go K1 refl refl K2 refl refl nh1 nh2 eq
+    ... | (opeq , εopeq , Keq , meq , veq) =
+      opeq , ≅-trans (≅-sym (≡-to-≅ Keq)) (generic-atK2-≅ (cong (λ o → gnd (in′ o)) opeq) εopeq refl refl K2) , meq , veq
 
 -- ---------------------------------------------------------------------
 -- Theorem A.4.2 (determinism): if an expression takes a small step in
