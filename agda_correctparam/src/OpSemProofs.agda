@@ -1934,3 +1934,190 @@ postulate
   theorem-A4-2 : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
                  (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
                → stp1 ≅ stp2
+
+-- ---------------------------------------------------------------------
+-- Partial progress toward theorem-A4-2, proved for real (not postulated)
+-- for the "tFun" group: the two rules whose conclusion is `fun`-headed
+-- (R1, and F-rule wrapping F-fun). theorem-A4-2 itself is left untouched
+-- above; this lemma has the exact same signature and, for every OTHER
+-- top-level shape of stp1 (the other 10 groups), simply defers to the
+-- theorem-A4-2 postulate directly -- since that already returns `_≅_`,
+-- no conversion is needed for those 23 delegating clauses. Only the two
+-- tFun clauses are genuine, hole-free proof content.
+--
+-- Two hard-won techniques made this tractable, confirmed via extensive
+-- standalone experiments (see conversation history / a42t.agda, since
+-- removed):
+--
+-- 1. Matching stp2 (or any second step derivation sharing e with stp1)
+--    against F-rule (or S1-S4) needs e itself to stay a GENERIC, fresh
+--    implicit in the sub-helper's own signature, with the concrete
+--    shape carried by a SEPARATE `e ≡ concrete-shape` hypothesis
+--    (mirroring theorem-A4-1-op's own established "helper stp refl"
+--    idiom throughout this file) -- fixing e concretely in the
+--    sub-helper's own type makes Agda's coverage checker get
+--    permanently "stuck" trying to unify `plugF f e` (f still unknown)
+--    against the fixed target, long before it can even look at which
+--    frame shape f has. This ALSO requires full local coverage of the
+--    sub-helper's own 25 leaf shapes (even the type-incompatible ones
+--    that could otherwise be omitted) once F-rule/S1-S4 appear anywhere
+--    among them -- Agda's coverage checker needs the complete sibling
+--    set to resolve any individual clause when a plugF/plugK-opaque
+--    constructor is present, confirmed by direct experiment.
+--
+-- 2. Once two step derivations of possibly-different index (r1/e1' vs
+--    r2/e2') need to be related, NEVER try to pattern-match a `_≅_`
+--    hypothesis between them directly (e.g. via `with rec-call | ≅-refl`
+--    for a recursive call `rec-call : stp1' ≅ stp2'`) -- Agda's coverage
+--    checker gets stuck trying to unify the two (still-independent)
+--    index metavariables, confirmed as a GENERAL Agda limitation via a
+--    minimal standalone repro completely unrelated to this codebase (an
+--    indexed family Fam : Nat → Nat → Set with a `wrap` constructor).
+--    Instead, bundle (e, r, e', stp) into a single, non-indexed Σ-value
+--    via `pack`, and do ALL recursive reasoning in ordinary `_≡_` on
+--    packed values (which Agda's coverage checker handles just fine,
+--    confirmed via the same repro) -- `_≡_` is converted to `_≅_` only
+--    ONCE, via `pack-≡-to-≅`, at the very outermost call.
+-- ---------------------------------------------------------------------
+
+-- Bundles (e, r, e', stp) into a plain Σ-quadruple, crucially including
+-- e itself in the bundle (rather than as an external index) -- so that
+-- `pack`'s own return TYPE never depends on the specific value of e,
+-- letting `pack (R1 f x) ≡ pack s` type-check even when s's own e is
+-- still a generic, unconstrained implicit (as technique 1 above needs).
+pack : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r : R} {e' : Γ ⊢ σ ! ε}
+     → _⊢_-[_]→_ {sub = sub} g e r e'
+     → Σ (Γ ⊢ σ ! ε) (λ e → Σ R (λ r → Σ (Γ ⊢ σ ! ε) (λ e' → _⊢_-[_]→_ {sub = sub} g e r e')))
+pack {e = e} {r = r} {e' = e'} stp = e , r , e' , stp
+
+pack-≡-to-≅ : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
+                {stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1'} {stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2'}
+              → pack stp1 ≡ pack stp2 → stp1 ≅ stp2
+pack-≡-to-≅ refl = ≅-refl
+
+-- Logically equivalent restatement of theorem-A4-2 itself, in packed
+-- form -- NOT a weaker assumption, just a different phrasing of the same
+-- not-yet-proven fact. Needed because theorem-A4-2-tFun-core's own
+-- recursive diagonal (technique 2 above) forces it to have a fully
+-- generic `e`, hence its own full 25-shape top-level coverage; its 23
+-- non-tFun clauses need SOMETHING of type `pack stp1 ≡ pack stp2` to
+-- delegate to, and deriving that from theorem-A4-2 itself would require
+-- pattern-matching a `_≅_` value with still-independent indices -- the
+-- exact limitation this whole file works around (confirmed as a general,
+-- codebase-independent Agda limitation via a minimal standalone repro).
+-- Once every one of the 25 shapes has a real proof, both this postulate
+-- and theorem-A4-2 itself become derivable from that proof and can be
+-- deleted.
+postulate
+  theorem-A4-2-pack : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
+                       (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
+                     → pack stp1 ≡ pack stp2
+
+-- fun's own domain γ is hidden from its codomain (gnd δ only shows δ),
+-- so two fun-headed terms with independently-fresh PrimFuns can't be
+-- compared via ordinary injectivity until γ itself is known shared --
+-- `refl`-matching this directly (rather than applying a fixed-γ lemma
+-- like fun-inj1/fun-inj2 to an abstract hypothesis) is what lets Agda's
+-- dependent pattern matcher discover γ1≡γ2 as a byproduct.
+fun-inj0 : ∀ {Γ γ1 γ2 δ ε} {f1 : PrimFun γ1 δ} {f2 : PrimFun γ2 δ} {e1 : Γ ⊢ gnd γ1 ! ε} {e2 : Γ ⊢ gnd γ2 ! ε}
+         → fun f1 e1 ≡ fun f2 e2 → γ1 ≡ γ2
+fun-inj0 refl = refl
+
+-- Core of theorem-A4-2-tFun, working entirely in ordinary `_≡_` on
+-- packed values (technique 2 above) -- converted to `_≅_` exactly once,
+-- by theorem-A4-2-tFun itself below.
+theorem-A4-2-tFun-core : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
+                          (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
+                        → pack stp1 ≡ pack stp2
+theorem-A4-2-tFun-core {Γ} {ε = ε} {sub = sub} {g = g} (R1 f x) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ fun {ε = ε} f (val (vgnd x))
+         → pack (R1 {sub = sub} {g = g} f x) ≡ pack s
+  helper (R1 .f .x) refl = refl
+  helper (R2-fst v w) ()
+  helper (R2-snd v w) ()
+  helper (R3 e v) ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v e) ()
+  helper (R8 sub1 sub2 v g1) ()
+  helper (R9 v) ()
+  helper (S1 sub' h v stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (F-rule sub2 (F-fun pf2) stp2) refl = ⊥-elim (theorem-A4-1-val stp2)
+  helper (F-rule sub2 F-fst       stp) ()
+  helper (F-rule sub2 F-snd       stp) ()
+  helper (F-rule sub2 (F-appL _)  stp) ()
+  helper (F-rule sub2 (F-appR _)  stp) ()
+  helper (F-rule sub2 (F-op _ _)  stp) ()
+  helper (F-rule sub2 F-loss      stp) ()
+  helper (F-rule sub2 (F-handleP h b) stp) ()
+theorem-A4-2-tFun-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-fun pf) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ fun pf eh
+         → pack (F-rule sub1 (F-fun pf) stp1) ≡ pack s
+  helper (R1 pf' x) eq with fun-inj0 eq
+  ... | refl = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym (fun-inj2 eq)) stp1))
+  helper (R2-fst v w) ()
+  helper (R2-snd v w) ()
+  helper (R3 e v) ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v e) ()
+  helper (R8 sub1' sub2 v g1) ()
+  helper (R9 v) ()
+  helper (S1 sub' h v stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1' sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  -- recursive diagonal: stp1,stp2' are themselves stepping the SAME hole
+  -- eh under the SAME rewritten continuation, so theorem-A4-2-tFun-core
+  -- applies to them directly -- genuine, terminating structural
+  -- recursion (stp1,stp2' are F-rule's own premises, strictly smaller).
+  helper (F-rule sub2 (F-fun pf2) stp2') eq with fun-inj0 eq
+  ... | refl with fun-inj1 eq | fun-inj2 eq
+  ...   | refl | refl with theorem-A4-2-tFun-core stp1 stp2'
+  ...     | inner-eq = cong (λ { (e , r , e' , t) → (fun pf e , r , fun pf e' , F-rule sub1 (F-fun pf) t) }) inner-eq
+  helper (F-rule sub2 F-fst       stp) ()
+  helper (F-rule sub2 F-snd       stp) ()
+  helper (F-rule sub2 (F-appL _)  stp) ()
+  helper (F-rule sub2 (F-appR _)  stp) ()
+  helper (F-rule sub2 (F-op _ _)  stp) ()
+  helper (F-rule sub2 F-loss      stp) ()
+  helper (F-rule sub2 (F-handleP h b) stp) ()
+-- The remaining 23 top-level shapes aren't tFun-headed at all -- delegate
+-- to theorem-A4-2-pack (see its own comment above for why this, rather
+-- than theorem-A4-2 itself, is what a fully-generic-`e` function like
+-- this one needs to call).
+theorem-A4-2-tFun-core stp1@(R2-pair _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R2-fst _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R2-snd _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R3 _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R4 _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R6 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R7 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R8 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R9 _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(S1 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(S2 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(S3 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(S4 _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(R5 _ _ _ _ _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ (F-pairL _) _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ (F-pairR _) _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ F-fst _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ F-snd _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ (F-appL _) _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ (F-appR _) _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ (F-op _ _) _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ F-loss _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-tFun-core stp1@(F-rule _ (F-handleP _ _) _) stp2 = theorem-A4-2-pack stp1 stp2
+
+theorem-A4-2-tFun : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
+                     (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
+                   → stp1 ≅ stp2
+theorem-A4-2-tFun stp1 stp2 = pack-≡-to-≅ (theorem-A4-2-tFun-core stp1 stp2)
