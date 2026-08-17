@@ -1577,7 +1577,7 @@ R5-cont-unique :
     (K2 : ContCxt Γ (gnd (in′ op2)) εop2 σ (ε ,ℓ ℓ))
   → ¬ Handles K1 ℓ → ¬ Handles K2 ℓ
   → plugK K1 (opE m1 op1 (val v2-1)) ≡ plugK K2 (opE m2 op2 (val v2-2))
-  → op1 ≡ op2 × K1 ≅ K2 × m1 ≅ m2 × v2-1 ≅ v2-2
+  → op1 ≡ op2 × εop1 ≡ εop2 × K1 ≅ K2 × m1 ≅ m2 × v2-1 ≅ v2-2
 R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1} {v2-2} K1 K2 nh1 nh2 eq = final
   where
     -- go's own return type threads op1≡op2/εop1≡εop2 as ORDINARY,
@@ -1936,10 +1936,10 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     ... | (opeq , εopeq , keq , meq , veq) =
       opeq , εopeq , wrapS∘ (cong (λ o → gnd (in′ o)) opeq) εopeq S-reset (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
 
-    final : op1 ≡ op2 × K1 ≅ K2 × m1 ≅ m2 × v2-1 ≅ v2-2
+    final : op1 ≡ op2 × εop1 ≡ εop2 × K1 ≅ K2 × m1 ≅ m2 × v2-1 ≅ v2-2
     final with go K1 refl refl K2 refl refl nh1 nh2 eq
     ... | (opeq , εopeq , Keq , meq , veq) =
-      opeq , ≅-trans (≅-sym (≡-to-≅ Keq)) (generic-atK2-≅ (cong (λ o → gnd (in′ o)) opeq) εopeq refl refl K2) , meq , veq
+      opeq , εopeq , ≅-trans (≅-sym (≡-to-≅ Keq)) (generic-atK2-≅ (cong (λ o → gnd (in′ o)) opeq) εopeq refl refl K2) , meq , veq
 
 -- ---------------------------------------------------------------------
 -- Theorem A.4.2 (determinism): if an expression takes a small step in
@@ -2686,11 +2686,66 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-appR v1) {e
   helper (F-rule sub2' F-loss stp) ()
   helper (F-rule sub2' (F-handleP h b) stp) ()
 
--- The remaining 6 top-level shapes still aren't proved -- delegate to
--- theorem-A4-2-pack (see its own comment above for why this, rather than
--- theorem-A4-2 itself, is what a fully-generic-`e` function like this
--- one needs to call).
-theorem-A4-2-core stp1@(R6 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+-- tHandle group: R6 / S1 / F-handleP / R5 -- the hardest group, 4-way.
+-- Target is σ' (test's own top implicit, fully generic, like tGlocal/
+-- tFst/tSnd/tApp), so no op-opacity/packG treatment is needed here at
+-- all -- the difficulty is entirely in the 4-way internal interactions.
+-- handleE hides ℓ,par,σ from its own codomain σ' -- unhandle-key
+-- (already built for R5-cont-unique) Σ-packages all three PLUS h itself
+-- at once, mirroring unglocal-key/unthen-key's role elsewhere; handleE-
+-- inj then peels the (parameter, body) pair once those are shared.
+--
+-- R6 (both param and handled value already values) vs S1 (handled expr
+-- stepping) or F-handleP (param stepping): ordinary theorem-A4-1-val
+-- contradictions, same pattern as everywhere else. R6 vs R5 (handled
+-- expr = plugK(opE...), never a value): plugK-op-not-val, already built
+-- for theorem-A4-1-op's own needs.
+--
+-- The one genuinely new case is S1 vs R5: S1's own premise proves the
+-- handled expression e steps; when e = plugK(opE m op (val v2)) (R5's
+-- own shape, K unhandled), theorem-A4-1-op ITSELF already proves this
+-- exact expression can never step at all (that's precisely what "K
+-- unhandled ⟹ terminal" means in this operational semantics) -- so
+-- theorem-A4-1-op applied directly to S1's own premise gives ⊥, with
+-- no need for R5-cont-unique or any recursive reasoning. R5-cont-unique
+-- is only needed for the R5-vs-R5 diagonal itself, to identify K,m,op,v2.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R6 h v1 v2) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ handleE h (val v1) (val v2)
+         → pack (R6 {sub = sub} {g = g} h v1 v2) ≡ pack s
+  helper (R6 h' v1' v2') eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , refl , refl) = refl
+  helper (R1 f x) ()
+  helper (R2-pair v w) ()
+  helper (R2-fst v w) ()
+  helper (R2-snd v w) ()
+  helper (R3 e v) ()
+  helper (R4 r) ()
+  helper (R7 sub' v e) ()
+  helper (R8 sub1 sub2' v g1) ()
+  helper (R9 v) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2' g1 stp) ()
+  helper (S4 stp) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (S1 sub' h' v' stp) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , _ , eq3) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq3 stp))
+  helper (F-rule sub2' (F-handleP h' b) stp) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (R5 sub' h' v1' m op v2' k nh) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , eq3) = ⊥-elim (plugK-op-not-val k v2 eq3)
 -- tThen group: R7 / S2. Same UnitTy-style opacity problem as tLoss
 -- (target Loss = gnd loss), so reuses packG/generic-atLC/shape-absurd
 -- the same way; thenE hides both its own σ (the held value's type) AND
@@ -2782,9 +2837,88 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (S2 sub1 g1 {e = eh} {e' = 
   ...       | refl with theorem-A4-2-core stp1' stp2'
   ...         | inner-eq = cong (λ { (innerE , innerR , innerE' , t) →
                   (Loss , g , thenE sub1 innerE g1 , 0# , thenE ⊆ᵉ-refl (lossE (val (vgnd innerR))) (vabs (weaken1 (thenE sub1 innerE' g1))) , S2 sub1 {g = g} g1 t) }) inner-eq
-theorem-A4-2-core stp1@(S1 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(R5 _ _ _ _ _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
--- tOp group: F-op vs F-op only (no direct/value rule ever produces an
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (S1 sub1 h v {e = eh} {e' = eh'} stp1') stp2 = helper stp2 refl
+  where
+  helper : ∀ {e2 r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e2 r2 e2') → e2 ≡ handleE h (val v) eh
+         → pack (S1 sub1 h v stp1') ≡ pack s
+  helper (R6 h' v1' v2') eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , refl , eq3) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq3) stp1'))
+  helper (R1 f x) ()
+  helper (R2-pair v' w) ()
+  helper (R2-fst v' w) ()
+  helper (R2-snd v' w) ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1' sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1' sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (S1 sub2 h' v' stp2') eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , refl , eq3) with eq3
+  ...     | refl with theorem-A4-2-core stp1' stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (handleE h (val v) e , r , handleE h (val v) e' , S1 sub1 h v t) }) inner-eq
+  helper (F-rule sub2' (F-handleP h' b) stp) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (R5 sub' h' v1' m op v2' k nh) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , eq3) = ⊥-elim (theorem-A4-1-op m op v2' k nh (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq3) stp1'))
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R5 sub1 h v1 m op v2 k nh) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e2 r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e2 r2 e2') → e2 ≡ handleE h (val v1) (plugK k (opE m op (val v2)))
+         → pack (R5 sub1 {g = g} h v1 m op v2 k nh) ≡ pack s
+  helper (R6 h' v1' v2') eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , eq3) = ⊥-elim (plugK-op-not-val k v2' (sym eq3))
+  helper (R1 f x) ()
+  helper (R2-pair v w) ()
+  helper (R2-fst v w) ()
+  helper (R2-snd v w) ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1' sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1' sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (S1 sub' h' v' stp) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , eq3) = ⊥-elim (theorem-A4-1-op m op v2 k nh (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq3 stp))
+  helper (F-rule sub2' (F-handleP h' b) stp) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (R5 sub2 h' v1' m' op' v2' k' nh') eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , refl , eq3) with R5-cont-unique k' k nh' nh eq3
+  ...     | (opeq , εopeq , keq , meq , veq) with opeq
+  ...       | refl with εopeq
+  ...         | refl with keq
+  ...           | ≅-refl with meq
+  ...             | ≅-refl with veq
+  ...               | ≅-refl = refl
 -- opE-headed conclusion -- operations always bubble up to a handler
 -- via R5/S1, never reduce directly). F-op's own codomain gnd(in′op) is
 -- opaque, so comparing it against ANY other rule's own conclusion type
@@ -2886,7 +3020,45 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-loss {e = eh
   ...     | refl with theorem-A4-2-core stp1' stp2'
   ...       | inner-eq = cong (λ { (e , r , e' , t) → (UnitTy , g , lossE e , r , lossE e' , F-rule sub1 F-loss t) }) inner-eq
 
-theorem-A4-2-core stp1@(F-rule _ (F-handleP _ _) _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-handleP h b) {e = eh} {e' = eh'} stp1') stp2 = helper stp2 refl
+  where
+  helper : ∀ {e2 r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e2 r2 e2') → e2 ≡ handleE h eh b
+         → pack (F-rule sub1 (F-handleP h b) stp1') ≡ pack s
+  helper (R6 h' v1' v2') eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
+  helper (R1 f x) ()
+  helper (R2-pair v w) ()
+  helper (R2-fst v w) ()
+  helper (R2-snd v w) ()
+  helper (R3 e' v) ()
+  helper (R4 r) ()
+  helper (R7 sub' v e') ()
+  helper (R8 sub1' sub2 v g1) ()
+  helper (R9 v) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1' sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (S1 sub' h' v' stp) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
+  helper (F-rule sub2' (F-handleP h' b') stp2') eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , refl) with eq2
+  ...     | refl with theorem-A4-2-core stp1' stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (handleE h e b , r , handleE h e' b , F-rule sub1 (F-handleP h b) t) }) inner-eq
+  helper (R5 sub' h' v1' m op v2' k nh) eq with just-injective (cong unhandle-key eq)
+  ... | refl with handleE-inj eq
+  ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
 
 theorem-A4-2-proved : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
                      (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
