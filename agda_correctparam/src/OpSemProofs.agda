@@ -2289,20 +2289,55 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-snd {e = eh}
   helper (F-rule sub2 F-loss stp) ()
   helper (F-rule sub2 (F-handleP h b) stp) ()
 
--- tLoss (R4 / F-rule-F-loss) and tThen (R7 / S2) both have a CONCRETE
--- ground-type target (UnitTy, Loss respectively), unlike every group
--- proved so far (whose target was either fully generic or a non-`gnd`
--- type constructor). This makes their F-op sibling-refutation clause
--- get stuck the same way OpSem's own theorem-A4-1-op battled (Agda
--- can't decide `gnd(in′op) ≟ gnd unit` since `in′` is abstract) --
--- confirmed by direct experiment. theorem-A4-1-op's own fix (generic-atE
--- + shape-absurdE, keeping the target type itself a fresh, re-quantified
--- variable rather than the closed-over concrete one) doesn't integrate
--- cleanly with this file's own `pack`-based recursion without also
--- bundling σ/g/sub into pack's own Σ-chain. Deferred until tOp itself is
--- built (where this exact machinery is unavoidable anyway) so it can be
--- built once and reused here.
-theorem-A4-2-core stp1@(R4 _) stp2 = theorem-A4-2-pack stp1 stp2
+-- tLoss group: R4 / F-rule-F-loss. Both have a CONCRETE ground-type
+-- target (UnitTy), unlike every group proved so far (whose target was
+-- either fully generic or a non-`gnd` type constructor) -- comparing it
+-- against F-op's own opaque codomain gets Agda's coverage checker stuck
+-- the same way tOp's own helper needed packG/generic-atLC to dodge.
+-- Reuses that machinery directly. Unlike tOp, F-op is ALWAYS a
+-- refutation here (never a match), and -- since shape-absurd compares
+-- only exprTag, which never touches in′/out -- it needs no special
+-- unOpEFull-style handling at all, just the same shape-absurd call as
+-- the other 23 non-matching shapes. The one wrinkle: shape-absurd alone
+-- can't refute R4-vs-F-loss (both tag tLoss, same shape family, not a
+-- clash) -- those two clauses need τeq2 resolved to refl first (trivial
+-- here, since UnitTy isn't opaque) before lossE-inj applies, exactly
+-- like the matching diagonals do for their own reconstruction.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R4 r) stp2 =
+  packG-≡-to-pack-≡ (helper refl stp2 refl)
+  where
+  helper : ∀ {σ2} (τeq2 : σ2 ≡ UnitTy) {e : Γ ⊢ σ2 ! ε} {r2 : R} {e2' : Γ ⊢ σ2 ! ε}
+         (s : _⊢_-[_]→_ {sub = sub} (generic-atLC τeq2 g) e r2 e2') → e ≡ generic-at τeq2 (lossE {ε = ε} (val (vgnd r)))
+       → packG (R4 {sub = sub} {g = g} r) ≡ packG s
+  helper τeq2 (R4 r') eq with τeq2
+  ... | refl with eq
+  ...   | refl = refl
+  helper τeq2 (R1 f x) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R2-pair v w) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R2-fst v w) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R2-snd v w) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R3 e v) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R6 h v1 v2) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R7 sub' v e) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R8 sub1 sub2' v g1) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R9 v) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (S1 sub' h v stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (S2 sub' g1 stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (S3 sub1 sub2' g1 stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (S4 stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R5 sub' h v1 m op v2 k nh) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fun x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairL x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairR x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-fst stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-snd stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appL x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appR x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-op x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2 F-loss {e = eh2} stp2') eq with τeq2
+  ... | refl with lossE-inj eq
+  ...   | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
 
 -- tGlocal group: R8 / S3. glocalE hides both ε₁ and ε₂ from its own
 -- codomain σ, plus carries two opaque ⊆ᵉ-witnesses (sub1,sub2) -- rather
@@ -2724,7 +2759,44 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-op m op) {e
   ...     | refl with theorem-A4-2-core stp1' stp2'
   ...       | inner-eq = cong (λ { (e , r , e' , t) → (gnd (in′ op) , g , opE m op e , r , opE m op e' , F-rule sub1 (F-op m op) t) }) inner-eq
 
-theorem-A4-2-core stp1@(F-rule _ F-loss _) stp2 = theorem-A4-2-pack stp1 stp2
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-loss {e = eh} {e' = eh'} stp1') stp2 =
+  packG-≡-to-pack-≡ (helper refl stp2 refl)
+  where
+  helper : ∀ {σ2} (τeq2 : σ2 ≡ UnitTy) {e : Γ ⊢ σ2 ! ε} {r2 : R} {e2' : Γ ⊢ σ2 ! ε}
+         (s : _⊢_-[_]→_ {sub = sub} (generic-atLC τeq2 g) e r2 e2') → e ≡ generic-at τeq2 (lossE eh)
+       → packG (F-rule sub1 F-loss stp1') ≡ packG s
+  helper τeq2 (R4 r) eq with τeq2
+  ... | refl with lossE-inj eq
+  ...   | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
+  helper τeq2 (R1 f x) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R2-pair v w) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R2-fst v w) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R2-snd v w) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R3 e v) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R6 h v1 v2) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R7 sub' v e) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R8 sub1' sub2 v g1) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R9 v) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (S1 sub' h v stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (S2 sub' g1 stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (S3 sub1' sub2 g1 stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (S4 stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R5 sub' h v1 m op v2 k nh) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fun x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairL x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairR x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-fst stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-snd stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appL x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appR x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-op x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2 F-loss {e = eh2} {e' = eh2'} stp2') eq with τeq2
+  ... | refl with lossE-inj eq
+  ...   | eq2 with eq2
+  ...     | refl with theorem-A4-2-core stp1' stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (UnitTy , g , lossE e , r , lossE e' , F-rule sub1 F-loss t) }) inner-eq
+
 theorem-A4-2-core stp1@(F-rule _ (F-handleP _ _) _) stp2 = theorem-A4-2-pack stp1 stp2
 
 theorem-A4-2-proved : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
