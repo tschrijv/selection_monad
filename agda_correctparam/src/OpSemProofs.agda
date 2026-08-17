@@ -447,6 +447,22 @@ unOpE _                    = nothing
 unOpE-subst : ∀ {Γ ε τ1 τ2} (eq : τ1 ≡ τ2) (e : Γ ⊢ τ2 ! ε) → unOpE (subst (λ τ → Γ ⊢ τ ! ε) (sym eq) e) ≡ unOpE e
 unOpE-subst refl e = refl
 
+-- Like unOpE, but ALSO bundles the ∈-witness m (unOpE itself drops it,
+-- since it's not needed for theorem-A4-1-op's own progress use above) --
+-- needed for theorem-A4-2's tOp case, which (unlike theorem-A4-1-op)
+-- must show two F-op-headed conclusions come from literally the SAME
+-- rule application (op AND m both), not just recover one operation's
+-- own identity. m's own type (ℓ ∈ ε, a concrete stdlib inductive, not
+-- an opaque Sig field) poses no extra opacity problem once bundled the
+-- same way as ℓ,op,arg.
+unOpEFull : ∀ {Γ σ ε} → Γ ⊢ σ ! ε → Maybe (Σ (Σ Effect Op) (λ p → (proj₁ p ∈ ε) × Γ ⊢ gnd (out (proj₂ p)) ! ε))
+unOpEFull (opE {ℓ = ℓ} m op e) = just ((ℓ , op) , m , e)
+unOpEFull _              = nothing
+
+unOpEFull-subst : ∀ {Γ ε τ1 τ2} (eq : τ1 ≡ τ2) (e : Γ ⊢ τ2 ! ε) → unOpEFull (subst (λ τ → Γ ⊢ τ ! ε) (sym eq) e) ≡ unOpEFull e
+unOpEFull-subst refl e = refl
+
+
 -- Discharges unOpE's own success case: given `packed` (unOpE applied to
 -- both sides of the F-op-vs-F-op comparison, Σ-packed), rewrites a step
 -- derivation's source from the ORIGINAL rule's own (op3-typed) source to
@@ -515,6 +531,15 @@ exprTag-subst refl e = refl
 -- discussed above opE-at.
 generic-at : ∀ {Γ ε τ Xty} (τeq : τ ≡ Xty) → Γ ⊢ Xty ! ε → Γ ⊢ τ ! ε
 generic-at τeq X = subst (λ τ' → _ ⊢ τ' ! _) (sym τeq) X
+
+-- Same idea, for LC (a step relation's own ambient continuation) rather
+-- than an expression -- needed for tOp's own helper below, so that its
+-- "g2" position is literally a cast of the closed-over g (a genuine
+-- function of τeq2, reducing back to g once τeq2 is refl) rather than
+-- an independent fresh variable that would need its own, separately-
+-- proved equation to g.
+generic-atLC : ∀ {Γ ε τ Xty} (τeq : τ ≡ Xty) → LC Γ Xty ε → LC Γ τ ε
+generic-atLC τeq X = subst (λ τ' → LC _ τ' _) (sym τeq) X
 
 generic-at-tag : ∀ {Γ ε τ Xty} (τeq : τ ≡ Xty) (X : Γ ⊢ Xty ! ε) → exprTag (generic-at τeq X) ≡ exprTag X
 generic-at-tag refl X = refl
@@ -1995,6 +2020,30 @@ pack-≡-to-≅ : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e
               → pack stp1 ≡ pack stp2 → stp1 ≅ stp2
 pack-≡-to-≅ refl = ≅-refl
 
+-- Heavier bundle, needed only for tOp: also includes σ and g themselves
+-- (εg,sub stay closed over -- they never vary, since only σ/e/g change
+-- when a rule's own conclusion type is opaque). F-op's own codomain
+-- gnd(in′op) is opaque, so any helper comparing it against another
+-- rule's own (possibly rigid, e.g. UnitTy) conclusion type must keep σ
+-- itself generic to avoid Agda's coverage checker getting stuck trying
+-- to decide gnd(in′op) ≟ UnitTy -- same root cause as theorem-A4-1-op's
+-- own opE-at/isOpE machinery near the top of this file, which this
+-- reuses. Since g's own type depends on σ, g must be generalized right
+-- alongside it.
+packG : ∀ {Γ ε εg} {sub : εg ⊆ᵉ ε} {σ} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r : R} {e' : Γ ⊢ σ ! ε}
+      → _⊢_-[_]→_ {sub = sub} g e r e'
+      → Σ Ty (λ σ → Σ (LC Γ σ εg) (λ g → Σ (Γ ⊢ σ ! ε) (λ e → Σ R (λ r → Σ (Γ ⊢ σ ! ε) (λ e' → _⊢_-[_]→_ {sub = sub} g e r e')))))
+packG {σ = σ} {g = g} {e = e} {r = r} {e' = e'} stp = σ , g , e , r , e' , stp
+
+-- Once σ (hence g) is already known shared -- as it always is once we're
+-- back at theorem-A4-2-core's own top level -- a packG equality carries
+-- exactly the same information as an ordinary pack one, just with two
+-- redundant (trivially-refl) extra components.
+packG-≡-to-pack-≡ : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
+                       {stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1'} {stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2'}
+                     → packG stp1 ≡ packG stp2 → pack stp1 ≡ pack stp2
+packG-≡-to-pack-≡ refl = refl
+
 -- Logically equivalent restatement of theorem-A4-2 itself, in packed
 -- form -- NOT a weaker assumption, just a different phrasing of the same
 -- not-yet-proven fact. Needed because theorem-A4-2-core's own
@@ -2611,7 +2660,70 @@ theorem-A4-2-core stp1@(R7 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(S1 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(S2 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R5 _ _ _ _ _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(F-rule _ (F-op _ _) _) stp2 = theorem-A4-2-pack stp1 stp2
+-- tOp group: F-op vs F-op only (no direct/value rule ever produces an
+-- opE-headed conclusion -- operations always bubble up to a handler
+-- via R5/S1, never reduce directly). F-op's own codomain gnd(in′op) is
+-- opaque, so comparing it against ANY other rule's own conclusion type
+-- -- even a fully generic one, this time, since op itself is a FIXED,
+-- concrete value once F-op is matched at the top -- would make Agda's
+-- coverage checker get stuck deciding gnd(in′op) ≟ (whatever that
+-- rule's own type is), the same root problem theorem-A4-1-op's own
+-- opE-at/isOpE/unOpE machinery exists to solve. This reuses that
+-- machinery (generic-at/shape-absurd for the 24 non-opE refutations,
+-- unOpEFull -- a version of unOpE that also bundles the ∈-witness m,
+-- needed here since theorem-A4-2 must show the SAME rule fired, not
+-- just recover one op's identity) with a genuinely new piece:
+-- theorem-A4-1-op only ever needs to derive ⊥ or transport a single
+-- step, whereas here helper must return a packG equality even in the
+-- refutation branches -- which is exactly why packG (bundling σ AND g,
+-- not just e/r/e' like pack) exists: helper's own σ/g must stay fully
+-- generic to dodge the stuckness, and packG's return type is σ/g-
+-- independent by construction, so it stays well-typed regardless.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-op m op) {e = eh} {e' = eh'} stp1') stp2 =
+  packG-≡-to-pack-≡ (helper refl stp2 refl)
+  where
+  -- s's own continuation position is LITERALLY `generic-atLC τeq2 g` --
+  -- a deterministic cast of the closed-over g, reducing back to g once
+  -- τeq2 is refl -- rather than an independent fresh variable, which
+  -- would need its own, separately-proved equation to g (confirmed by
+  -- direct experiment: making it a fresh {g2} implicit instead leaves
+  -- no way to derive g2 ≡ g once F-op's own op-identity is established,
+  -- since the op-identity extraction below only ever touches eh, not
+  -- the continuation).
+  helper : ∀ {σ2} (τeq2 : σ2 ≡ gnd (in′ op)) {e : Γ ⊢ σ2 ! ε} {r2 : R} {e2' : Γ ⊢ σ2 ! ε}
+         (s : _⊢_-[_]→_ {sub = sub} (generic-atLC τeq2 g) e r2 e2') → e ≡ generic-at τeq2 (opE m op eh)
+       → packG (F-rule sub1 (F-op m op) stp1') ≡ packG s
+  helper τeq2 (R1 f x) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R2-pair v w) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R2-fst v w) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R2-snd v w) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R3 e v) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R4 r) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R6 h v1 v2) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R7 sub' v e) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R8 sub1' sub2' v g1) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R9 v) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (S1 sub' h v stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (S2 sub' g1 stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (S3 sub1' sub2' g1 stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (S4 stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R5 sub' h v1 m' op' v2 k nh) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fun x) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairL x) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairR x) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-fst stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-snd stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appL x) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appR x) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-loss stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2 (F-op m' op') {e = eh2} {e' = eh2'} stp2') eq
+    with trans (cong unOpEFull eq) (unOpEFull-subst τeq2 (opE m op eh))
+  ... | keq with just-injective keq
+  ...   | refl with τeq2
+  ...     | refl with theorem-A4-2-core stp1' stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (gnd (in′ op) , g , opE m op e , r , opE m op e' , F-rule sub1 (F-op m op) t) }) inner-eq
+
 theorem-A4-2-core stp1@(F-rule _ F-loss _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(F-rule _ (F-handleP _ _) _) stp2 = theorem-A4-2-pack stp1 stp2
 
