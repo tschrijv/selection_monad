@@ -2323,7 +2323,74 @@ theorem-A4-2-core {Γ} {ε = ε} {g = g} (S3 sub1 sub2 g1 {e = eh} {e' = eh'} st
   helper (F-rule sub2' F-loss stp) ()
   helper (F-rule sub2' (F-handleP h b) stp) ()
 
--- The remaining 17 top-level shapes still aren't proved -- delegate to
+-- tReset group: R9 / S4. resetE hides no type parameter (Γ⊢σ!ε→Γ⊢σ!ε,
+-- σ visible on both sides), and S4 keeps the ambient sub/g unchanged
+-- (unlike S3), so this is the simplest recursive group so far --
+-- resetE-inj applies directly, no "-inj0" extraction needed. Target is
+-- σ (generic), so F-op needs no special handling either.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R9 v) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ resetE {ε = ε} (val v)
+         → pack (R9 {sub = sub} {g = g} v) ≡ pack s
+  helper (R9 .v) refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp2) refl = ⊥-elim (theorem-A4-1-val stp2)
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (F-rule sub2' (F-fun _) stp) ()
+  helper (F-rule sub2' (F-pairL _) stp) ()
+  helper (F-rule sub2' (F-pairR _) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL _) stp) ()
+  helper (F-rule sub2' (F-appR _) stp) ()
+  helper (F-rule sub2' (F-op _ _) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (S4 {e = eh} {e' = eh'} stp1') stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ resetE eh
+         → pack (S4 {sub = sub} {g = g} stp1') ≡ pack s
+  helper (R9 v) eq with resetE-inj eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
+  helper (R1 f x) ()
+  helper (R2-pair v w) ()
+  helper (R2-fst v w) ()
+  helper (R2-snd v w) ()
+  helper (R3 e v) ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v e) ()
+  helper (R8 sub1 sub2 v g1) ()
+  helper (S1 sub' h v stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp2') eq with resetE-inj eq
+  ... | refl with theorem-A4-2-core stp1' stp2'
+  ...   | inner-eq = cong (λ { (e , r , e' , t) → (resetE e , 0# , resetE e' , S4 t) }) inner-eq
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (F-rule sub2' (F-fun _) stp) ()
+  helper (F-rule sub2' (F-pairL _) stp) ()
+  helper (F-rule sub2' (F-pairR _) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL _) stp) ()
+  helper (F-rule sub2' (F-appR _) stp) ()
+  helper (F-rule sub2' (F-op _ _) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+
+-- The remaining 12 top-level shapes still aren't proved -- delegate to
 -- theorem-A4-2-pack (see its own comment above for why this, rather than
 -- theorem-A4-2 itself, is what a fully-generic-`e` function like this
 -- one needs to call).
@@ -2331,10 +2398,8 @@ theorem-A4-2-core stp1@(R2-pair _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R3 _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R6 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R7 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(R9 _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(S1 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(S2 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(S4 _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R5 _ _ _ _ _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(F-rule _ (F-pairL _) _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(F-rule _ (F-pairR _) _) stp2 = theorem-A4-2-pack stp1 stp2
