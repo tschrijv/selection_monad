@@ -2246,6 +2246,83 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-snd {e = eh}
 -- built once and reused here.
 theorem-A4-2-core stp1@(R4 _) stp2 = theorem-A4-2-pack stp1 stp2
 
+-- tGlocal group: R8 / S3. glocalE hides both ε₁ and ε₂ from its own
+-- codomain σ, plus carries two opaque ⊆ᵉ-witnesses (sub1,sub2) -- rather
+-- than a chain of fun-inj0-style extractions, this reuses R5-cont-
+-- unique's own unglocal-key (Σ-packages ε₁,ε₂,sub1,sub2,g1 all at once)
+-- + glocalE-arg-inj (the hole content) exactly as R5-cont-unique's own
+-- S-glocal/S-glocal case does. Target here is σ itself (test's own top
+-- implicit, fully generic -- unlike tLoss/tThen, never a concrete `gnd`
+-- constant), so F-op needs no special opacity handling, same as tFst/
+-- tSnd.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R8 sub1 sub2 v g1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ glocalE sub1 sub2 (val v) g1
+         → pack (R8 sub1 sub2 {sub = sub} {g = g} v g1) ≡ pack s
+  helper (R8 sub1' sub2' v' g1') eq with just-injective (cong unglocal-key eq)
+  ... | refl with val-inj (glocalE-arg-inj eq)
+  ...   | refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1' stp) ()
+  helper (S3 sub1' sub2' g1' {e = eh2} {e' = eh2'} stp') eq with just-injective (cong unglocal-key eq)
+  ... | refl with glocalE-arg-inj eq
+  ...   | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp'))
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (F-rule sub2' (F-fun _) stp) ()
+  helper (F-rule sub2' (F-pairL _) stp) ()
+  helper (F-rule sub2' (F-pairR _) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL _) stp) ()
+  helper (F-rule sub2' (F-appR _) stp) ()
+  helper (F-rule sub2' (F-op _ _) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+theorem-A4-2-core {Γ} {ε = ε} {g = g} (S3 sub1 sub2 g1 {e = eh} {e' = eh'} stp1') stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = ⊆ᵉ-refl} g e r2 e2') → e ≡ glocalE sub1 sub2 eh g1
+         → pack (S3 sub1 sub2 g1 stp1') ≡ pack s
+  helper (R8 sub1' sub2' v' g1') eq with just-injective (cong unglocal-key eq)
+  ... | refl with glocalE-arg-inj eq
+  ...   | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
+  helper (R1 f x) ()
+  helper (R2-pair v w) ()
+  helper (R2-fst v w) ()
+  helper (R2-snd v w) ()
+  helper (R3 e v) ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v e) ()
+  helper (R9 v) ()
+  helper (S1 sub' h v stp) ()
+  helper (S2 sub' g1' stp) ()
+  helper (S3 sub1' sub2' g1' stp2') eq with just-injective (cong unglocal-key eq)
+  ... | refl with glocalE-arg-inj eq
+  ...   | refl with theorem-A4-2-core stp1' stp2'
+  ...     | inner-eq = cong (λ { (e , r , e' , t) → (glocalE sub1 sub2 e g1 , r , glocalE sub1 sub2 e' g1 , S3 sub1 sub2 g1 t) }) inner-eq
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (F-rule sub2' (F-fun _) stp) ()
+  helper (F-rule sub2' (F-pairL _) stp) ()
+  helper (F-rule sub2' (F-pairR _) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL _) stp) ()
+  helper (F-rule sub2' (F-appR _) stp) ()
+  helper (F-rule sub2' (F-op _ _) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+
 -- The remaining 17 top-level shapes still aren't proved -- delegate to
 -- theorem-A4-2-pack (see its own comment above for why this, rather than
 -- theorem-A4-2 itself, is what a fully-generic-`e` function like this
@@ -2254,11 +2331,9 @@ theorem-A4-2-core stp1@(R2-pair _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R3 _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R6 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R7 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(R8 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R9 _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(S1 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(S2 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(S3 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(S4 _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R5 _ _ _ _ _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(F-rule _ (F-pairL _) _) stp2 = theorem-A4-2-pack stp1 stp2
