@@ -1952,23 +1952,8 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
 -- of being inhabited (by refl) at all, so it is the whole statement:
 -- no need for r1≡r2/e1'≡e2' as separate conjuncts.
 --
--- Formulated only, not proved here.
--- ---------------------------------------------------------------------
-
-postulate
-  theorem-A4-2 : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
-                 (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
-               → stp1 ≅ stp2
-
--- ---------------------------------------------------------------------
--- Partial progress toward theorem-A4-2, proved for real (not postulated)
--- for the "tFun" group: the two rules whose conclusion is `fun`-headed
--- (R1, and F-rule wrapping F-fun). theorem-A4-2 itself is left untouched
--- above; this lemma has the exact same signature and, for every OTHER
--- top-level shape of stp1 (the other 10 groups), simply defers to the
--- theorem-A4-2 postulate directly -- since that already returns `_≅_`,
--- no conversion is needed for those 23 delegating clauses. Only the two
--- tFun clauses are genuine, hole-free proof content.
+-- Fully proved below, by induction on stp1's own 25 leaf shapes (11
+-- groups of mutually-exclusive or genuinely-recursive rules).
 --
 -- Two hard-won techniques made this tractable, confirmed via extensive
 -- standalone experiments (see conversation history / a42t.agda, since
@@ -2044,24 +2029,6 @@ packG-≡-to-pack-≡ : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ �
                      → packG stp1 ≡ packG stp2 → pack stp1 ≡ pack stp2
 packG-≡-to-pack-≡ refl = refl
 
--- Logically equivalent restatement of theorem-A4-2 itself, in packed
--- form -- NOT a weaker assumption, just a different phrasing of the same
--- not-yet-proven fact. Needed because theorem-A4-2-core's own
--- recursive diagonal (technique 2 above) forces it to have a fully
--- generic `e`, hence its own full 25-shape top-level coverage; its 23
--- non-tFun clauses need SOMETHING of type `pack stp1 ≡ pack stp2` to
--- delegate to, and deriving that from theorem-A4-2 itself would require
--- pattern-matching a `_≅_` value with still-independent indices -- the
--- exact limitation this whole file works around (confirmed as a general,
--- codebase-independent Agda limitation via a minimal standalone repro).
--- Once every one of the 25 shapes has a real proof, both this postulate
--- and theorem-A4-2 itself become derivable from that proof and can be
--- deleted.
-postulate
-  theorem-A4-2-pack : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
-                       (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
-                     → pack stp1 ≡ pack stp2
-
 -- fun's own domain γ is hidden from its codomain (gnd δ only shows δ),
 -- so two fun-headed terms with independently-fresh PrimFuns can't be
 -- compared via ordinary injectivity until γ itself is known shared --
@@ -2092,9 +2059,9 @@ snd-inj0 : ∀ {Γ σ1 σ2 τ ε} {e1 : Γ ⊢ (σ1 `× τ) ! ε} {e2 : Γ ⊢ (
          → snd {σ = σ1} e1 ≡ snd {σ = σ2} e2 → σ1 ≡ σ2
 snd-inj0 refl = refl
 
--- Core of theorem-A4-2-proved, working entirely in ordinary `_≡_` on
+-- Core of theorem-A4-2, working entirely in ordinary `_≡_` on
 -- packed values (technique 2 above) -- converted to `_≅_` exactly once,
--- by theorem-A4-2-proved itself below.
+-- by theorem-A4-2 itself below.
 theorem-A4-2-core : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
                           (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
                         → pack stp1 ≡ pack stp2
@@ -3060,7 +3027,7 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-handleP h b
   ... | refl with handleE-inj eq
   ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
 
-theorem-A4-2-proved : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
+theorem-A4-2 : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
                      (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
                    → stp1 ≅ stp2
-theorem-A4-2-proved stp1 stp2 = pack-≡-to-≅ (theorem-A4-2-core stp1 stp2)
+theorem-A4-2 stp1 stp2 = pack-≡-to-≅ (theorem-A4-2-core stp1 stp2)
