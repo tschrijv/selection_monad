@@ -2691,9 +2691,98 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-appR v1) {e
 -- theorem-A4-2 itself, is what a fully-generic-`e` function like this
 -- one needs to call).
 theorem-A4-2-core stp1@(R6 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(R7 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
+-- tThen group: R7 / S2. Same UnitTy-style opacity problem as tLoss
+-- (target Loss = gnd loss), so reuses packG/generic-atLC/shape-absurd
+-- the same way; thenE hides both its own σ (the held value's type) AND
+-- ε₁ (g1's own effect context) from its outer Loss codomain, unlike
+-- lossE which hid nothing -- unthen-key (already built for R5-cont-
+-- unique) Σ-packages (σ,ε₁,sub,g1) all at once, mirroring unglocal-key's
+-- role in tGlocal; thenE-arg-inj then peels the held value itself once
+-- those are shared. S2's own conclusion is the most convoluted of any
+-- rule -- its outer r is always 0# (never the premise's own r) and its
+-- outer e' embeds the premise's own r,e' deep inside a freshly-built
+-- thenE/lossE/vabs tree -- so the diagonal's cong reconstruction has to
+-- rebuild that whole tree, exactly as tReset's S4 case needed 0# rather
+-- than the threaded r, just one layer more nested.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R7 sub1 v e) stp2 =
+  packG-≡-to-pack-≡ (helper refl stp2 refl)
+  where
+  helper : ∀ {σ2} (τeq2 : σ2 ≡ Loss) {e2 : Γ ⊢ σ2 ! ε} {r2 : R} {e2' : Γ ⊢ σ2 ! ε}
+         (s : _⊢_-[_]→_ {sub = sub} (generic-atLC τeq2 g) e2 r2 e2') → e2 ≡ generic-at τeq2 (thenE sub1 (val v) (vabs e))
+       → packG (R7 sub1 {subamb = sub} {g = g} v e) ≡ packG s
+  helper τeq2 (R7 sub1' v' e') eq with τeq2
+  ... | refl with just-injective (cong unthen-key eq)
+  ...   | refl with thenE-arg-inj eq
+  ...     | eq2 with eq2
+  ...       | refl = refl
+  helper τeq2 (R1 f x) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R2-pair v' w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R2-fst v' w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R2-snd v' w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R3 e' v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R4 r) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R6 h v1 v2) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R8 sub1' sub2 v' g1) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R9 v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (S1 sub' h v' stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (S3 sub1' sub2 g1 stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (S4 stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R5 sub' h v1 m op v2 k nh) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fun x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairL x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairR x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-fst stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-snd stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appL x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appR x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-op x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-loss stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (S2 sub2 g1' {e = eh2} stp2') eq with τeq2
+  ... | refl with just-injective (cong unthen-key eq)
+  ...   | refl with thenE-arg-inj eq
+  ...     | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (S2 sub1 g1 {e = eh} {e' = eh'} stp1') stp2 =
+  packG-≡-to-pack-≡ (helper refl stp2 refl)
+  where
+  helper : ∀ {σ2} (τeq2 : σ2 ≡ Loss) {e2 : Γ ⊢ σ2 ! ε} {r2 : R} {e2' : Γ ⊢ σ2 ! ε}
+         (s : _⊢_-[_]→_ {sub = sub} (generic-atLC τeq2 g) e2 r2 e2') → e2 ≡ generic-at τeq2 (thenE sub1 eh g1)
+       → packG (S2 sub1 {g = g} g1 stp1') ≡ packG s
+  helper τeq2 (R7 sub1' v e') eq with τeq2
+  ... | refl with just-injective (cong unthen-key eq)
+  ...   | refl with thenE-arg-inj eq
+  ...     | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
+  helper τeq2 (R1 f x) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R2-pair v w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R2-fst v w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R2-snd v w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R3 e' v) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R4 r) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R6 h v1 v2) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R8 sub1' sub2 v g1') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R9 v) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (S1 sub' h v stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (S3 sub1' sub2 g1' stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (S4 stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R5 sub' h v1 m op v2 k nh) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fun x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairL x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-pairR x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-fst stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-snd stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appL x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-appR x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-op x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-loss stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (S2 sub2 g1' {e = eh2} stp2') eq with τeq2
+  ... | refl with just-injective (cong unthen-key eq)
+  ...   | refl with thenE-arg-inj eq
+  ...     | eq2 with eq2
+  ...       | refl with theorem-A4-2-core stp1' stp2'
+  ...         | inner-eq = cong (λ { (innerE , innerR , innerE' , t) →
+                  (Loss , g , thenE sub1 innerE g1 , 0# , thenE ⊆ᵉ-refl (lossE (val (vgnd innerR))) (vabs (weaken1 (thenE sub1 innerE' g1))) , S2 sub1 {g = g} g1 t) }) inner-eq
 theorem-A4-2-core stp1@(S1 _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
-theorem-A4-2-core stp1@(S2 _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 theorem-A4-2-core stp1@(R5 _ _ _ _ _ _ _ _) stp2 = theorem-A4-2-pack stp1 stp2
 -- tOp group: F-op vs F-op only (no direct/value rule ever produces an
 -- opE-headed conclusion -- operations always bubble up to a handler
