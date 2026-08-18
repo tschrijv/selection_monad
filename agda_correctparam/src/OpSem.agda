@@ -290,15 +290,32 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} → LC Γ σ εg
 
 -- ---------------------------------------------------------------------
 -- Fig. 7: the big-step judgment g ⊢ e ⇒r w.
+--
+-- Carries εg⊆ᵉε as its own (implicit) INDEX, exactly mirroring
+-- _⊢_-[_]→_'s own design above (see that data type's header comment for
+-- the full rationale): a single `sub` threaded through the WHOLE chain,
+-- rather than each `step` existentially picking its own. Without this,
+-- two INDEPENDENTLY-supplied big-step derivations of the same e (under
+-- the same g) carry no evidence their underlying small-steps used the
+-- SAME εg⊆ᵉε witness -- and since ⊆ᵉ can have multiple, extensionally
+-- different inhabitants (εg⊆ᵉε unfolds to a membership-preserving
+-- function, and ℓ∈ε is not a proposition when ε repeats a label, e.g.
+-- under two nested handlers for the same effect), that mismatch is a
+-- real one: theorem-A4-2 cannot bridge two steps at different `sub`s,
+-- and some rules (R7) bake `sub` directly into their own output
+-- expression, so the mismatch cannot be discharged after the fact
+-- either. Indexing the whole judgment by one shared `sub` sidesteps the
+-- issue at the root, the same way _⊢_-[_]→_'s own indexing already
+-- eliminated the analogous bridging problem there.
 -- ---------------------------------------------------------------------
 
 infix 3 _⊢_⇒[_]_
 
-data _⊢_⇒[_]_ {Γ} : ∀ {σ ε εg} → LC Γ σ εg → Γ ⊢ σ ! ε → R → Γ ⊢ σ ! ε → Set where
-  done : ∀ {σ ε εg} {g : LC Γ σ εg} (w : Γ ⊢ σ ! ε)
-       → g ⊢ w ⇒[ 0# ] w
+data _⊢_⇒[_]_ {Γ} : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} → LC Γ σ εg → Γ ⊢ σ ! ε → R → Γ ⊢ σ ! ε → Set where
+  done : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} (w : Γ ⊢ σ ! ε)
+       → _⊢_⇒[_]_ {sub = sub} g w 0# w
   step : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e1 e2 w : Γ ⊢ σ ! ε} {r s : R}
-       → _⊢_-[_]→_ {sub = sub} g e1 r e2 → g ⊢ e2 ⇒[ s ] w → g ⊢ e1 ⇒[ r + s ] w
+       → _⊢_-[_]→_ {sub = sub} g e1 r e2 → _⊢_⇒[_]_ {sub = sub} g e2 s w → _⊢_⇒[_]_ {sub = sub} g e1 (r + s) w
 
 -- ---------------------------------------------------------------------
 -- Terminal expressions: the two shapes a well-typed big-step evaluation

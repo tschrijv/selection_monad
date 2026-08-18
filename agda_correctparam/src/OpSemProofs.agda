@@ -36,7 +36,7 @@ open import Data.Product using (Σ; _,_; proj₁; proj₂; _×_)
 open import Data.Product.Properties using (Σ-≡,≡←≡)
 open import Relation.Nullary using (¬_; Dec; yes; no)
 open import Function using (_∘_)
-open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym; trans; subst)
+open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; cong₂; sym; trans; subst)
 open import Relation.Binary.HeterogeneousEquality using (_≅_; ≡-to-≅) renaming (refl to ≅-refl; sym to ≅-sym; trans to ≅-trans)
 
 -- ---------------------------------------------------------------------
@@ -3169,3 +3169,38 @@ theorem-A4-3 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : �
 theorem-A4-3 {e = e} nt with progress-dichotomy e
 ... | inj₁ term = ⊥-elim (nt term)
 ... | inj₂ stp = stp
+
+-- ---------------------------------------------------------------------
+-- Corollary 3.3: if a big-step derivation g ⊢ e ⇒[r] w ends in a VALUE
+-- w (as opposed to _⊢_⇒[_]_'s own `done` constructor, which trivially
+-- accepts ANY w -- not just terminal/value ones -- as an r=0# "answer"
+-- for itself), then that value and the accumulated loss are unique:
+-- any other big-step derivation from the same e (under the same g) that
+-- also ends in a value must report the exact same value and loss.
+-- Expected to follow from theorem-A4-2 (single-step determinism) by a
+-- straightforward induction on one of the two derivations, using
+-- theorem-A4-1 (terminal ⟹ no step) to rule out one derivation stopping
+-- "early" relative to the other. Γ is fixed to ∅, matching theorem-A4-3
+-- (progress) rather than theorem-A4-1/A4-2 (fully Γ-generic): determinism
+-- alone doesn't need closedness, but this corollary is meant to combine
+-- with theorem-A4-3 later (to get existence of the value/loss, not just
+-- uniqueness), which does. Formulated only, not proved here.
+-- ---------------------------------------------------------------------
+
+big-step-unique : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r1 r2 : R} {w1 w2 : ∅ ⊢ σ ! ε}
+                → _⊢_⇒[_]_ {sub = sub} g e r1 w1 → Terminal w1 → _⊢_⇒[_]_ {sub = sub} g e r2 w2 → Terminal w2
+                → r1 ≡ r2 × w1 ≡ w2
+big-step-unique (done _)         t1 (done _)         t2 = refl , refl
+big-step-unique (done _)         t1 (step stp2 d2')  t2 = ⊥-elim (theorem-A4-1 t1 stp2)
+big-step-unique (step stp1 d1')  t1 (done _)         t2 = ⊥-elim (theorem-A4-1 t2 stp1)
+big-step-unique (step stp1 d1')  t1 (step stp2 d2')  t2
+  with cong (λ { (_ , r , e' , _) → r , e' }) (theorem-A4-2-core stp1 stp2)
+... | reEq with cong proj₁ reEq | cong proj₂ reEq
+...   | req | e'eq with big-step-unique (subst (λ x → _⊢_⇒[_]_ _ x _ _) e'eq d1') t1 d2' t2
+...     | (sEq , wEq) = cong₂ _+_ req sEq , wEq
+
+corollary-3-3 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r1 r2 : R} {v1 v2 : Val ∅ σ}
+              → _⊢_⇒[_]_ {sub = sub} g e r1 (val v1) → _⊢_⇒[_]_ {sub = sub} g e r2 (val v2)
+              → r1 ≡ r2 × v1 ≡ v2
+corollary-3-3 d1 d2 with big-step-unique d1 (terminalVal _) d2 (terminalVal _)
+... | (rEq , wEq) = rEq , val-inj wEq
