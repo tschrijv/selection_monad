@@ -1172,18 +1172,18 @@ theorem-B9-S1 {ℓ = ℓ} {par = par} {σ = σ} sub {g} h v {e} {e'} {r} stp (wf
 -- a single mapF̂-cong/+-assoc rewrite. The outer γ (⌊g⌋[subamb,ρ], for
 -- the DISREGARDED ambient g) never actually matters, exactly as when
 -- this was stated at an arbitrary γ.
-theorem-B9-S2 : ∀ {Γ ε εg εamb} (sub : εg ⊆ᵉ ε) {subamb : εamb ⊆ᵉ ε} {g : LC Γ Loss εamb} (g1 : LC Γ Loss εg) {e e' : Γ ⊢ Loss ! ε} {r : R}
+theorem-B9-S2 : ∀ {Γ ε εg εamb σ} (sub : εg ⊆ᵉ ε) {subamb : εamb ⊆ᵉ ε} {g : LC Γ Loss εamb} (g1 : LC Γ σ εg) {e e' : Γ ⊢ σ ! ε} {r : R}
                    → _⊢_-[_]→_ {sub = sub} g1 e r e'
                    → WFE (thenE sub e g1) → (ρ : Env Γ)
                    → runSelWith (Esem (thenE sub e g1) ρ) ⌊ g ⌋[ subamb , ρ ]
                    ≡ addR 0# (runSelWith (Esem (thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub e' g1)))) ρ) ⌊ g ⌋[ subamb , ρ ])
-theorem-B9-S2 {Γ} {ε} sub {subamb} {g} g1 {e} {e'} {r} stp (wf-then wfe _) ρ =
+theorem-B9-S2 {Γ} {ε} {σ = σ} sub {subamb} {g} g1 {e} {e'} {r} stp (wf-then wfe _) ρ =
   trans (cong (λ W → runSelWith (upS W) γ) (trans eqLHS mapEq))
         (trans (sym (addR-0 (runSelWith (upS (mapF̂ ((r + 0#) +_) D)) γ)))
                (cong (λ w → addR 0# (runSelWith w γ)) (sym eqRHS-Esem)))
   where
   γ = ⌊ g ⌋[ subamb , ρ ]
-  g1' : R → R̂ ε
+  g1' : ⟦ σ ⟧ → R̂ ε
   g1' a = widenF̂ sub (Lsem g1 ρ a)
   D : R̂ ε
   D = thenS g1' (Esem e' ρ)
@@ -1424,10 +1424,10 @@ theorem-B9 (F-rule {α = α} sub {g = g} f {e} {e'} {r} stp) wfe ρ =
 -- definition (matching exactly the continuation stp's own index ties it
 -- to). WFE(glocalE...)'s own hole is extracted via wf-glocal's first
 -- component.
-theorem-B9 (S3 {ε = ε} {ε₂ = ε₂} {ε₁ = ε₁} {σ = σ} sub1 sub2 {g = g} g1 {e} {e'} {r} stp) (wf-glocal wfe _) ρ =
+theorem-B9 (S3 {ε = ε} {ε₂ = ε₂} {ε₁ = ε₁} {σ = σ} sub1 sub2 {sub = sub} {g = g} g1 {e} {e'} {r} stp) (wf-glocal wfe _) ρ =
   glocalS-addR r sub2 (Esem e ρ) (Esem e' ρ) g1' γ (theorem-B9 stp wfe ρ)
   where
-  γ = ⌊ g ⌋[ ⊆ᵉ-refl , ρ ]
+  γ = ⌊ g ⌋[ sub , ρ ]
   g1' : ⟦ σ ⟧ → R̂ ε₁
   g1' a = widenF̂ sub1 (Lsem g1 ρ a)
 

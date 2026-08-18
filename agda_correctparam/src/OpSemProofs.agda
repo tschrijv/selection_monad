@@ -34,7 +34,7 @@ open import Data.Maybe using (Maybe; just; nothing; _<∣>_)
 open import Data.Maybe.Properties using (just-injective)
 open import Data.Product using (Σ; _,_; proj₁; proj₂; _×_)
 open import Data.Product.Properties using (Σ-≡,≡←≡)
-open import Relation.Nullary using (¬_)
+open import Relation.Nullary using (¬_; Dec; yes; no)
 open import Function using (_∘_)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym; trans; subst)
 open import Relation.Binary.HeterogeneousEquality using (_≅_; ≡-to-≅) renaming (refl to ≅-refl; sym to ≅-sym; trans to ≅-trans)
@@ -2348,9 +2348,9 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R8 sub1 sub2 v g1) stp2 = 
   helper (F-rule sub2' (F-op _ _) stp) ()
   helper (F-rule sub2' F-loss stp) ()
   helper (F-rule sub2' (F-handleP h b) stp) ()
-theorem-A4-2-core {Γ} {ε = ε} {g = g} (S3 sub1 sub2 g1 {e = eh} {e' = eh'} stp1') stp2 = helper stp2 refl
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (S3 sub1 sub2 g1 {e = eh} {e' = eh'} stp1') stp2 = helper stp2 refl
   where
-  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = ⊆ᵉ-refl} g e r2 e2') → e ≡ glocalE sub1 sub2 eh g1
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ glocalE sub1 sub2 eh g1
          → pack (S3 sub1 sub2 g1 stp1') ≡ pack s
   helper (R8 sub1' sub2' v' g1') eq with just-injective (cong unglocal-key eq)
   ... | refl with glocalE-arg-inj eq
@@ -3031,3 +3031,141 @@ theorem-A4-2 : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : 
                      (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
                    → stp1 ≅ stp2
 theorem-A4-2 stp1 stp2 = pack-≡-to-≅ (theorem-A4-2-core stp1 stp2)
+
+-- ---------------------------------------------------------------------
+-- Closed-value inversion: under Γ = ∅, `vvar` is uninhabited (∅ ∋ σ has
+-- no constructors), so a closed value of ground/product/function type
+-- must be vgnd/vpair/vabs-shaped respectively -- needed wherever a
+-- computation rule (R1/R4 need vgnd, R2-fst/R2-snd need vpair, R3/R7
+-- need vabs) requires a SPECIFIC value shape, not just "some value".
+-- vgnd/vpair/vabs are the only Val constructors that can even TYPE-
+-- CHECK at gnd γ / σ`×τ / σ⇒τ!ε respectively (Ty's own constructors are
+-- pairwise disjoint, decided without touching any opaque Sig field), so
+-- the other two cases are omittable exactly as R2-pair/F-pairL/F-pairR
+-- were omittable against a concrete gnd target back in tFun.
+val-closed-gnd : ∀ {γ} (v : Val ∅ (gnd γ)) → Σ ⟦ γ ⟧ᴳ (λ x → v ≡ vgnd x)
+val-closed-gnd (vvar ())
+val-closed-gnd (vgnd x) = x , refl
+
+val-closed-pair : ∀ {σ τ} (v : Val ∅ (σ `× τ)) → Σ (Val ∅ σ) (λ v1 → Σ (Val ∅ τ) (λ v2 → v ≡ vpair v1 v2))
+val-closed-pair (vvar ())
+val-closed-pair (vpair v1 v2) = v1 , v2 , refl
+
+val-closed-abs : ∀ {σ τ ε} (v : Val ∅ (σ ⇒ τ ! ε)) → Σ ((∅ , σ) ⊢ τ ! ε) (λ e → v ≡ vabs e)
+val-closed-abs (vvar ())
+val-closed-abs (vabs e) = e , refl
+
+-- ---------------------------------------------------------------------
+-- Theorem A.4.3 (progress, full direction): a non-terminal CLOSED
+-- expression can take a step. theorem-A4-1 already proves the converse
+-- (terminal ⟹ no step); this is what makes that a genuine dichotomy
+-- rather than a one-sided fact -- together they say Terminal e is
+-- exactly the set of e's with no outgoing -[_]→ step.
+--
+-- Γ is fixed to ∅ here (unlike theorem-A4-1/A4-2, which are fully
+-- generic in Γ): progress genuinely needs closed terms. Counterexample
+-- for open Γ, confirmed before this postulate was written: with
+-- Γ = ∅ , gnd γ and y = Z, `fun f (val (vvar y))` is well-typed and
+-- provably ¬ Terminal, but has no step -- R1 only fires on `val (vgnd
+-- x)` (a concrete ground semantic value), never on an arbitrary
+-- variable, and F-rule needs the hole itself to step, which a value
+-- (val (vvar y) included) never does.
+--
+-- Worked out as a dichotomy (Terminal e ⊎ step), not the ¬Terminal-
+-- implies-step form stated above: the dichotomy is what the recursive
+-- calls below actually need at each "hole" position (to know whether a
+-- principal subexpression is a value, an unhandled op call, or steps),
+-- and theorem-A4-3 itself falls out of it in one line at the very end.
+progress-dichotomy : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} (e : ∅ ⊢ σ ! ε)
+                    → Terminal e ⊎ Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ e' → _⊢_-[_]→_ {sub = sub} g e r e'))
+progress-dichotomy (val v) = inj₁ (terminalVal v)
+progress-dichotomy {sub = sub} {g = g} (fun f e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-fun f)) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) with val-closed-gnd v0
+...   | (x0 , refl) = inj₂ (0# , val (vgnd (⟦ f ⟧f x0)) , R1 f x0)
+progress-dichotomy (fun f e0) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-fun f)) nh)
+progress-dichotomy (fun f e0) | inj₂ (r , e0' , stp0) = inj₂ (r , fun f e0' , F-rule _ (F-fun f) stp0)
+progress-dichotomy {sub = sub} {g = g} (pair e1 e2)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-pairL e2)) (val (vvar Z))) (weaken1V g))} e1
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-pairL e2)) nh)
+... | inj₂ (r , e1' , stp1) = inj₂ (r , pair e1' e2 , F-rule sub (F-pairL e2) stp1)
+progress-dichotomy {sub = sub} {g = g} (pair e1 e2) | inj₁ (terminalVal v1)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-pairR v1)) (val (vvar Z))) (weaken1V g))} e2
+... | inj₁ (terminalVal v2) = inj₂ (0# , val (vpair v1 v2) , R2-pair v1 v2)
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-pairR v1)) nh)
+... | inj₂ (r , e2' , stp2) = inj₂ (r , pair (val v1) e2' , F-rule sub (F-pairR v1) stp2)
+
+progress-dichotomy {sub = sub} {g = g} (fst e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F F-fst) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) with val-closed-pair v0
+...   | (v1 , v2 , refl) = inj₂ (0# , val v1 , R2-fst v1 v2)
+progress-dichotomy (fst e0) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K F-fst) nh)
+progress-dichotomy (fst e0) | inj₂ (r , e0' , stp0) = inj₂ (r , fst e0' , F-rule _ F-fst stp0)
+
+progress-dichotomy {sub = sub} {g = g} (snd e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F F-snd) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) with val-closed-pair v0
+...   | (v1 , v2 , refl) = inj₂ (0# , val v2 , R2-snd v1 v2)
+progress-dichotomy (snd e0) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K F-snd) nh)
+progress-dichotomy (snd e0) | inj₂ (r , e0' , stp0) = inj₂ (r , snd e0' , F-rule _ F-snd stp0)
+
+progress-dichotomy {sub = sub} {g = g} (app e1 e2)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-appL e2)) (val (vvar Z))) (weaken1V g))} e1
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-appL e2)) nh)
+... | inj₂ (r , e1' , stp1) = inj₂ (r , app e1' e2 , F-rule sub (F-appL e2) stp1)
+progress-dichotomy {sub = sub} {g = g} (app e1 e2) | inj₁ (terminalVal v1)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-appR v1)) (val (vvar Z))) (weaken1V g))} e2
+... | inj₁ (terminalVal v2) with val-closed-abs v1
+...   | (ebody , refl) = inj₂ (0# , ebody [ v2 ] , R3 ebody v2)
+progress-dichotomy (app e1 e2) | inj₁ (terminalVal v1) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-appR v1)) nh)
+progress-dichotomy (app e1 e2) | inj₁ (terminalVal v1) | inj₂ (r , e2' , stp2) = inj₂ (r , app (val v1) e2' , F-rule _ (F-appR v1) stp2)
+
+progress-dichotomy {sub = sub} {g = g} (opE m op e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-op m op)) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) = inj₁ (terminalOp m op v0 ▫ (λ ()))
+... | inj₁ (terminalOp m' op' v K nh) = inj₁ (terminalOp m' op' v (F∘ K (F-op m op)) nh)
+... | inj₂ (r , e0' , stp0) = inj₂ (r , opE m op e0' , F-rule sub (F-op m op) stp0)
+
+progress-dichotomy {sub = sub} {g = g} (lossE e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F F-loss) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) with val-closed-gnd v0
+...   | (x0 , refl) = inj₂ (x0 , _ , R4 x0)
+progress-dichotomy (lossE e0) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K F-loss) nh)
+progress-dichotomy (lossE e0) | inj₂ (r , e0' , stp0) = inj₂ (r , lossE e0' , F-rule _ F-loss stp0)
+progress-dichotomy {sub = subamb} {g = g} (thenE sub1 e0 g1)
+  with progress-dichotomy {sub = sub1} {g = g1} e0
+... | inj₁ (terminalVal v0) with val-closed-abs g1
+...   | (ebody , refl) = inj₂ (0# , glocalE ⊆ᵉ-refl sub1 (ebody [ v0 ]) zeroLC , R7 sub1 v0 ebody)
+progress-dichotomy (thenE sub1 e0 g1) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (S∘ K (S-then sub1 g1)) nh)
+progress-dichotomy (thenE sub1 e0 g1) | inj₂ (r , e0' , stp0) = inj₂ (0# , thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub1 e0' g1))) , S2 sub1 g1 stp0)
+progress-dichotomy {sub = subamb} {g = g} (glocalE sub1 sub2 e0 g1)
+  with progress-dichotomy {sub = sub1} {g = g1} e0
+... | inj₁ (terminalVal v0) = inj₂ (0# , val v0 , R8 sub1 sub2 v0 g1)
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (S∘ K (S-glocal sub1 sub2 g1)) nh)
+... | inj₂ (r , e0' , stp0) = inj₂ (r , glocalE sub1 sub2 e0' g1 , S3 sub1 sub2 g1 stp0)
+
+progress-dichotomy {sub = sub} {g = g} (resetE e0)
+  with progress-dichotomy {sub = sub} {g = g} e0
+... | inj₁ (terminalVal v0) = inj₂ (0# , val v0 , R9 v0)
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (S∘ K S-reset) nh)
+... | inj₂ (r , e0' , stp0) = inj₂ (0# , resetE e0' , S4 stp0)
+progress-dichotomy {sub = sub} {g = g} (handleE {ℓ = ℓ} h p b)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-handleP h b)) (val (vvar Z))) (weaken1V g))} p
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-handleP h b)) nh)
+... | inj₂ (r , p' , stpp) = inj₂ (r , handleE h p' b , F-rule sub (F-handleP h b) stpp)
+progress-dichotomy {sub = sub} {g = g} (handleE {ℓ = ℓ} h p b) | inj₁ (terminalVal v1)
+  with progress-dichotomy {sub = ⊆ᵉ-,ℓ} {g = vabs (thenE sub (retApplied h v1) (weaken1V g))} b
+... | inj₁ (terminalVal v2) = inj₂ (0# , _ , R6 h v1 v2)
+... | inj₁ (terminalOp {ℓ = ℓop} m op v K nh) with ℓ ≟ᵉ ℓop
+progress-dichotomy {sub = sub} {g = g} (handleE {ℓ = ℓ} h p b) | inj₁ (terminalVal v1) | inj₁ (terminalOp {ℓ = ℓop} m op v K nh) | yes eq
+  with eq
+... | refl = inj₂ (0# , _ , R5 sub h v1 m op v K nh)
+progress-dichotomy (handleE h p b) | inj₁ (terminalVal v1) | inj₁ (terminalOp m op v K nh) | no neq =
+  inj₁ (terminalOp m op v (S∘ K (S-handleB h v1)) (λ { (inj₁ eq2) → neq (sym eq2) ; (inj₂ hk) → nh hk }))
+progress-dichotomy (handleE h p b) | inj₁ (terminalVal v1) | inj₂ (r , b' , stpb) = inj₂ (r , handleE h (val v1) b' , S1 _ h v1 stpb)
+
+theorem-A4-3 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε}
+             → ¬ Terminal e → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ e' → _⊢_-[_]→_ {sub = sub} g e r e'))
+theorem-A4-3 {e = e} nt with progress-dichotomy e
+... | inj₁ term = ⊥-elim (nt term)
+... | inj₂ stp = stp

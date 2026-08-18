@@ -237,18 +237,26 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} → LC Γ σ εg
   -- (a runtime-only artifact, not source syntax) is realised as
   -- loss(r) ▶ (λ_:().e) -- run loss(r) (which immediately reports r, R4),
   -- then continue as e. `sub` relates g1's OWN εg to ε, not the ambient
-  -- g's εamb (unconstrained, per R7's own note above).
-  S2 : ∀ {ε εg εamb} (sub : εg ⊆ᵉ ε) {subamb : εamb ⊆ᵉ ε} {g : LC Γ Loss εamb} (g1 : LC Γ Loss εg) {e e' : Γ ⊢ Loss ! ε} {r : R}
+  -- g's εamb (unconstrained, per R7's own note above). Generic in σ (the
+  -- hole's own type), matching S1/S3/S4 below and thenE's own
+  -- constructor (Syntax.agda) -- σ = Loss here would be an unmotivated
+  -- restriction: thenE's first argument is no more Loss-specific than
+  -- glocalE's or handleE's own holes are.
+  S2 : ∀ {ε εg εamb σ} (sub : εg ⊆ᵉ ε) {subamb : εamb ⊆ᵉ ε} {g : LC Γ Loss εamb} (g1 : LC Γ σ εg) {e e' : Γ ⊢ σ ! ε} {r : R}
      → _⊢_-[_]→_ {sub = sub} g1 e r e'
      → _⊢_-[_]→_ {sub = subamb} g (thenE sub e g1) 0# (thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub e' g1))))
 
   -- (S3) ⟨e⟩^ε₁_g1 evaluates e under g1 (disregarding the ambient g),
-  -- keeping the frame's own effect ε₁, and re-wraps the result. The
-  -- ambient g : LC Γ σ ε already lives at ε directly (no separate εg),
-  -- so the family's own index is trivially ⊆ᵉ-refl here.
-  S3 : ∀ {ε ε₂ ε₁ σ} (sub1 : ε₂ ⊆ᵉ ε₁) (sub2 : ε₁ ⊆ᵉ ε) {g : LC Γ σ ε} (g1 : LC Γ σ ε₂) {e e' : Γ ⊢ σ ! ε₁} {r : R}
+  -- keeping the frame's own effect ε₁, and re-wraps the result. Generic
+  -- (unused) ambient εamb/sub/g, matching R8 -- glocalE's own value rule,
+  -- two rules above -- which already has exactly this free shape:
+  -- neither rule's conclusion ever actually uses g to build its result,
+  -- so pinning the family's own index to ⊆ᵉ-refl here (as opposed to
+  -- leaving it universally quantified and unused, R1-style) was an
+  -- unmotivated restriction.
+  S3 : ∀ {ε ε₂ ε₁ σ εamb} (sub1 : ε₂ ⊆ᵉ ε₁) (sub2 : ε₁ ⊆ᵉ ε) {sub : εamb ⊆ᵉ ε} {g : LC Γ σ εamb} (g1 : LC Γ σ ε₂) {e e' : Γ ⊢ σ ! ε₁} {r : R}
      → _⊢_-[_]→_ {sub = sub1} g1 e r e'
-     → _⊢_-[_]→_ {sub = ⊆ᵉ-refl} g (glocalE sub1 sub2 e g1) r (glocalE sub1 sub2 e' g1)
+     → _⊢_-[_]→_ {sub = sub} g (glocalE sub1 sub2 e g1) r (glocalE sub1 sub2 e' g1)
 
   -- (S4) reset evaluates its body under the *same* ambient g, but
   -- contributes no loss of its own (whatever loss e produced is discarded
