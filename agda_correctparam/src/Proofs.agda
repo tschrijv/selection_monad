@@ -1032,25 +1032,144 @@ addR-0 (r , s) = cong (λ z → z , s) (+-identityˡ r)
 -- are, likewise, not reached within a single step.
 -- ---------------------------------------------------------------------
 
-data WFG {Γ ε} : ∀ {σ} → LC Γ σ ε → Set where
-  wf-zero : ∀ {σ} → WFG {σ = σ} zeroLC
-  wf-then : ∀ {σ σ' εg} {sub : εg ⊆ᵉ ε} {e : (Γ , σ) ⊢ σ' ! ε} {g' : LC (Γ , σ) σ' εg}
-          → WFG g' → WFG (vabs (thenE sub e g'))
+-- WFV/WFH extend WFE's own reach INTO value/handler bodies (vabs's own
+-- expression, a handler's own clause/ret bodies) -- exactly the pieces
+-- WFE alone (see above) never needed for theorem-B9's single-step
+-- scope, but which DO get exposed once a value/handler is actually
+-- substituted into (R3's e[v], R5/R6's clause/ret instantiation, S1's
+-- retApplied), i.e. exactly the extra invariant preservation-across-
+-- steps (needed for the big-step theorems, B10a/B10b) requires. Declared
+-- mutually with WFE/WFG since Val/Handler/_⊢_!_ themselves are.
+mutual
+  data WFV {Γ} : ∀ {σ} → Val Γ σ → Set
+  data WFH {Γ} : ∀ {ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Set
+  data WFE {Γ} : ∀ {σ ε} → Γ ⊢ σ ! ε → Set
+  data WFG {Γ ε} : ∀ {σ} → LC Γ σ ε → Set
 
-data WFE {Γ} : ∀ {σ ε} → Γ ⊢ σ ! ε → Set where
-  wf-val    : ∀ {σ ε} (v : Val Γ σ) → WFE {ε = ε} (val v)
-  wf-fun    : ∀ {γ δ ε} {f : PrimFun γ δ} {e : Γ ⊢ gnd γ ! ε} → WFE e → WFE (fun f e)
-  wf-pair   : ∀ {σ τ ε} {e1 : Γ ⊢ σ ! ε} {e2 : Γ ⊢ τ ! ε} → WFE e1 → WFE e2 → WFE (pair e1 e2)
-  wf-fst    : ∀ {σ τ ε} {e : Γ ⊢ (σ `× τ) ! ε} → WFE e → WFE (fst e)
-  wf-snd    : ∀ {σ τ ε} {e : Γ ⊢ (σ `× τ) ! ε} → WFE e → WFE (snd e)
-  wf-app    : ∀ {σ τ ε} {e1 : Γ ⊢ (σ ⇒ τ ! ε) ! ε} {e2 : Γ ⊢ σ ! ε} → WFE e1 → WFE e2 → WFE (app e1 e2)
-  wf-op     : ∀ {ℓ ε} {m : ℓ ∈ ε} {op : Op ℓ} {e : Γ ⊢ gnd (out op) ! ε} → WFE e → WFE (opE m op e)
-  wf-loss   : ∀ {ε} {e : Γ ⊢ Loss ! ε} → WFE e → WFE (lossE e)
-  wf-then   : ∀ {σ ε ε₁} {sub : ε₁ ⊆ᵉ ε} {e1 : Γ ⊢ σ ! ε} {g : LC Γ σ ε₁} → WFE e1 → WFG g → WFE (thenE sub e1 g)
-  wf-glocal : ∀ {σ ε₂ ε₁ ε} {sub1 : ε₂ ⊆ᵉ ε₁} {sub2 : ε₁ ⊆ᵉ ε} {e : Γ ⊢ σ ! ε₁} {g : LC Γ σ ε₂} → WFE e → WFG g → WFE (glocalE sub1 sub2 e g)
-  wf-reset  : ∀ {σ ε} {e : Γ ⊢ σ ! ε} → WFE e → WFE (resetE e)
-  wf-handle : ∀ {ℓ par σ σ' ε} {h : Handler Γ ℓ par σ σ' ε} {e1 : Γ ⊢ gnd par ! ε} {e2 : Γ ⊢ σ ! (ε ,ℓ ℓ)}
-            → WFE e1 → WFE e2 → WFE (handleE h e1 e2)
+  data WFV {Γ} where
+    wf-vvar  : ∀ {σ} (x : Γ ∋ σ) → WFV (vvar x)
+    wf-vgnd  : ∀ {γ} (x : ⟦ γ ⟧ᴳ) → WFV (vgnd {γ = γ} x)
+    wf-vpair : ∀ {σ τ} {v : Val Γ σ} {w : Val Γ τ} → WFV v → WFV w → WFV (vpair v w)
+    wf-vabs  : ∀ {σ τ ε} {e : (Γ , σ) ⊢ τ ! ε} → WFE e → WFV (vabs e)
+
+  data WFH {Γ} where
+    wf-handler : ∀ {ℓ par σ σ' ε} {h : Handler Γ ℓ par σ σ' ε}
+               → (∀ op → WFE (clause h op)) → WFE (ret h) → WFH h
+
+  data WFE {Γ} where
+    wf-val    : ∀ {σ ε} {v : Val Γ σ} → WFV v → WFE {ε = ε} (val v)
+    wf-fun    : ∀ {γ δ ε} {f : PrimFun γ δ} {e : Γ ⊢ gnd γ ! ε} → WFE e → WFE (fun f e)
+    wf-pair   : ∀ {σ τ ε} {e1 : Γ ⊢ σ ! ε} {e2 : Γ ⊢ τ ! ε} → WFE e1 → WFE e2 → WFE (pair e1 e2)
+    wf-fst    : ∀ {σ τ ε} {e : Γ ⊢ (σ `× τ) ! ε} → WFE e → WFE (fst e)
+    wf-snd    : ∀ {σ τ ε} {e : Γ ⊢ (σ `× τ) ! ε} → WFE e → WFE (snd e)
+    wf-app    : ∀ {σ τ ε} {e1 : Γ ⊢ (σ ⇒ τ ! ε) ! ε} {e2 : Γ ⊢ σ ! ε} → WFE e1 → WFE e2 → WFE (app e1 e2)
+    wf-op     : ∀ {ℓ ε} {m : ℓ ∈ ε} {op : Op ℓ} {e : Γ ⊢ gnd (out op) ! ε} → WFE e → WFE (opE m op e)
+    wf-loss   : ∀ {ε} {e : Γ ⊢ Loss ! ε} → WFE e → WFE (lossE e)
+    wf-then   : ∀ {σ ε ε₁} {sub : ε₁ ⊆ᵉ ε} {e1 : Γ ⊢ σ ! ε} {g : LC Γ σ ε₁} → WFE e1 → WFG g → WFE (thenE sub e1 g)
+    wf-glocal : ∀ {σ ε₂ ε₁ ε} {sub1 : ε₂ ⊆ᵉ ε₁} {sub2 : ε₁ ⊆ᵉ ε} {e : Γ ⊢ σ ! ε₁} {g : LC Γ σ ε₂} → WFE e → WFG g → WFE (glocalE sub1 sub2 e g)
+    wf-reset  : ∀ {σ ε} {e : Γ ⊢ σ ! ε} → WFE e → WFE (resetE e)
+    wf-handle : ∀ {ℓ par σ σ' ε} {h : Handler Γ ℓ par σ σ' ε} {e1 : Γ ⊢ gnd par ! ε} {e2 : Γ ⊢ σ ! (ε ,ℓ ℓ)}
+              → WFH h → WFE e1 → WFE e2 → WFE (handleE h e1 e2)
+
+  data WFG {Γ ε} where
+    wf-zero : ∀ {σ} → WFG {σ = σ} zeroLC
+    wf-then : ∀ {σ σ' εg} {sub : εg ⊆ᵉ ε} {e : (Γ , σ) ⊢ σ' ! ε} {g' : LC (Γ , σ) σ' εg}
+            → WFE e → WFG g' → WFG (vabs (thenE sub e g'))
+
+-- WFV-renV/WFH-renH/WFE-renE/WFG-renV: renaming preserves well-formedness
+-- (mutually, mirroring renV/renH/renE's own mutual structure) -- a
+-- building block for WFsub-ext below (extS's own S-case weakens an
+-- existing value via renV).
+mutual
+  WFV-renV : ∀ {Γ Γ' σ} (ρ : Ren Γ Γ') {v : Val Γ σ} → WFV v → WFV (renV ρ v)
+  WFV-renV ρ (wf-vvar x)    = wf-vvar (ρ x)
+  WFV-renV ρ (wf-vgnd x)    = wf-vgnd x
+  WFV-renV ρ (wf-vpair v w) = wf-vpair (WFV-renV ρ v) (WFV-renV ρ w)
+  WFV-renV ρ (wf-vabs e)    = wf-vabs (WFE-renE (extR ρ) e)
+
+  WFH-renH : ∀ {Γ Γ' ℓ par σ σ' ε} (ρ : Ren Γ Γ') {h : Handler Γ ℓ par σ σ' ε} → WFH h → WFH (renH ρ h)
+  WFH-renH ρ (wf-handler wfc wfr) =
+    wf-handler (λ op → WFE-renE (extR (extR (extR (extR ρ)))) (wfc op)) (WFE-renE (extR (extR ρ)) wfr)
+
+  WFE-renE : ∀ {Γ Γ' σ ε} (ρ : Ren Γ Γ') {e : Γ ⊢ σ ! ε} → WFE e → WFE (renE ρ e)
+  WFE-renE ρ (wf-val v)          = wf-val (WFV-renV ρ v)
+  WFE-renE ρ (wf-fun wfe)        = wf-fun (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-pair wfe1 wfe2) = wf-pair (WFE-renE ρ wfe1) (WFE-renE ρ wfe2)
+  WFE-renE ρ (wf-fst wfe)        = wf-fst (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-snd wfe)        = wf-snd (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-app wfe1 wfe2)  = wf-app (WFE-renE ρ wfe1) (WFE-renE ρ wfe2)
+  WFE-renE ρ (wf-op wfe)         = wf-op (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-loss wfe)       = wf-loss (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-then wfe wfg)   = wf-then (WFE-renE ρ wfe) (WFG-renV ρ wfg)
+  WFE-renE ρ (wf-glocal wfe wfg) = wf-glocal (WFE-renE ρ wfe) (WFG-renV ρ wfg)
+  WFE-renE ρ (wf-reset wfe)      = wf-reset (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-handle wfh wfe1 wfe2) = wf-handle (WFH-renH ρ wfh) (WFE-renE ρ wfe1) (WFE-renE ρ wfe2)
+
+  WFG-renV : ∀ {Γ Γ' σ ε} (ρ : Ren Γ Γ') {g : LC Γ σ ε} → WFG g → WFG (renV ρ g)
+  WFG-renV ρ wf-zero            = wf-zero
+  WFG-renV ρ (wf-then wfe wfg') = wf-then (WFE-renE (extR ρ) wfe) (WFG-renV (extR ρ) wfg')
+
+-- WFsub: a substitution σs : Sub Γ Γ' is well-formed if every value it
+-- sends a variable to is itself WFV -- exactly the hypothesis
+-- WFV/WFH/WFE-subV/subH/subE need below, mirroring subV/subH/subE's own
+-- mutual structure.
+WFsub : ∀ {Γ Γ'} → Sub Γ Γ' → Set
+WFsub {Γ} σs = ∀ {σ} (x : Γ ∋ σ) → WFV (σs x)
+
+WFsub-ext : ∀ {Γ Γ' τ} {σs : Sub Γ Γ'} → WFsub σs → WFsub (extS {τ = τ} σs)
+WFsub-ext wfσs Z     = wf-vvar Z
+WFsub-ext wfσs (S x) = WFV-renV S (wfσs x)
+
+mutual
+  WFV-subV : ∀ {Γ Γ' σ} {σs : Sub Γ Γ'} → WFsub σs → {v : Val Γ σ} → WFV v → WFV (subV σs v)
+  WFV-subV wfσs (wf-vvar x)    = wfσs x
+  WFV-subV wfσs (wf-vgnd x)    = wf-vgnd x
+  WFV-subV wfσs (wf-vpair v w) = wf-vpair (WFV-subV wfσs v) (WFV-subV wfσs w)
+  WFV-subV wfσs (wf-vabs e)    = wf-vabs (WFE-subE (WFsub-ext wfσs) e)
+
+  WFH-subH : ∀ {Γ Γ' ℓ par σ σ' ε} {σs : Sub Γ Γ'} → WFsub σs → {h : Handler Γ ℓ par σ σ' ε} → WFH h → WFH (subH σs h)
+  WFH-subH wfσs (wf-handler wfc wfr) =
+    wf-handler (λ op → WFE-subE (WFsub-ext (WFsub-ext (WFsub-ext (WFsub-ext wfσs)))) (wfc op))
+               (WFE-subE (WFsub-ext (WFsub-ext wfσs)) wfr)
+
+  WFE-subE : ∀ {Γ Γ' σ ε} {σs : Sub Γ Γ'} → WFsub σs → {e : Γ ⊢ σ ! ε} → WFE e → WFE (subE σs e)
+  WFE-subE wfσs (wf-val v)          = wf-val (WFV-subV wfσs v)
+  WFE-subE wfσs (wf-fun wfe)        = wf-fun (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-pair wfe1 wfe2) = wf-pair (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2)
+  WFE-subE wfσs (wf-fst wfe)        = wf-fst (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-snd wfe)        = wf-snd (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-app wfe1 wfe2)  = wf-app (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2)
+  WFE-subE wfσs (wf-op wfe)         = wf-op (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-loss wfe)       = wf-loss (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-then wfe wfg)   = wf-then (WFE-subE wfσs wfe) (WFG-subV wfσs wfg)
+  WFE-subE wfσs (wf-glocal wfe wfg) = wf-glocal (WFE-subE wfσs wfe) (WFG-subV wfσs wfg)
+  WFE-subE wfσs (wf-reset wfe)      = wf-reset (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-handle wfh wfe1 wfe2) = wf-handle (WFH-subH wfσs wfh) (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2)
+
+  WFG-subV : ∀ {Γ Γ' σ ε} {σs : Sub Γ Γ'} → WFsub σs → {g : LC Γ σ ε} → WFG g → WFG (subV σs g)
+  WFG-subV wfσs wf-zero            = wf-zero
+  WFG-subV wfσs (wf-then wfe wfg') = wf-then (WFE-subE (WFsub-ext wfσs) wfe) (WFG-subV (WFsub-ext wfσs) wfg')
+
+-- WFsub-idSub/WFsub-cons: the two building blocks every concrete
+-- substitution used by R3/R5/R6/R7/S1 (_[_], sub1, and the explicit
+-- cons-chains) is assembled from.
+WFsub-idSub : ∀ {Γ} → WFsub (idSub {Γ})
+WFsub-idSub x = wf-vvar x
+
+WFsub-cons : ∀ {Γ Γ' τ} {v : Val Γ' τ} {σs : Sub Γ Γ'} → WFV v → WFsub σs → WFsub (cons v σs)
+WFsub-cons wfv wfσs Z     = wfv
+WFsub-cons wfv wfσs (S x) = wfσs x
+
+WFsub-sub1 : ∀ {Γ σ} {v : Val Γ σ} → WFV v → WFsub (sub1 v)
+WFsub-sub1 wfv = WFsub-cons wfv WFsub-idSub
+
+WFsub-wkSub : ∀ {Γ τ} → WFsub (wkSub {Γ} {τ})
+WFsub-wkSub x = wf-vvar (S x)
+
+-- WFE-[]: the R3/R7-specific substitution instance -- e[v] is WFE
+-- whenever e and v both are.
+WFE-[] : ∀ {Γ σ τ ε} {e : (Γ , σ) ⊢ τ ! ε} {v : Val Γ σ} → WFE e → WFV v → WFE (e [ v ])
+WFE-[] wfe wfv = WFE-subE (WFsub-sub1 wfv) wfe
 
 -- WFE-plugF: (F-rule)'s own extraction lemma -- the hole's own WFE-ness,
 -- read off WFE(plugF f e) by cases on f (matching WFE's own constructor
@@ -1065,7 +1184,98 @@ WFE-plugF (F-appL e₂)    (wf-app wfe _)    = wfe
 WFE-plugF (F-appR v)     (wf-app _ wfe)    = wfe
 WFE-plugF (F-op m op)    (wf-op wfe)       = wfe
 WFE-plugF F-loss         (wf-loss wfe)     = wfe
-WFE-plugF (F-handleP h b) (wf-handle wfe _) = wfe
+WFE-plugF (F-handleP h b) (wf-handle _ wfe _) = wfe
+
+-- WFE-plugS: WFE-plugF's own analogue for the four SFrame shapes.
+WFE-plugS : ∀ {Γ α ε τ ε'} (s : SFrame Γ α ε τ ε') {e : Γ ⊢ α ! ε} → WFE (plugS s e) → WFE e
+WFE-plugS (S-handleB h v)      (wf-handle _ _ wfe)   = wfe
+WFE-plugS (S-then sub g)       (wf-then wfe _)       = wfe
+WFE-plugS (S-glocal sub1 sub2 g) (wf-glocal wfe _)   = wfe
+WFE-plugS S-reset               (wf-reset wfe)       = wfe
+
+-- WFE-plugK: WFE-plugF/WFE-plugS's own analogue for a whole ContCxt,
+-- recursing outside-in exactly as plugK itself is built.
+WFE-plugK : ∀ {Γ σ ε τ ε'} (k : ContCxt Γ σ ε τ ε') {e : Γ ⊢ σ ! ε} → WFE (plugK k e) → WFE e
+WFE-plugK ▫        wfe  = wfe
+WFE-plugK (F∘ {β = β} k f) wfpe with Frame-effect-eq f
+... | refl = WFE-plugK k (WFE-plugF f wfpe)
+WFE-plugK (S∘ k s) wfpe = WFE-plugK k (WFE-plugS s wfpe)
+
+-- WFE-plugF-fill/WFE-plugS-fill: the REVERSE direction of WFE-plugF/
+-- WFE-plugS -- given the ORIGINAL hole's WFE-ness just to read off the
+-- frame's own embedded data (v/h/b), swap in a DIFFERENT WFE hole e'
+-- (same Γ, no renaming) and conclude the whole plugged expression is
+-- still WFE. Used by (F-rule)/(S1)/(S2)/(S3)/(S4)'s own OUTER
+-- conclusion, once the INNER premise's own e' has been produced.
+WFE-plugF-fill : ∀ {Γ α ε τ} (f : Frame Γ α ε τ ε) {e e' : Γ ⊢ α ! ε} → WFE (plugF f e) → WFE e' → WFE (plugF f e')
+WFE-plugF-fill (F-fun pf)      (wf-fun _)             wfe' = wf-fun wfe'
+WFE-plugF-fill (F-pairL e₂)    (wf-pair _ wfe2)       wfe' = wf-pair wfe' wfe2
+WFE-plugF-fill (F-pairR v)     (wf-pair wfv _)        wfe' = wf-pair wfv wfe'
+WFE-plugF-fill F-fst           (wf-fst _)             wfe' = wf-fst wfe'
+WFE-plugF-fill F-snd           (wf-snd _)             wfe' = wf-snd wfe'
+WFE-plugF-fill (F-appL e₂)     (wf-app _ wfe2)        wfe' = wf-app wfe' wfe2
+WFE-plugF-fill (F-appR v)      (wf-app wfv _)         wfe' = wf-app wfv wfe'
+WFE-plugF-fill (F-op m op)     (wf-op _)              wfe' = wf-op wfe'
+WFE-plugF-fill F-loss          (wf-loss _)            wfe' = wf-loss wfe'
+WFE-plugF-fill (F-handleP h b) (wf-handle wfh _ wfb)  wfe' = wf-handle wfh wfe' wfb
+
+-- WFE-frame-fill: F-rule's own need -- fill a WEAKENED frame (its own
+-- embedded data renamed via S) with an ARBITRARY WFE hole e' at the
+-- extended context, reading the frame's own embedded data off the
+-- ORIGINAL (unweakened) hole's WFE-ness. Specializing e' to
+-- val(vvar Z) gives exactly F-rule's own synthesized-continuation body
+-- plugF(weaken1F f)(val(vvar Z)); the general e' form is what R5's own
+-- k'/yArg construction (via WFE-plugK-ren-fill below) needs instead.
+WFE-frame-fill : ∀ {Γ α ε τ υ} (f : Frame Γ α ε τ ε) {e : Γ ⊢ α ! ε} {e' : (Γ , υ) ⊢ α ! ε}
+                → WFE (plugF f e) → WFE e' → WFE (plugF (weaken1F f) e')
+WFE-frame-fill (F-fun pf)      _                        wfe' = wf-fun wfe'
+WFE-frame-fill (F-pairL e₂)    (wf-pair _ wfe2)         wfe' = wf-pair wfe' (WFE-renE S wfe2)
+WFE-frame-fill (F-pairR v)     (wf-pair (wf-val wfv) _) wfe' = wf-pair (wf-val (WFV-renV S wfv)) wfe'
+WFE-frame-fill F-fst           _                        wfe' = wf-fst wfe'
+WFE-frame-fill F-snd           _                        wfe' = wf-snd wfe'
+WFE-frame-fill (F-appL e₂)     (wf-app _ wfe2)          wfe' = wf-app wfe' (WFE-renE S wfe2)
+WFE-frame-fill (F-appR v)      (wf-app (wf-val wfv) _)  wfe' = wf-app (wf-val (WFV-renV S wfv)) wfe'
+WFE-frame-fill (F-op m op)     _                        wfe' = wf-op wfe'
+WFE-frame-fill F-loss          _                        wfe' = wf-loss wfe'
+WFE-frame-fill (F-handleP h b) (wf-handle wfh _ wfb)    wfe' = wf-handle (WFH-renH S wfh) wfe' (WFE-renE S wfb)
+
+-- WFE-sframe-fill: WFE-frame-fill's own analogue for SFrame, needed by
+-- WFE-plugK-ren-fill below (R5's own k'/yArg construction weakens EVERY
+-- frame along k, regular or special, via weaken1K = renK S).
+WFE-sframe-fill : ∀ {Γ α ε τ ε' υ} (s : SFrame Γ α ε τ ε') {e : Γ ⊢ α ! ε} {e' : (Γ , υ) ⊢ α ! ε}
+                 → WFE (plugS s e) → WFE e' → WFE (plugS (renS S s) e')
+WFE-sframe-fill (S-handleB h v)      (wf-handle wfh (wf-val wfv) _) wfe' = wf-handle (WFH-renH S wfh) (wf-val (WFV-renV S wfv)) wfe'
+WFE-sframe-fill (S-then sub g)       (wf-then _ wfg)        wfe' = wf-then wfe' (WFG-renV S wfg)
+WFE-sframe-fill (S-glocal sub1 sub2 g) (wf-glocal _ wfg)    wfe' = wf-glocal wfe' (WFG-renV S wfg)
+WFE-sframe-fill S-reset               (wf-reset _)          wfe' = wf-reset wfe'
+
+-- WFE-plugK-ren-fill: R5's own need -- fill plugK's weakened context
+-- (weaken1K k, at the FRESH z-context) with an arbitrary WFE hole e',
+-- reading k's own embedded frame data off the ORIGINAL hole's WFE-ness,
+-- recursing exactly as WFE-plugK/plugK itself does.
+WFE-plugK-ren-fill : ∀ {Γ σ ε τ ε' υ} (k : ContCxt Γ σ ε τ ε') {e : Γ ⊢ σ ! ε} {e' : (Γ , υ) ⊢ σ ! ε}
+                    → WFE (plugK k e) → WFE e' → WFE (plugK (weaken1K k) e')
+WFE-plugK-ren-fill ▫        wfpe wfe' = wfe'
+WFE-plugK-ren-fill (F∘ {β = β} k f) wfpe wfe' with Frame-effect-eq f
+... | refl = WFE-frame-fill f wfpe (WFE-plugK-ren-fill k (WFE-plugF f wfpe) wfe')
+WFE-plugK-ren-fill (S∘ k s) wfpe wfe' = WFE-sframe-fill s wfpe (WFE-plugK-ren-fill k (WFE-plugS s wfpe) wfe')
+
+-- WFG-e[v]: R7's own need -- if g = vabs e is WFG, then substituting a
+-- WFV value v into e's own body is WFE. Case on WFG's own two possible
+-- shapes: zeroLC (e ≡ val(vgnd 0#), substitution is a no-op) or
+-- vabs(thenE sub e' g') (e ≡ thenE sub e' g', WFE-[]/WFG-subV push the
+-- substitution through each component).
+WFG-e[v] : ∀ {Γ σ ε} {e : (Γ , σ) ⊢ Loss ! ε} → WFG (vabs e) → {v : Val Γ σ} → WFV v → WFE (e [ v ])
+WFG-e[v] wf-zero              wfv = wf-val (wf-vgnd _)
+WFG-e[v] (wf-then wfe' wfg')  wfv = wf-then (WFE-[] wfe' wfv) (WFG-subV (WFsub-sub1 wfv) wfg')
+
+-- retApplied-wf: S1's own need -- retApplied h v = ret h with z bound to
+-- (v, the fresh var), so its WFE-ness follows from WFH h's own WFE(ret
+-- h) via WFE-subE, given the specific substitution retApplied itself
+-- uses (cons (vvar Z) (cons (weaken1V v) wkSub)).
+retApplied-wf : ∀ {Γ ℓ par σ σ' ε} {h : Handler Γ ℓ par σ σ' ε} {v : Val Γ (gnd par)} → WFH h → WFV v → WFE (retApplied h v)
+retApplied-wf (wf-handler wfc wfr) wfv =
+  WFE-subE (WFsub-cons (wf-vvar Z) (WFsub-cons (WFV-renV S wfv) WFsub-wkSub)) wfr
 
 -- WFG-upS: a WFG continuation's own Vsem is ALWAYS upS-wrapped -- exactly
 -- η̂ˢ's/thenE's OWN `Esem` clauses, unfolding directly by cases on the
@@ -1073,7 +1283,7 @@ WFE-plugF (F-handleP h b) (wf-handle wfe _) = wfe
 -- WFG's own header comment).
 WFG-upS : ∀ {Γ σ ε} {g : LC Γ σ ε} → WFG g → (ρ : Env Γ) (a : ⟦ σ ⟧) → Σ (F̂ ε R) (λ W → Vsem g ρ a ≡ upS W)
 WFG-upS wf-zero ρ a = pure 0# , refl
-WFG-upS (wf-then {sub = sub} {e = e} {g' = g'} wfg') ρ a =
+WFG-upS (wf-then {sub = sub} {e = e} {g' = g'} _ wfg') ρ a =
   thenS (λ b → widenF̂ sub (Lsem g' (ρ ,, a) b)) (Esem e (ρ ,, a)) , refl
 
 -- R7-core: the general, WFG-free fact underlying (R7) -- for ANY F̂
@@ -1133,7 +1343,7 @@ theorem-B9-S1 : ∀ {Γ ε εamb ℓ par σ σ'} (sub : εamb ⊆ᵉ ε) {g : LC
                    → _⊢_-[_]→_ {sub = ⊆ᵉ-,ℓ} (vabs (thenE sub (retApplied h v) (weaken1V g))) e r e'
                    → WFE (handleE h (val v) e) → (ρ : Env Γ)
                    → runSelWith (Esem (handleE h (val v) e) ρ) ⌊ g ⌋[ sub , ρ ] ≡ addR r (runSelWith (Esem (handleE h (val v) e') ρ) ⌊ g ⌋[ sub , ρ ])
-theorem-B9-S1 {ℓ = ℓ} {par = par} {σ = σ} sub {g} h v {e} {e'} {r} stp (wf-handle _ wfe) ρ = trans step1 (trans step2 step3)
+theorem-B9-S1 {ℓ = ℓ} {par = par} {σ = σ} sub {g} h v {e} {e'} {r} stp (wf-handle _ _ wfe) ρ = trans step1 (trans step2 step3)
   where
   γ = ⌊ g ⌋[ sub , ρ ]
   p : ⟦ gnd par ⟧
@@ -1445,3 +1655,122 @@ theorem-B9 (S1 sub {g} h v stp) wfe ρ = theorem-B9-S1 sub {g} h v stp wfe ρ
 theorem-B9 (S2 sub {g = g} g1 stp) wfe ρ = theorem-B9-S2 sub {g = g} g1 stp wfe ρ
 theorem-B9 (R5 sub h v1 m op v2 k nh) wfe ρ = theorem-B9-R5 sub h v1 m op v2 k nh ρ
 theorem-B9 (R7 sub {subamb = subamb} {g = g} v e) (wf-then _ wfg) ρ = theorem-B9-R7 sub {g} v e wfg ρ ⌊ g ⌋[ subamb , ρ ]
+
+-- ---------------------------------------------------------------------
+-- WFE-preserved: a single small-step preserves both WFE(e) and WFG(g)
+-- -- the invariant theorem-B9 alone (single-step scope) never needed to
+-- re-establish, but that chaining theorem-B9 across a whole big-step
+-- derivation (theorem-B10a below) does. Case on the 16 step
+-- constructors:
+--  * R1/R2-pair/R2-fst/R2-snd/R4/R8/R9 are trivial -- their own output
+--    is always wf-val of data already extracted from the input (or, for
+--    R1/R4, a fresh wf-vgnd, no dependency at all).
+--  * R3/R7 expose a previously-opaque value/loss-continuation body via
+--    substitution -- WFE-[]/WFG-e[v] (above) are exactly built for this.
+--  * R6/R5 substitute into a handler's own ret/clause body -- WFH's own
+--    two fields, fed through WFE-subE with the rule's own concrete
+--    substitution (WFsub-cons chains). R5 additionally needs fk/fl's own
+--    WFV-ness, built from WFE-plugK-ren-fill (k's own weakened+refilled
+--    WFE-ness) and WFH-renH/WFG-renV (h/g's own weakened WFE/WFG-ness).
+--  * F-rule/S1 synthesize a NEW ambient continuation embedding the
+--    ambient g (WFG-renV) plus an administrative wrapper expression
+--    (WFE-frame-fill / retApplied-wf) -- recurse under THAT continuation.
+--  * S2/S3 disregard the ambient g entirely, recursing directly under
+--    their own g1 instead (S2's own output additionally wraps a fresh
+--    lossE/thenE administrative shell, all trivially WFE/WFG).
+--  * S4 recurses under the SAME ambient g (reset shares it unchanged).
+-- ---------------------------------------------------------------------
+
+WFE-preserved : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e e' : Γ ⊢ σ ! ε} {r : R}
+              → _⊢_-[_]→_ {sub = sub} g e r e' → WFG g → WFE e → WFE e'
+WFE-preserved (R1 f x) wfg (wf-fun (wf-val (wf-vgnd _))) = wf-val (wf-vgnd _)
+WFE-preserved (R2-pair v w) wfg (wf-pair (wf-val wfv) (wf-val wfw)) = wf-val (wf-vpair wfv wfw)
+WFE-preserved (R2-fst v w) wfg (wf-fst (wf-val (wf-vpair wfv wfw))) = wf-val wfv
+WFE-preserved (R2-snd v w) wfg (wf-snd (wf-val (wf-vpair wfv wfw))) = wf-val wfw
+WFE-preserved (R3 e v) wfg (wf-app (wf-val (wf-vabs wfe)) (wf-val wfv)) = WFE-[] wfe wfv
+WFE-preserved (R4 r) wfg (wf-loss (wf-val (wf-vgnd _))) = wf-val (wf-vgnd _)
+WFE-preserved (R6 h v1 v2) wfg (wf-handle (wf-handler wfc wfr) (wf-val wfv1) (wf-val wfv2)) =
+  WFE-subE (WFsub-cons wfv2 (WFsub-cons wfv1 WFsub-idSub)) wfr
+WFE-preserved (R7 sub v e) wfg (wf-then (wf-val wfv) wfge) = wf-glocal (WFG-e[v] wfge wfv) wf-zero
+WFE-preserved (R8 sub1 sub2 v g1) wfg (wf-glocal (wf-val wfv) wfg1) = wf-val wfv
+WFE-preserved (R9 v) wfg (wf-reset (wf-val wfv)) = wf-val wfv
+WFE-preserved (F-rule sub f stp) wfg wfpe =
+  WFE-plugF-fill f wfpe (WFE-preserved stp newg-wfg (WFE-plugF f wfpe))
+  where
+  newg-wfg = wf-then (WFE-frame-fill f wfpe (wf-val (wf-vvar Z))) (WFG-renV S wfg)
+WFE-preserved (S1 sub h v stp) wfg (wf-handle wfh (wf-val wfv) wfe) =
+  wf-handle wfh (wf-val wfv) (WFE-preserved stp newg-wfg wfe)
+  where
+  newg-wfg = wf-then (retApplied-wf wfh wfv) (WFG-renV S wfg)
+WFE-preserved (S2 sub g1 stp) wfg (wf-then wfe wfg1) =
+  wf-then (wf-loss (wf-val (wf-vgnd _))) (wf-then (WFE-renE S (WFE-preserved stp wfg1 wfe)) (WFG-renV S wfg1))
+WFE-preserved (S3 sub1 sub2 g1 stp) wfg (wf-glocal wfe wfg1) =
+  wf-glocal (WFE-preserved stp wfg1 wfe) wfg1
+WFE-preserved (S4 stp) wfg (wf-reset wfe) =
+  wf-reset (WFE-preserved stp wfg wfe)
+WFE-preserved (R5 sub h v1 m op v2 k nh) wfg (wf-handle (wf-handler wfc wfr) (wf-val wfv1) wfb) with WFE-plugK k wfb
+... | wf-op (wf-val wfv2) = WFE-subE wfsub (wfc op)
+  where
+  wfh'      = WFH-renH S (wf-handler wfc wfr)
+  wfg'      = WFG-renV S wfg
+  wfpArg    = wf-fst (wf-val (wf-vvar Z))
+  wfyArg    = wf-snd (wf-val (wf-vvar Z))
+  wfkArg    = WFE-plugK-ren-fill k wfb wfyArg
+  wfhandled = wf-handle wfh' wfpArg wfkArg
+  wffk      = wf-vabs (wf-glocal wfhandled wfg')
+  wffl      = wf-vabs (wf-then wfhandled wfg')
+  wfsub     = WFsub-cons wffk (WFsub-cons wffl (WFsub-cons wfv2 (WFsub-cons wfv1 WFsub-idSub)))
+
+-- ---------------------------------------------------------------------
+-- Theorem B.10a: adequacy of Esem against the big-step judgment. If e
+-- big-steps to a value v with total loss r under loss-continuation g,
+-- then e's denotational meaning, run against g's own denotation, is
+-- exactly that -- the reported loss r paired with a leaf carrying v's
+-- own denotation. Esem(val v)ρ = η̂ˢ(Vsem v ρ), whose own runSelWith is
+-- (0#, leaf(Vsem v ρ)) (Domains.agda's own η̂ˢ clause) -- so this is
+-- what theorem-B9's per-step addR-shift accumulates to once the whole
+-- big-step chain (_⊢_⇒[_]_, OpSem.agda) has run down to `done`.
+-- Proved by induction on the big-step derivation, chaining theorem-B9
+-- across each step and WFE-preserved to re-establish WFE(e)/WFG(g) for
+-- the next one. Γ is fixed to ∅ (unlike theorem-B9, fully Γ-generic):
+-- this is meant to combine with theorem-A4-3/corollary-3-3, both of
+-- which are closed-term-only, so stating it generically in Γ here would
+-- outrun what it can actually be composed with. Also carries WFG(g) --
+-- absent from the original formulation -- since WFE-preserved (needed
+-- to chain across more than one step) genuinely needs it: R5's own
+-- fk/fl embed the ambient g directly, so g's own well-formedness has to
+-- be threaded through exactly like e's.
+-- ---------------------------------------------------------------------
+
+theorem-B10a : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r : R} {v : Val ∅ σ}
+             → _⊢_⇒[_]_ {sub = sub} g e r (val v) → WFG g → WFE e → (ρ : Env ∅)
+             → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ] ≡ (r , leaf (Vsem v ρ))
+theorem-B10a (done _)       wfg wfe ρ = refl
+theorem-B10a (step stp d')  wfg wfe ρ =
+  trans (theorem-B9 stp wfe ρ) (cong (addR _) (theorem-B10a d' wfg (WFE-preserved stp wfg wfe) ρ))
+
+-- ---------------------------------------------------------------------
+-- Theorem B.10b: adequacy of Esem against the big-step judgment, for
+-- the OTHER shape Terminal allows (OpSem.agda's own terminalOp) -- a
+-- stuck, unhandled operation call plugK K (opE m op (val v)), rather
+-- than a plain value. Mirrors theorem-B10a exactly, but the "leaf"
+-- endpoint is replaced by a "node": lemma-B8 (already proven, above)
+-- already computes Esem(plugK K(opE m op(val v)))ρ as exactly
+-- φ̂ˢ(promote K nh m)op(Vsem v ρ)(...), whose own runSelWith is
+-- (0#, node(promote K nh m)op(Vsem v ρ)(...)) (Domains.agda's own φ̂ˢ
+-- clause) -- the base case this accumulates to, via theorem-B9's
+-- per-step addR-shift, once the big-step chain runs down to `done` at
+-- this stuck configuration. `promote` (Proofs.agda, above) is exactly
+-- what widens m's own membership at the hole's εop out to K's own
+-- outer ε, using nh (¬ Handles K ℓ) the same way terminalOp itself
+-- does. Expected to follow from theorem-B9 + lemma-B8 by induction on
+-- the big-step derivation, exactly as theorem-B10a. Formulated only,
+-- not proved here.
+-- ---------------------------------------------------------------------
+
+postulate
+  theorem-B10b : ∀ {σ ε εg ℓ εop} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r : R}
+                 (m : ℓ ∈ εop) (op : Op ℓ) (v : Val ∅ (gnd (out op))) (K : ContCxt ∅ (gnd (in′ op)) εop σ ε) (nh : ¬ Handles K ℓ)
+               → _⊢_⇒[_]_ {sub = sub} g e r (plugK K (opE m op (val v))) → WFE e → (ρ : Env ∅)
+               → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ]
+               ≡ (r , node (promote K nh m) op (Vsem v ρ) (λ a → Esem (plugK (weaken1K K) (val (vvar Z))) (ρ ,, a)))
