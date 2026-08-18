@@ -1763,14 +1763,16 @@ theorem-B10a (step stp d')  wfg wfe ρ =
 -- this stuck configuration. `promote` (Proofs.agda, above) is exactly
 -- what widens m's own membership at the hole's εop out to K's own
 -- outer ε, using nh (¬ Handles K ℓ) the same way terminalOp itself
--- does. Expected to follow from theorem-B9 + lemma-B8 by induction on
--- the big-step derivation, exactly as theorem-B10a. Formulated only,
--- not proved here.
+-- does. Proved by induction on the big-step derivation, exactly as
+-- theorem-B10a.
 -- ---------------------------------------------------------------------
 
-postulate
-  theorem-B10b : ∀ {σ ε εg ℓ εop} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r : R}
-                 (m : ℓ ∈ εop) (op : Op ℓ) (v : Val ∅ (gnd (out op))) (K : ContCxt ∅ (gnd (in′ op)) εop σ ε) (nh : ¬ Handles K ℓ)
-               → _⊢_⇒[_]_ {sub = sub} g e r (plugK K (opE m op (val v))) → WFE e → (ρ : Env ∅)
-               → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ]
-               ≡ (r , node (promote K nh m) op (Vsem v ρ) (λ a → Esem (plugK (weaken1K K) (val (vvar Z))) (ρ ,, a)))
+theorem-B10b : ∀ {σ ε εg ℓ εop} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r : R}
+               (m : ℓ ∈ εop) (op : Op ℓ) (v : Val ∅ (gnd (out op))) (K : ContCxt ∅ (gnd (in′ op)) εop σ ε) (nh : ¬ Handles K ℓ)
+             → _⊢_⇒[_]_ {sub = sub} g e r (plugK K (opE m op (val v))) → WFG g → WFE e → (ρ : Env ∅)
+             → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ]
+             ≡ (r , node (promote K nh m) op (Vsem v ρ) (λ a → Esem (plugK (weaken1K K) (val (vvar Z))) (ρ ,, a)))
+theorem-B10b {sub = sub} {g = g} m op v K nh (done _) wfg wfe ρ =
+  cong (λ w → runSelWith w ⌊ g ⌋[ sub , ρ ]) (lemma-B8 op v K m nh ρ)
+theorem-B10b m op v K nh (step stp d') wfg wfe ρ =
+  trans (theorem-B9 stp wfe ρ) (cong (addR _) (theorem-B10b m op v K nh d' wfg (WFE-preserved stp wfg wfe) ρ))
