@@ -1858,3 +1858,27 @@ theorem-B11b {sub = sub} {g = g} {e = e} wfg wfe ρ hyp | (r' , _ , stp' , termi
 theorem-B11b {sub = sub} {g = g} {e = e} wfg wfe ρ hyp | (r' , _ , stp' , terminalOp m op₀ v K nh)
   with trans (sym (theorem-B10b m op₀ v K nh stp' wfg wfe ρ)) hyp
 ... | refl = _ , m , v , K , nh , stp' , refl , refl , (λ b → refl)
+
+-- ---------------------------------------------------------------------
+-- Corollary B.12 (first-order adequacy): fixing v (rather than
+-- existentially quantifying it, as theorem-B11a does) and taking
+-- a := Vsem v ρ, e's denotational meaning is (r, leaf a) exactly when e
+-- big-steps to THIS v with loss r.
+--
+-- (⇒) weakened to existential form (a fresh a, concluding SOME v' with
+-- e ⇒[r] (val v') and Vsem v' ρ ≡ a) -- this is exactly theorem-B11a
+-- restated, and is genuinely as far as this direction can go: pinning
+-- the SAME v used by (⇐) would need Vsem injective on closed values,
+-- which is FALSE in general (two syntactically different closed
+-- function values can denote the same semantic function -- e.g.
+-- vabs(val(vvar Z)) and vabs(fst(pair(val(vvar Z))(val(vvar Z)))), both
+-- λx.x denotationally). (⇐) is theorem-B10a directly, for the ORIGINAL
+-- fixed v.
+-- ---------------------------------------------------------------------
+
+corollary-B12 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {v : Val ∅ σ}
+               → WFG g → WFE e → (ρ : Env ∅)
+               → (∀ {r a} → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ] ≡ (r , leaf a)
+                    → Σ (Val ∅ σ) (λ v' → _⊢_⇒[_]_ {sub = sub} g e r (val v') × Vsem v' ρ ≡ a))
+               × (∀ {r} → _⊢_⇒[_]_ {sub = sub} g e r (val v) → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ] ≡ (r , leaf (Vsem v ρ)))
+corollary-B12 wfg wfe ρ = theorem-B11a wfg wfe ρ , (λ stp → theorem-B10a stp wfg wfe ρ)
