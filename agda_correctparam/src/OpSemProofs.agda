@@ -3204,3 +3204,31 @@ corollary-3-3 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : �
               → r1 ≡ r2 × v1 ≡ v2
 corollary-3-3 d1 d2 with big-step-unique d1 (terminalVal _) d2 (terminalVal _)
 ... | (rEq , wEq) = rEq , val-inj wEq
+
+-- ---------------------------------------------------------------------
+-- Theorem A.4.4 (termination): every closed expression's big-step
+-- evaluation eventually reaches a Terminal configuration -- either a
+-- value (terminalVal) or a stuck, unhandled operation call
+-- (terminalOp). Matches "the original's own argument from termination
+-- (Appendix A)" that paper.tex's own Adequacy theorem (proved as
+-- Proofs.agda's theorem-B11a) is explicitly built on, combined there
+-- with theorem-B9/B10a/B10b to rule out the mismatching ŜStep shape and
+-- identify r/a in the matching one.
+--
+-- Γ is fixed to ∅, matching theorem-A4-3 (progress) rather than
+-- theorem-A4-1/A4-2 (fully Γ-generic): the open-Γ counterexample to
+-- progress (fun f (val (vvar y)), stuck but ¬ Terminal for
+-- Γ = ∅ , gnd γ) is equally a counterexample to termination -- a
+-- non-terminal stuck expression can obviously never REACH a terminal
+-- one. Expected to follow from theorem-A4-3 (progress) by well-founded
+-- induction -- NOT on e's own syntax (a single step can grow e, e.g.
+-- (S2)'s own administrative thenE/lossE wrapping), but on some measure
+-- theorem-A4-3's own step provides descent along (this is genuinely the
+-- crux of "termination", not just bookkeeping -- the language has no
+-- general recursion/fixpoint construct, but that alone doesn't hand you
+-- a ready-made measure). Formulated only, not proved here.
+-- ---------------------------------------------------------------------
+
+postulate
+  theorem-A4-4 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} (e : ∅ ⊢ σ ! ε)
+                → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))

@@ -21,6 +21,7 @@ open Sig Sg
 open import Syntax Sg
 open import Subst Sg
 open import OpSem Sg
+open import OpSemProofs Sg using (theorem-A4-4)
 open import Denotational Sg
 
 open import Data.List using (_∷_; [])
@@ -1776,3 +1777,41 @@ theorem-B10b {sub = sub} {g = g} m op v K nh (done _) wfg wfe ρ =
   cong (λ w → runSelWith w ⌊ g ⌋[ sub , ρ ]) (lemma-B8 op v K m nh ρ)
 theorem-B10b m op v K nh (step stp d') wfg wfe ρ =
   trans (theorem-B9 stp wfe ρ) (cong (addR _) (theorem-B10b m op v K nh d' wfg (WFE-preserved stp wfg wfe) ρ))
+
+-- ---------------------------------------------------------------------
+-- Theorem B.11a: the converse of theorem-B10a. If e's denotational
+-- meaning, run against g's own denotation, is a leaf -- (r, leaf a),
+-- NOT a node -- then e big-steps (under g) to SOME value v with EXACTLY
+-- that loss r, whose own denotation IS a.
+--
+-- Unlike theorem-B10a/B10b (whose own proof is a direct induction on an
+-- ALREADY-GIVEN big-step derivation), this direction has to PRODUCE
+-- one: theorem-A4-4 (termination, closed terms) gives SOME big-step
+-- derivation reaching SOME Terminal w -- either a value (terminalVal)
+-- or a stuck op-call (terminalOp). theorem-B10a/B10b then compute w's
+-- own denotation exactly (leaf vs. node respectively); comparing that
+-- against the leaf hypothesis rules the terminalOp case out entirely
+-- (a leaf can never equal a node -- disjoint ŜStep shapes) and, in the
+-- terminalVal case, identifies r and a directly.
+-- ---------------------------------------------------------------------
+
+leaf-inj : ∀ {ε X} {x y : X} → leaf {ε} x ≡ leaf y → x ≡ y
+leaf-inj refl = refl
+
+leaf≠node : ∀ {ε X} {x : X} {ℓ} {m : ℓ ∈ ε} {o : Op ℓ} {v : ⟦ out o ⟧ᴳ} {κ : ⟦ in′ o ⟧ᴳ → Ŝ ε X}
+          → leaf x ≡ node m o v κ → ⊥
+leaf≠node ()
+
+theorem-B11a : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r : R} {a : ⟦ σ ⟧}
+              → WFG g → WFE e → (ρ : Env ∅)
+              → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ] ≡ (r , leaf a)
+              → Σ (Val ∅ σ) (λ v → _⊢_⇒[_]_ {sub = sub} g e r (val v) × Vsem v ρ ≡ a)
+theorem-B11a {sub = sub} {g = g} wfg wfe ρ hyp with theorem-A4-4 {sub = sub} {g = g} _
+theorem-B11a {sub = sub} {g = g} wfg wfe ρ hyp | (r' , _ , stp' , terminalVal v') =
+  v' , subst (λ x → _⊢_⇒[_]_ {sub = sub} g _ x (val v')) rEq stp' , leaf-inj leafEq
+  where
+  pEq    = trans (sym (theorem-B10a stp' wfg wfe ρ)) hyp
+  rEq    = cong proj₁ pEq
+  leafEq = cong proj₂ pEq
+theorem-B11a {sub = sub} {g = g} wfg wfe ρ hyp | (r' , _ , stp' , terminalOp m op v K nh) =
+  ⊥-elim (leaf≠node (cong proj₂ (trans (sym hyp) (theorem-B10b m op v K nh stp' wfg wfe ρ))))
