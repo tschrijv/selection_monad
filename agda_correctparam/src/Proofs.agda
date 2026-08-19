@@ -1815,3 +1815,46 @@ theorem-B11a {sub = sub} {g = g} wfg wfe ρ hyp | (r' , _ , stp' , terminalVal v
   leafEq = cong proj₂ pEq
 theorem-B11a {sub = sub} {g = g} wfg wfe ρ hyp | (r' , _ , stp' , terminalOp m op v K nh) =
   ⊥-elim (leaf≠node (cong proj₂ (trans (sym hyp) (theorem-B10b m op v K nh stp' wfg wfe ρ))))
+
+-- ---------------------------------------------------------------------
+-- Theorem B.11b: theorem-B11a's own counterpart for the OTHER Terminal
+-- shape -- if e's denotation is a node (r, node m' op a κ), NOT a leaf,
+-- then e big-steps (under g) to SOME stuck, unhandled operation call
+-- plugK K (opE m op (val v)) with EXACTLY that loss r, where m' is K's
+-- own promoted membership witness, a is v's own denotation, and κ is
+-- (extensionally) the denotation of K's own delimited continuation.
+--
+-- Existentially quantifies over εop/m/v/K/nh (K's own hole effect
+-- context and everything terminalOp packages, Terminal's own
+-- constructor being indexed by exactly these) -- unlike theorem-B11a,
+-- there is no single fixed "shape" (val v) to quote in the conclusion's
+-- own type the way theorem-B10a's v/theorem-B11a's v could. Combines
+-- theorem-A4-4/theorem-B10a/theorem-B10b exactly as theorem-B11a does
+-- (progress rules out the leaf case here, the leaf and node cases being
+-- symmetric mirror images of each other): the two proof obligations
+-- pEq (the r-and-node equality) get discharged by ONE `refl` match --
+-- since node's own arguments (m/op/v/κ, all still-open metas at that
+-- point in theorem-B11b's own implicit telescope) get unified
+-- simultaneously with theorem-B10b's own output, rather than needing
+-- individual per-argument injectivity lemmas the way leaf's single
+-- argument did. κ's own equality is stated pointwise (∀ b → ...) rather
+-- than via funext, to avoid baking that axiom into the statement
+-- itself -- discharged here by `λ b → refl`, the SAME unification.
+-- ---------------------------------------------------------------------
+
+theorem-B11b : ∀ {σ ε εg ℓ} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {r : R}
+               {m' : ℓ ∈ ε} {op : Op ℓ} {a : ⟦ out op ⟧ᴳ} {κ : ⟦ in′ op ⟧ᴳ → Ŝ ε ⟦ σ ⟧}
+              → WFG g → WFE e → (ρ : Env ∅)
+              → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ] ≡ (r , node m' op a κ)
+              → Σ EffCxt (λ εop → Σ (ℓ ∈ εop) (λ m → Σ (Val ∅ (gnd (out op))) (λ v →
+                  Σ (ContCxt ∅ (gnd (in′ op)) εop σ ε) (λ K → Σ (¬ Handles K ℓ) (λ nh →
+                    _⊢_⇒[_]_ {sub = sub} g e r (plugK K (opE m op (val v)))
+                  × promote K nh m ≡ m'
+                  × Vsem v ρ ≡ a
+                  × (∀ b → Esem (plugK (weaken1K K) (val (vvar Z))) (ρ ,, b) ≡ κ b))))))
+theorem-B11b {sub = sub} {g = g} {e = e} wfg wfe ρ hyp with theorem-A4-4 {sub = sub} {g = g} e
+theorem-B11b {sub = sub} {g = g} {e = e} wfg wfe ρ hyp | (r' , _ , stp' , terminalVal v') =
+  ⊥-elim (leaf≠node (cong proj₂ (trans (sym (theorem-B10a stp' wfg wfe ρ)) hyp)))
+theorem-B11b {sub = sub} {g = g} {e = e} wfg wfe ρ hyp | (r' , _ , stp' , terminalOp m op₀ v K nh)
+  with trans (sym (theorem-B10b m op₀ v K nh stp' wfg wfe ρ)) hyp
+... | refl = _ , m , v , K , nh , stp' , refl , refl , (λ b → refl)
