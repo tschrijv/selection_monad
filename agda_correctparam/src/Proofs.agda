@@ -21,7 +21,7 @@ open Sig Sg
 open import Syntax Sg
 open import Subst Sg
 open import OpSem Sg
-open import OpSemProofs Sg using (theorem-A4-4)
+open import OpSemProofs Sg using (theorem-A4-4; val-closed-gnd)
 open import Denotational Sg
 
 open import Data.List using (_∷_; [])
@@ -656,6 +656,67 @@ plugK-fst-snd-coh (S∘ k₀ (S-handleB h w)) ρ p' a =
                 (trans (cong (λ p2 → handlerSem (renH S h) (ρ ,, a) p2 (Esem eW (ρ ,, a))) (weaken1V-coh _ w ρ a))
                        (weaken1H-coh _ h ρ a (Vsem w ρ) (Esem eW (ρ ,, a))))
 
+-- ---------------------------------------------------------------------
+-- plugK-hole-subst-coh: theorem-B13's own need -- filling a WEAKENED k's
+-- hole with a fresh variable, then evaluating at an env extended by
+-- w's own denotation, agrees with filling k's ORIGINAL hole with w
+-- directly and evaluating at the original env. ("Weaken then bind the
+-- fresh var to Vsem w ρ" = "substitute w in directly.") Bridges
+-- theorem-B10b's own κ = λ b → Esem(plugK(weaken1K K)(val(vvar
+-- Z)))(ρ,,b) back to the recursive Eval derivation's own subject
+-- plugK K (val w).
+--
+-- Proven by induction on k, mirroring plugK-fst-snd-coh's own (F∘)/(S∘)
+-- structure exactly (that lemma relates TWO weakenings of the same k
+-- via a projection; this one relates ONE weakening, evaluated at an
+-- extended env, to no weakening at all, evaluated with the hole
+-- substituted -- same underlying machinery, lemma-B6 + weaken1F-skip
+-- for (F∘), renLsem-coh/weaken1V-coh/weaken1H-coh per SFrame shape for
+-- (S∘)).
+-- ---------------------------------------------------------------------
+
+plugK-hole-subst-coh : ∀ {Γ σ εH τ εO} (k : ContCxt Γ σ εH τ εO) (ρ : Env Γ) (w : Val Γ σ)
+  → Esem (plugK (weaken1K k) (val (vvar Z))) (ρ ,, Vsem w ρ) ≡ Esem (plugK k (val w)) ρ
+plugK-hole-subst-coh ▫ ρ w = refl
+plugK-hole-subst-coh {εO = εO} (F∘ {β = β} k₀ f) ρ w = helper (Frame-effect-eq f)
+  where
+  helper : β ≡ εO
+         → Esem (plugK (weaken1K (F∘ k₀ f)) (val (vvar Z))) (ρ ,, Vsem w ρ)
+         ≡ Esem (plugK (F∘ k₀ f) (val w)) ρ
+  helper refl =
+    trans (lemma-B6 (weaken1F f) (plugK (weaken1K k₀) (val (vvar Z))) (ρ ,, Vsem w ρ))
+          (trans (cong₂ bindŜ (plugK-hole-subst-coh k₀ ρ w) (funext contEq))
+                 (sym (lemma-B6 f (plugK k₀ (val w)) ρ)))
+    where
+    contEq : ∀ a → Esem (plugF (weaken1F (weaken1F f)) (val (vvar Z))) ((ρ ,, Vsem w ρ) ,, a)
+               ≡ Esem (plugF (weaken1F f) (val (vvar Z))) (ρ ,, a)
+    contEq a = weaken1F-skip f _ ρ (Vsem w ρ) a
+plugK-hole-subst-coh (S∘ k₀ S-reset) ρ w =
+  cong resetS (plugK-hole-subst-coh k₀ ρ w)
+plugK-hole-subst-coh (S∘ k₀ (S-then sub g)) ρ w =
+  cong upS (cong₂ thenS (funext contEq) (plugK-hole-subst-coh k₀ ρ w))
+  where
+  contEq : ∀ b → widenF̂ sub (Lsem (weaken1V g) (ρ ,, Vsem w ρ) b) ≡ widenF̂ sub (Lsem g ρ b)
+  contEq b = cong (widenF̂ sub) (renLsem-coh S ρ (ρ ,, Vsem w ρ) (λ x → refl) g b)
+plugK-hole-subst-coh (S∘ k₀ (S-glocal sub1 sub2 g)) ρ w =
+  cong₂ (glocalS sub2) (funext contEq) (plugK-hole-subst-coh k₀ ρ w)
+  where
+  contEq : ∀ b → widenF̂ sub1 (Lsem (weaken1V g) (ρ ,, Vsem w ρ) b) ≡ widenF̂ sub1 (Lsem g ρ b)
+  contEq b = cong (widenF̂ sub1) (renLsem-coh S ρ (ρ ,, Vsem w ρ) (λ x → refl) g b)
+plugK-hole-subst-coh (S∘ k₀ (S-handleB h v)) ρ w =
+  trans stepP (trans (cong (handlerSem h ρ (Vsem v ρ)) (plugK-hole-subst-coh k₀ ρ w)) (sym stepW))
+  where
+  eP = plugK (weaken1K k₀) (val (vvar Z))
+  eW = plugK k₀ (val w)
+  stepP : Esem (handleE (renH S h) (val (renV S v)) eP) (ρ ,, Vsem w ρ)
+        ≡ handlerSem h ρ (Vsem v ρ) (Esem eP (ρ ,, Vsem w ρ))
+  stepP = trans (bindŜ-unitˡ (λ p2 → handlerSem (renH S h) (ρ ,, Vsem w ρ) p2 (Esem eP (ρ ,, Vsem w ρ))) (Vsem (renV S v) (ρ ,, Vsem w ρ)))
+                (trans (cong (λ p2 → handlerSem (renH S h) (ρ ,, Vsem w ρ) p2 (Esem eP (ρ ,, Vsem w ρ))) (weaken1V-coh _ v ρ (Vsem w ρ)))
+                       (weaken1H-coh _ h ρ (Vsem w ρ) (Vsem v ρ) (Esem eP (ρ ,, Vsem w ρ))))
+  stepW : Esem (handleE h (val v) eW) ρ
+        ≡ handlerSem h ρ (Vsem v ρ) (Esem eW ρ)
+  stepW = bindŜ-unitˡ (λ p2 → handlerSem h ρ p2 (Esem eW ρ)) (Vsem v ρ)
+
 -- Forward-declared so lemma-B8-F∘-eq (mutually recursive with it, on the
 -- structurally smaller k) can call it before its own body (below) is given.
 lemma-B8 : ∀ {Γ ℓ εH τ εO} (op : Op ℓ) (v : Val Γ (gnd (out op)))
@@ -1194,6 +1255,14 @@ WFE-plugS (S-then sub g)       (wf-then wfe _)       = wfe
 WFE-plugS (S-glocal sub1 sub2 g) (wf-glocal wfe _)   = wfe
 WFE-plugS S-reset               (wf-reset wfe)       = wfe
 
+-- WFE-plugS-fill: WFE-plugF-fill's own analogue for SFrame, no renaming
+-- (unlike WFE-sframe-fill).
+WFE-plugS-fill : ∀ {Γ α ε τ ε'} (s : SFrame Γ α ε τ ε') {e e' : Γ ⊢ α ! ε} → WFE (plugS s e) → WFE e' → WFE (plugS s e')
+WFE-plugS-fill (S-handleB h v)        (wf-handle wfh wfv _) wfe' = wf-handle wfh wfv wfe'
+WFE-plugS-fill (S-then sub g)         (wf-then _ wfg)       wfe' = wf-then wfe' wfg
+WFE-plugS-fill (S-glocal sub1 sub2 g) (wf-glocal _ wfg)     wfe' = wf-glocal wfe' wfg
+WFE-plugS-fill S-reset                (wf-reset _)          wfe' = wf-reset wfe'
+
 -- WFE-plugK: WFE-plugF/WFE-plugS's own analogue for a whole ContCxt,
 -- recursing outside-in exactly as plugK itself is built.
 WFE-plugK : ∀ {Γ σ ε τ ε'} (k : ContCxt Γ σ ε τ ε') {e : Γ ⊢ σ ! ε} → WFE (plugK k e) → WFE e
@@ -1219,6 +1288,16 @@ WFE-plugF-fill (F-appR v)      (wf-app wfv _)         wfe' = wf-app wfv wfe'
 WFE-plugF-fill (F-op m op)     (wf-op _)              wfe' = wf-op wfe'
 WFE-plugF-fill F-loss          (wf-loss _)            wfe' = wf-loss wfe'
 WFE-plugF-fill (F-handleP h b) (wf-handle wfh _ wfb)  wfe' = wf-handle wfh wfe' wfb
+
+-- WFE-plugK-fill: WFE-plugF-fill/WFE-plugS-fill's own analogue for a
+-- whole ContCxt, no renaming (unlike WFE-plugK-ren-fill, needed by R5's
+-- own weakened k' -- theorem-B13's own recursive obligation stays at
+-- the SAME Γ throughout).
+WFE-plugK-fill : ∀ {Γ σ ε τ ε'} (k : ContCxt Γ σ ε τ ε') {e e' : Γ ⊢ σ ! ε} → WFE (plugK k e) → WFE e' → WFE (plugK k e')
+WFE-plugK-fill ▫        wfpe wfe' = wfe'
+WFE-plugK-fill (F∘ {β = β} k f) wfpe wfe' with Frame-effect-eq f
+... | refl = WFE-plugF-fill f wfpe (WFE-plugK-fill k (WFE-plugF f wfpe) wfe')
+WFE-plugK-fill (S∘ k s) wfpe wfe' = WFE-plugS-fill s wfpe (WFE-plugK-fill k (WFE-plugS s wfpe) wfe')
 
 -- WFE-frame-fill: F-rule's own need -- fill a WEAKENED frame (its own
 -- embedded data renamed via S) with an ARBITRARY WFE hole e' at the
@@ -1722,6 +1801,15 @@ WFE-preserved (R5 sub h v1 m op v2 k nh) wfg (wf-handle (wf-handler wfc wfr) (wf
   wffl      = wf-vabs (wf-then wfhandled wfg')
   wfsub     = WFsub-cons wffk (WFsub-cons wffl (WFsub-cons wfv2 (WFsub-cons wfv1 WFsub-idSub)))
 
+-- WFE-preserved-⇒: WFE-preserved's own chaining across a WHOLE big-step
+-- derivation (_⊢_⇒[_]_), not just one small step -- theorem-B13's own
+-- need, to get WFE of a big-step-reached stuck configuration from WFE
+-- of the expression it started from.
+WFE-preserved-⇒ : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e e' : ∅ ⊢ σ ! ε} {r : R}
+                 → _⊢_⇒[_]_ {sub = sub} g e r e' → WFG g → WFE e → WFE e'
+WFE-preserved-⇒ (done _)      wfg wfe = wfe
+WFE-preserved-⇒ (step stp d') wfg wfe = WFE-preserved-⇒ d' wfg (WFE-preserved stp wfg wfe)
+
 -- ---------------------------------------------------------------------
 -- Theorem B.10a: adequacy of Esem against the big-step judgment. If e
 -- big-steps to a value v with total loss r under loss-continuation g,
@@ -1882,3 +1970,164 @@ corollary-B12 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : �
                     → Σ (Val ∅ σ) (λ v' → _⊢_⇒[_]_ {sub = sub} g e r (val v') × Vsem v' ρ ≡ a))
                × (∀ {r} → _⊢_⇒[_]_ {sub = sub} g e r (val v) → runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ] ≡ (r , leaf (Vsem v ρ)))
 corollary-B12 wfg wfe ρ = theorem-B11a wfg wfe ρ , (λ stp → theorem-B10a stp wfg wfe ρ)
+
+-- ---------------------------------------------------------------------
+-- Definitions between Corollary B.12 and Theorem B.13 (giant-step
+-- adequacy), source paper's Appendix B: the set EV of "effect values"
+-- (a purely SYNTACTIC analogue of runSelWith's own R × ŜStep output --
+-- same "value, or pending op with a continuation per possible reply"
+-- shape, but branching over closed SOURCE values rather than semantic
+-- elements), the partial (here: postulated total) function Eval from
+-- expressions into EV, and the ≤ relation comparing an EV against an
+-- actual denotational R × ŜStep result.
+--
+-- V_τ (paper's own notation for "the syntactic values of type τ") is
+-- just Val ∅ τ in this codebase's own vocabulary -- no separate
+-- definition needed.
+--
+-- EV σ ε = (Σ_{ℓ∈ε, op:ℓ} V_(out op) × R × EV^(V_(in op))) + R × V_σ,
+-- i.e. done (a value, with its own total loss) or opNode (a pending,
+-- syntactic operation call, ITS OWN total loss to reach it, awaiting a
+-- reply of type V_(in op), one EV per possible reply). Unlike the
+-- paper's own literal EV formula (which has no R on the op-summand, the
+-- accumulated loss instead threaded recursively INTO the continuation
+-- via "r · Eval(K[w])" -- see scaleEV below), opNode carries r directly,
+-- mirroring runSelWith's own (r, node ...) pairing: continuing past an
+-- op-call via K[w] is a FRESH re-evaluation (its own r starts over from
+-- that point, exactly as runSelWith(κ(V[[w]]))γ does -- see EV≤'s own
+-- comment below), so storing r at THIS node rather than threading it
+-- through every deeper node is both more direct and matches the
+-- denotational side leaf-for-leaf. Fixed σ/ε (not g -- g only enters
+-- via Eval below), mirroring the paper's own "fix σ and ε" framing.
+-- ---------------------------------------------------------------------
+
+data EV (σ : Ty) (ε : EffCxt) : Set where
+  done   : R → Val ∅ σ → EV σ ε
+  opNode : ∀ {ℓ} → ℓ ∈ ε → (op : Op ℓ) → Val ∅ (gnd (out op)) → R → (Val ∅ (gnd (in′ op)) → EV σ ε) → EV σ ε
+
+-- scaleEV: the paper's own "r · (-)" operation on EV -- prepend r to
+-- the reported loss AT THE ROOT only (done's own r, or opNode's own r):
+-- since r is no longer threaded recursively into deeper nodes (each
+-- one's own r is already an absolute total from the tree's own root,
+-- not a further increment), scaling the root is all "r · (-)" needs to
+-- mean now.
+scaleEV : ∀ {σ ε} → R → EV σ ε → EV σ ε
+scaleEV r (done r' v)          = done (r + r') v
+scaleEV r (opNode m op v r' f) = opNode m op v (r + r') f
+
+-- Eval: fix an ambient g (and its own εg ⊆ᵉ ε witness, matching every
+-- other big-step-relative definition in this file); Eval g e ev
+-- witnesses that e's own "unwound" operational behaviour under g IS the
+-- syntactic EV tree ev. A RELATION (data type), not a function computing
+-- EV from e -- the paper's own Eval is a genuine (total) function, but
+-- stating it that way here would need well-founded recursion on a
+-- measure this development doesn't yet have (see the discussion this
+-- replaced, in git history): K[w], for a fresh reply value w, is not a
+-- syntactic subterm of e (e ⇒ K[op(v)] may have GROWN e along the way,
+-- e.g. via (S2)'s own administrative wrapping), so Agda's termination
+-- checker can't accept a direct recursive definition, and theorem-A4-4
+-- (termination) is itself only a postulate, exposing no structured
+-- witness to recurse on instead.
+--
+-- As a RELATION, this problem doesn't arise: Eval-op's own (∀ w → Eval g
+-- (plugK K (val w)) (f w)) field is just an ordinary strictly-positive
+-- occurrence (exactly how _⊢_⇒[_]_'s own `step` already recurses
+-- unboundedly with no termination concern, being data rather than a
+-- function). Totality (every e relates to SOME ev) is a separate claim
+-- from this data type itself -- matching the paper's own "Eval is
+-- total" being a REMARK about the function it defines, not part of the
+-- definition -- and isn't asserted here.
+data Eval {σ ε εg} {sub : εg ⊆ᵉ ε} (g : LC ∅ σ εg) : ∅ ⊢ σ ! ε → EV σ ε → Set where
+  Eval-val : ∀ {e r v} → _⊢_⇒[_]_ {sub = sub} g e r (val v) → Eval g e (done r v)
+
+  Eval-op : ∀ {e r ℓ εop} (m : ℓ ∈ εop) (op : Op ℓ) (v : Val ∅ (gnd (out op))) (K : ContCxt ∅ (gnd (in′ op)) εop σ ε) (nh : ¬ Handles K ℓ)
+            {f : Val ∅ (gnd (in′ op)) → EV σ ε}
+          → _⊢_⇒[_]_ {sub = sub} g e r (plugK K (opE m op (val v)))
+          → (∀ w → Eval {sub = sub} g (plugK K (val w)) (f w))
+          → Eval g e (opNode (promote K nh m) op v r f)
+
+-- ---------------------------------------------------------------------
+-- EV≤: relates an EV (Eval's own syntactic answer) to an ACTUAL
+-- denotational R × ŜStep result at the SAME σ/ε, given the fixed
+-- ambient g/ρ (paper's own ≤, between EV and Ŵ_ε(S[[σ]])).
+--
+--  * done r v ≤ (r, leaf a)   needs v's own denotation to be a.
+--  * opNode m op v r f ≤ (s, node m' op a κ)   needs r ≡ s (opNode's own
+--    stored total loss agreeing with the outer one), v's own denotation
+--    to be a, and every possible reply w's own continuation f(w) to
+--    ≤-match κ(V[[w]]) RUN against the same ambient g -- κ is only a
+--    Ŝ ε ⟦σ⟧ (an un-run computation, ŜStep's own node continuation
+--    field), so it needs runSelWith against ⌊g⌋[sub,ρ] to become
+--    comparable to f(w) (an EV) via THIS SAME relation, recursively;
+--    that recursive comparison's own r-component starts fresh (from
+--    whatever f(w)'s own opNode/done stores), matching how continuing
+--    past an op-call denotationally reports loss from THAT point, not
+--    cumulatively with r again.
+--
+-- op/op' are NOT separately quantified and equated -- opNode's own op
+-- and node's own op are simply required to be the SAME op directly (a
+-- clean stand-in for the paper's own "op = op'" conjunct). The paper's
+-- own "n' = ε(ℓ)" conjunct (equating m against a SPECIFIC canonical
+-- membership witness) is omitted: εg⊆ᵉε's own membership witnesses
+-- aren't propositions in this development (see corollary-3-3's own
+-- history, OpSemProofs.agda) so "the" canonical witness isn't a
+-- meaningful notion here -- m (opNode's own) and m' (node's own) are
+-- left as independent, unconstrained witnesses.
+-- ---------------------------------------------------------------------
+
+data EV≤ {σ ε εg} {sub : εg ⊆ᵉ ε} (g : LC ∅ σ εg) (ρ : Env ∅) : EV σ ε → R × ŜStep ε ⟦ σ ⟧ → Set where
+  EV≤-done : ∀ {r v a} → Vsem v ρ ≡ a → EV≤ g ρ (done r v) (r , leaf a)
+  EV≤-op   : ∀ {ℓ} {m : ℓ ∈ ε} {op : Op ℓ} {v : Val ∅ (gnd (out op))} {r : R} {f : Val ∅ (gnd (in′ op)) → EV σ ε}
+               {s : R} {m' : ℓ ∈ ε} {a : ⟦ out op ⟧ᴳ} {κ : ⟦ in′ op ⟧ᴳ → Ŝ ε ⟦ σ ⟧}
+           → r ≡ s
+           → Vsem v ρ ≡ a
+           → (∀ w → EV≤ {sub = sub} g ρ (f w) (runSelWith (κ (Vsem w ρ)) ⌊ g ⌋[ sub , ρ ]))
+           → EV≤ g ρ (opNode m op v r f) (s , node m' op a κ)
+
+-- ---------------------------------------------------------------------
+-- Theorem B.13 (the last result in this appendix, and the payoff of the
+-- EV/Eval/EV≤ machinery just built): for every closed e : σ ! ε, Eval e
+-- (e's own syntactic, "unwound" operational answer under the fixed
+-- ambient g) EV≤-matches e's actual denotational answer, run against
+-- g's own denotation. I.e. Eval e ≤ S⟦e⟧L⟦g⟧ in the source paper's own
+-- notation -- the two accounts of e's behaviour (operational and
+-- denotational) agree, all the way down. Takes an Eval DERIVATION as an
+-- explicit hypothesis (Eval now being a relation, not a function -- see
+-- its own comment above) and is proved by structural induction on it,
+-- exactly mirroring theorem-B9/theorem-B10a's own style of inducting on
+-- an explicit step/big-step derivation. The paper's own proof strategy
+-- (well-founded-tree induction on Eval(e)) becomes ordinary structural
+-- induction on THIS derivation, which Agda's termination checker
+-- accepts directly: the recursive obligation in the Eval-op case
+-- recurses on evf w, a genuine subterm (Eval-op's own ∀ w → ... field
+-- applied to a specific w), not on e's own syntax. Carries WFG(g)/
+-- WFE(e), for the same reason theorem-B10a/B10b need them (used
+-- internally, in both cases).
+--
+-- Structural induction on the Eval-op case's own recursive obligation
+-- is bridged by plugK-hole-subst-coh (above): it relates theorem-B10b's
+-- own κ = λ b → Esem(plugK(weaken1K K)(val(vvar Z)))(ρ,,b) back to the
+-- recursive Eval-derivation's own subject plugK K (val w). w's own
+-- well-formedness (needed to feed WFE-preserved/WFE-plugK-fill, to get
+-- WFE(plugK K (val w)) for the recursive call) is automatic: w is
+-- closed and ground (Val ∅ (gnd (in′ op))), so val-closed-gnd forces it
+-- to be vgnd-shaped, always WFV.
+-- ---------------------------------------------------------------------
+
+theorem-B13 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε} {ev : EV σ ε}
+             → Eval {sub = sub} g e ev → WFG g → WFE e → (ρ : Env ∅)
+             → EV≤ {sub = sub} g ρ ev (runSelWith (Esem e ρ) ⌊ g ⌋[ sub , ρ ])
+theorem-B13 {sub = sub} (Eval-val stp) wfg wfe ρ
+  rewrite theorem-B10a stp wfg wfe ρ = EV≤-done refl
+theorem-B13 {sub = sub} {g = g} (Eval-op m op v K nh {f = f} stp evf) wfg wfe ρ
+  rewrite theorem-B10b m op v K nh stp wfg wfe ρ
+  = EV≤-op refl refl (λ w → subst (EV≤ g ρ (f w)) (coh w) (theorem-B13 (evf w) wfg (wfe' w) ρ))
+  where
+  wfstuck : WFE (plugK K (opE m op (val v)))
+  wfstuck = WFE-preserved-⇒ stp wfg wfe
+  wfe' : ∀ w → WFE (plugK K (val w))
+  wfe' w with val-closed-gnd w
+  ... | (x , refl) = WFE-plugK-fill K wfstuck (wf-val (wf-vgnd x))
+  coh : ∀ w → runSelWith (Esem (plugK K (val w)) ρ) ⌊ g ⌋[ sub , ρ ]
+            ≡ runSelWith (Esem (plugK (weaken1K K) (val (vvar Z))) (ρ ,, Vsem w ρ)) ⌊ g ⌋[ sub , ρ ]
+  coh w = sym (cong (λ x → runSelWith x ⌊ g ⌋[ sub , ρ ]) (plugK-hole-subst-coh K ρ w))
