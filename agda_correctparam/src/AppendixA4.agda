@@ -1159,3 +1159,54 @@ weaken1K-sub1-plugK v (F∘ k f) e with Frame-amb-eq f
 ... | refl = trans (subE-plugF-weaken1F-gen f v (plugK (weaken1K k) e)) (cong (plugF f) (weaken1K-sub1-plugK v k e))
 weaken1K-sub1-plugK v (S∘ k s) e = trans (subE-plugS-weaken1S-gen s v (plugK (weaken1K k) e)) (cong (plugS s) (weaken1K-sub1-plugK v k e))
 
+-- ---------------------------------------------------------------------
+-- Context congruence: an ambient-INDEPENDENT step of e (one that holds
+-- under every sub/g, matching how R1-R4/R6/R2-fst/R2-snd/Rplus are all
+-- stated -- unlike F-rule/S1, whose own premise is pinned to a single,
+-- boosted ambient) lifts through an ENTIRE evaluation context K, not
+-- just a single frame. Lemma A.9 already handles a single regular
+-- frame's own boosted-continuation congruence (via GboostedFamily,
+-- since its OWN target is Gsingle-restricted and its hole's
+-- computability proof is genuinely arbitrary/opaque); this needs no
+-- such machinery, since the hypothesis here is already a concrete,
+-- ambient-independent STEP WITNESS (not an arbitrary computability
+-- proof to induct on) -- so each layer just gets applied directly,
+-- instantiating the recursive call at exactly the ambient that layer's
+-- own congruence rule demands.
+--
+-- S2/S4 (S-then/S-reset) do NOT preserve r or the plugged-in shape the
+-- way F-rule/S1/S3 do: S2 forces its OWN step index to 0#, hoisting
+-- whatever r it was given out into a fresh plusE wrapper (and S4
+-- likewise always forces 0#, discarding r entirely) -- so the
+-- resulting index and target expression have to be COMPUTED from K
+-- itself (K-outer-r/K-target below), not assumed to stay r/plugK K e'
+-- unchanged throughout, the way a naive single-shape statement would.
+K-outer-r : ∀ {α εα τ ε} → ContCxt ∅ α εα τ ε → R → R
+K-outer-r ▫ r                       = r
+K-outer-r (F∘ k f) r                = K-outer-r k r
+K-outer-r (S∘ k (S-handleB h v)) r  = K-outer-r k r
+K-outer-r (S∘ k (S-then sub g)) r   = 0#
+K-outer-r (S∘ k (S-glocal s1 s2 g)) r = K-outer-r k r
+K-outer-r (S∘ k S-reset) r          = 0#
+
+K-target : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) (r : R) → ∅ ⊢ α ! εα → ∅ ⊢ τ ! ε
+K-target ▫ r e'                       = e'
+K-target (F∘ k f) r e'                = plugF f (K-target k r e')
+K-target (S∘ k (S-handleB h v)) r e'  = handleE h (val v) (K-target k r e')
+K-target (S∘ k (S-then sub g)) r e'   = plusE (val (vgnd (K-outer-r k r))) (thenE sub (K-target k r e') g)
+K-target (S∘ k (S-glocal s1 s2 g)) r e' = glocalE s1 s2 (K-target k r e') g
+K-target (S∘ k S-reset) r e'          = resetE (K-target k r e')
+
+plugK-cong : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) {e e' : ∅ ⊢ α ! εα} (r : R)
+           → (∀ {εg} {sub : εg ⊆ᵉ εα} {g : LC ∅ α εg} → _⊢_-[_]→_ {sub = sub} g e r e')
+           → ∀ {εg2} {sub2 : εg2 ⊆ᵉ ε} {g2 : LC ∅ τ εg2} → _⊢_-[_]→_ {sub = sub2} g2 (plugK K e) (K-outer-r K r) (K-target K r e')
+plugK-cong ▫ r hyp = hyp
+plugK-cong (F∘ k f) r hyp {sub2 = sub2} {g2 = g2} with Frame-amb-eq f
+... | refl =
+  F-rule sub2 f (plugK-cong k r hyp {sub2 = ⊆ᵉ-refl} {g2 = vabs (thenE sub2 (plugF (weaken1F f) (val (vvar Z))) (weaken1V g2))})
+plugK-cong (S∘ k (S-handleB h v)) r hyp {sub2 = sub2} {g2 = g2} =
+  S1 sub2 h v (plugK-cong k r hyp {sub2 = ⊆ᵉ-,ℓ} {g2 = vabs (thenE sub2 (retApplied h v) (weaken1V g2))})
+plugK-cong (S∘ k (S-then sub g)) r hyp = S2 sub g (plugK-cong k r hyp {sub2 = sub} {g2 = g})
+plugK-cong (S∘ k (S-glocal s1 s2 g)) r hyp = S3 s1 s2 g (plugK-cong k r hyp {sub2 = s1} {g2 = g})
+plugK-cong (S∘ k S-reset) r hyp = S4 (plugK-cong k r hyp)
+
