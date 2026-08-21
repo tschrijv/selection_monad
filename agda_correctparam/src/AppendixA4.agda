@@ -761,3 +761,100 @@ lemma-A8-3 {σ} {τ} {ε'} {ε} sub {g} {e} lossCompG compE {v} Pv =
               {G = λ _ g0 → LossComputable (ComputableV σ) g0} {G' = Gsingle g}
               (λ { (refl , refl) → lossCompG }) (compE Pv))))
 
+-- weaken1V-sub1-cancel's own companions for Expr/Handler (same
+-- fusion+identity argument, just through subE-renE-fuse/subE-idSub and
+-- subH-renH-fuse/subH-idSub instead of the Val-level versions).
+weaken1-sub1-cancelE : ∀ {Γ σ τ ε} (v : Val Γ τ) (e : Γ ⊢ σ ! ε) → subE (cons v idSub) (renE S e) ≡ e
+weaken1-sub1-cancelE v e = trans (subE-renE-fuse (cons v idSub) S e) (subE-idSub e)
+
+weaken1-sub1-cancelH : ∀ {Γ ℓ par σ σ' ε τ} (v : Val Γ τ) (h : Handler Γ ℓ par σ σ' ε) → subH (cons v idSub) (renH S h) ≡ h
+weaken1-sub1-cancelH v h = trans (subH-renH-fuse (cons v idSub) S h) (subH-idSub h)
+
+-- The other substitution gap Lemma A.9 needs: plugging a FRESH bound
+-- variable into a (weakened) frame's hole, then substituting that
+-- variable back to v, collapses to plugging v into the frame directly
+-- -- i.e. "F[x][v/x] = F[v]", by exhaustive case analysis on F (its
+-- subcomponents, all closed since F : Frame ∅ ..., are individually
+-- restored by weaken1-sub1-cancelE/V/H).
+subE-plugF-weaken1F : ∀ {α τ ε} (F : Frame ∅ α ε τ ε) (v : Val ∅ α)
+                     → subE (cons v idSub) (plugF (weaken1F F) (val (vvar Z))) ≡ plugF F (val v)
+subE-plugF-weaken1F (F-fun f)       v = refl
+subE-plugF-weaken1F (F-pairL e)     v = cong (pair (val v)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F (F-pairR w)     v = cong (λ w' → pair (val w') (val v)) (weaken1V-sub1-cancel v w)
+subE-plugF-weaken1F F-fst           v = refl
+subE-plugF-weaken1F F-snd           v = refl
+subE-plugF-weaken1F (F-appL e)      v = cong (app (val v)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F (F-appR w)      v = cong (λ w' → app (val w') (val v)) (weaken1V-sub1-cancel v w)
+subE-plugF-weaken1F (F-op m op)     v = refl
+subE-plugF-weaken1F F-loss          v = refl
+subE-plugF-weaken1F (F-handleP h b) v = cong₂ (λ h' b' → handleE h' (val v) b') (weaken1-sub1-cancelH v h) (weaken1-sub1-cancelE v b)
+subE-plugF-weaken1F (F-plusL e)     v = cong (plusE (val v)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F (F-plusR w)     v = cong (λ w' → plusE (val w') (val v)) (weaken1V-sub1-cancel v w)
+
+-- Lemma A.9: if F is a regular frame such that F[v]:τ!ε is (fully)
+-- computable for every computable v:α, then F[e] is {g}-computable for
+-- any loss-computable g:τ→loss!ε' (ε'⊆ε) and any (fully) computable
+-- e:α!ε. The workhorse behind pushing regular-frame congruence through
+-- a computability argument -- used throughout Lemma A.10/A.11 wherever
+-- a subexpression sits under an F-fun/F-pairL/.../F-handleP frame.
+--
+-- Unlike Lemma A.6/A.7/A.8's own {g}-inductions (all of which invert
+-- steps via S2/S3/R7/R8/R9/Rplus -- rules whose CONCLUSION ambient is
+-- an implicit, unconstrained metavariable, freely unifying with
+-- whatever the surrounding proof needs), F-rule's conclusion ambient
+-- is tied DIRECTLY to its own explicit `sub` argument, which itself
+-- gets baked into the boosted continuation its premise demands
+-- (`vabs (thenE sub ...)`). So inverting a step of F[e] at an
+-- otherwise-arbitrary ambient (subX, g) forces the boosted
+-- continuation used to also be subX-specific -- there is no single
+-- FIXED continuation g' (as in Lemma A.6/A.7-1's own glocalE-based
+-- proofs) that simultaneously matches every possible subX. The
+-- induction is therefore carried out w.r.t. a FAMILY of continuations
+-- (GboostedFamily below: "g'' is the subX-boosted continuation, for
+-- SOME subX" -- existentially quantified, not tied to the ambient
+-- sub slot GComputable's own gc-step exposes) rather than Lemma A.6's
+-- single-valued Gsingle.
+lemma-A9 : ∀ {α τ ε ε'} (F : Frame ∅ α ε τ ε) (sub : ε' ⊆ᵉ ε) {g : LC ∅ τ ε'}
+         → LossComputable (ComputableV τ) g
+         → (∀ {v : Val ∅ α} → ComputableV α v → ComputableE τ ε (plugF F (val v)))
+         → ∀ {e : ∅ ⊢ α ! ε} → ComputableE α ε e
+         → GComputable (ComputableV τ) (Gsingle g) (plugF F e)
+lemma-A9 {α} {τ} {ε} {ε'} F sub {g} lossCompG Fcomp {e} compE = go compE'
+  where
+  boosted : ε' ⊆ᵉ ε → LC ∅ α ε
+  boosted subX = vabs (thenE subX (plugF (weaken1F F) (val (vvar Z))) (weaken1V g))
+
+  GboostedFamily : ∀ {εg} → εg ⊆ᵉ ε → LC ∅ α εg → Set
+  GboostedFamily {εg} _ g'' = Σ (εg ≡ ε) (λ eq → Σ (ε' ⊆ᵉ ε) (λ subX → subst (LC ∅ α) eq g'' ≡ boosted subX))
+
+  boosted-lossComp : ∀ {subX : ε' ⊆ᵉ ε} → LossComputable (ComputableV α) (boosted subX)
+  boosted-lossComp {subX = subX} = lemma-A8-3 subX lossCompG Fcomp''
+    where
+    Fcomp'' : ∀ {v : Val ∅ α} → ComputableV α v → ComputableE τ ε ((plugF (weaken1F F) (val (vvar Z))) [ v ])
+    Fcomp'' {v} Pv = subst (ComputableE τ ε) (sym (subE-plugF-weaken1F F v)) (Fcomp Pv)
+
+  compE' : GComputable (ComputableV α) GboostedFamily e
+  compE' = GComputable-antimono {σ = α} {ε = ε}
+             {G = λ _ g0 → LossComputable (ComputableV α) g0} {G' = GboostedFamily}
+             (λ { (refl , subX , refl) → boosted-lossComp {subX = subX} }) compE
+  go : ∀ {e} → GComputable (ComputableV α) GboostedFamily e → GComputable (ComputableV τ) (Gsingle g) (plugF F e)
+  go (gc-val {v} Pv) =
+    GComputable-antimono {σ = τ} {ε = ε}
+      {G = λ _ g0 → LossComputable (ComputableV τ) g0} {G' = Gsingle g}
+      (λ { (refl , refl) → lossCompG }) (Fcomp Pv)
+  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = F∘ K F} nh (λ {v1} → go (ihK {v1}))
+  go (gc-step {e0} nterm ih) = gc-step nterm' step-case
+    where
+    nterm' : ¬ Terminal (plugF F e0)
+    nterm' term with progress-dichotomy {sub = ⊆ᵉ-refl} {g = boosted sub} e0
+    ... | inj₁ t = nterm t
+    ... | inj₂ (r0 , e0' , stp0) = theorem-A4-1 {sub = sub} {g = g} term (F-rule sub F stp0)
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ τ εg} → Gsingle g subX g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (plugF F e0) r2 e''
+              → GComputable (ComputableV τ) (Gsingle g) e''
+    step-case {subX = subX} (refl , refl) stp
+      with progress-dichotomy {g = boosted subX} e0
+    ... | inj₁ t = ⊥-elim (nterm t)
+    ... | inj₂ (r0 , e0'' , stp0) with step-det-with (F-rule subX F stp0) stp
+    ...   | (refl , refl) = go (ih {sub = ⊆ᵉ-refl} {g = boosted subX} (refl , subX , refl) stp0)
+
