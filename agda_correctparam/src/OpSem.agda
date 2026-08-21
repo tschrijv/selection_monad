@@ -40,6 +40,8 @@ data Frame (Γ : Cxt) : Ty → EffCxt → Ty → EffCxt → Set where
   F-op      : ∀ {ℓ ε}           → ℓ ∈ ε → (op : Op ℓ) → Frame Γ (gnd (out op)) ε (gnd (in′ op)) ε
   F-loss    : ∀ {ε}             → Frame Γ Loss ε UnitTy ε
   F-handleP : ∀ {ℓ par σ σ' ε}  → Handler Γ ℓ par σ σ' ε → Γ ⊢ σ ! (ε ,ℓ ℓ) → Frame Γ (gnd par) ε σ' ε
+  F-plusL   : ∀ {ε}             → Γ ⊢ Loss ! ε → Frame Γ Loss ε Loss ε
+  F-plusR   : ∀ {ε}             → Val Γ Loss → Frame Γ Loss ε Loss ε
 
 data SFrame (Γ : Cxt) : Ty → EffCxt → Ty → EffCxt → Set where
   S-handleB : ∀ {ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Val Γ (gnd par) → SFrame Γ σ (ε ,ℓ ℓ) σ' ε
@@ -64,6 +66,8 @@ plugF (F-appR v)      e = app (val v) e
 plugF (F-op m op)     e = opE m op e
 plugF F-loss          e = lossE e
 plugF (F-handleP h b) e = handleE h e b
+plugF (F-plusL e₂)    e = plusE e e₂
+plugF (F-plusR v)     e = plusE (val v) e
 
 plugS : ∀ {Γ σ ε τ ε'} → SFrame Γ σ ε τ ε' → Γ ⊢ σ ! ε → Γ ⊢ τ ! ε'
 plugS (S-handleB h v) e     = handleE h (val v) e
@@ -89,6 +93,8 @@ renF ρ (F-appR v)      = F-appR (renV ρ v)
 renF ρ (F-op m op)     = F-op m op
 renF ρ F-loss          = F-loss
 renF ρ (F-handleP h b) = F-handleP (renH ρ h) (renE ρ b)
+renF ρ (F-plusL e)     = F-plusL (renE ρ e)
+renF ρ (F-plusR v)     = F-plusR (renV ρ v)
 
 renS : ∀ {Γ Γ' σ ε τ ε'} → Ren Γ Γ' → SFrame Γ σ ε τ ε' → SFrame Γ' σ ε τ ε'
 renS ρ (S-handleB h v)  = S-handleB (renH ρ h) (renV ρ v)
@@ -215,6 +221,20 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} → LC Γ σ εg
   R9 : ∀ {ε εg σ} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} (v : Val Γ σ)
      → _⊢_-[_]→_ {sub = sub} g (resetE {ε = ε} (val v)) 0# (val v)
 
+  -- (Rplus) g ⊢ v1 + v2 --0--> val(v1+v2). Not itself one of Fig. 6's
+  -- numbered rules -- needed only because "r + e" (S2's own admissible
+  -- notation) is realised here via its own constructor plusE (Syntax.
+  -- agda), rather than desugared through thenE/lossE (which, tried
+  -- first, turned out to loop forever: g⊢(loss(r)▶g1) always steps back
+  -- to ANOTHER loss(r)▶g1' via S2+R4, r never reaching the accumulator
+  -- -- see OpSemProofs.agda's git history / session notes for the
+  -- diverging trace). Once BOTH operands are values, plusE's only
+  -- reduction is the LOSS TYPE's own _+_ (a Sig field) applied directly
+  -- -- symmetric with R2-pair, which likewise fires once both of a
+  -- pair's own components have reached values.
+  Rplus : ∀ {ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ Loss εg} (r w : R)
+        → _⊢_-[_]→_ {sub = sub} g (plusE {ε = ε} (val (vgnd r)) (val (vgnd w))) 0# (val (vgnd (r + w)))
+
   -- (F) regular-frame congruence, adjusting the loss continuation to
   -- λ^ε x:α.(F[x]▶g) exactly as the source rule does. Ties the family's
   -- own index to F-rule's OWN `sub` directly -- it already plays exactly
@@ -234,17 +254,26 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} → LC Γ σ εg
 
   -- (S2) g₁ ⊢ e --r--> e' ⟹ g ⊢ (e▶g₁) --0--> r + (e'▶g₁); ▶ disregards
   -- the ambient g entirely and evaluates under its own g₁ instead. "r + e"
-  -- (a runtime-only artifact, not source syntax) is realised as
-  -- loss(r) ▶ (λ_:().e) -- run loss(r) (which immediately reports r, R4),
-  -- then continue as e. `sub` relates g1's OWN εg to ε, not the ambient
-  -- g's εamb (unconstrained, per R7's own note above). Generic in σ (the
+  -- (a runtime-only artifact, not source syntax) is realised via plusE
+  -- (Syntax.agda) directly -- NOT desugared through thenE/lossE as an
+  -- earlier version of this rule did: that encoding (loss(r)▶(λ_:().e))
+  -- turns out to loop forever, since g⊢(loss(r)▶g1)-0->r+(()▶g1) is
+  -- ITSELF loss(r)▶(a bigger g1), so S2+R4 fire again on the SAME
+  -- loss(r) hole, ad infinitum, and r never reaches the accumulator.
+  -- plusE has no such issue: both its operands are ordinary regular-
+  -- frame holes (F-plusL/F-plusR), so F-rule's own congruence machinery
+  -- steps the right operand (e'▶g1) down to a value on its own account,
+  -- at which point Rplus (above) fires exactly once, since the left
+  -- operand val(vgnd r) is already a value. `sub` relates g1's OWN εg
+  -- to ε, not the ambient g's εamb (unconstrained, per R7's own note
+  -- above). Generic in σ (the
   -- hole's own type), matching S1/S3/S4 below and thenE's own
   -- constructor (Syntax.agda) -- σ = Loss here would be an unmotivated
   -- restriction: thenE's first argument is no more Loss-specific than
   -- glocalE's or handleE's own holes are.
   S2 : ∀ {ε εg εamb σ} (sub : εg ⊆ᵉ ε) {subamb : εamb ⊆ᵉ ε} {g : LC Γ Loss εamb} (g1 : LC Γ σ εg) {e e' : Γ ⊢ σ ! ε} {r : R}
      → _⊢_-[_]→_ {sub = sub} g1 e r e'
-     → _⊢_-[_]→_ {sub = subamb} g (thenE sub e g1) 0# (thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub e' g1))))
+     → _⊢_-[_]→_ {sub = subamb} g (thenE sub e g1) 0# (plusE (val (vgnd r)) (thenE sub e' g1))
 
   -- (S3) ⟨e⟩^ε₁_g1 evaluates e under g1 (disregarding the ambient g),
   -- keeping the frame's own effect ε₁, and re-wraps the result. Generic

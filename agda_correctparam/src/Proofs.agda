@@ -130,6 +130,12 @@ lemma-B4-2 : ∀ {Γ σ τ ε} (v : Val Γ (σ ⇒ τ ! ε)) (e : Γ ⊢ σ ! ε
            → Esem (app (val v) e) ρ ≡ bindŜ (Esem e ρ) (λ a → Vsem v ρ a)
 lemma-B4-2 v e ρ = bindŜ-unitˡ (λ φ → bindŜ (Esem e ρ) (λ a → φ a)) (Vsem v ρ)
 
+-- Same idea, for plusE's own left-value case (needed by lemma-B6's own
+-- F-plusR clause below, mirroring F-pairR's own use of lemma-B4-1).
+lemma-B4-3 : ∀ {Γ ε} (v : Val Γ Loss) (e : Γ ⊢ Loss ! ε) (ρ : Env Γ)
+           → Esem (plusE (val v) e) ρ ≡ bindŜ (Esem e ρ) (λ s → η̂ˢ (Vsem v ρ + s))
+lemma-B4-3 v e ρ = bindŜ-unitˡ (λ r → bindŜ (Esem e ρ) (λ s → η̂ˢ (r + s))) (Vsem v ρ)
+
 -- ---------------------------------------------------------------------
 -- Lemma 7.5 (hat-Lemma B.5): SKIPPED. Statement (1) is about R̂-of (gone);
 -- (2)/(3) are Lsem unfolding facts that are still definitional here (as
@@ -259,6 +265,8 @@ mutual
   renE-coh ren ρ ρ' coh (thenE sub e1 g) =
     cong upS (cong₂ (λ w1 c → thenS c w1) (renE-coh ren ρ ρ' coh e1)
                      (funext (λ a → cong (widenF̂ sub) (renLsem-coh ren ρ ρ' coh g a))))
+  renE-coh ren ρ ρ' coh (plusE e1 e2) =
+    cong₂ (λ w1 w2 → bindŜ w1 (λ r → bindŜ w2 (λ s → η̂ˢ (r + s)))) (renE-coh ren ρ ρ' coh e1) (renE-coh ren ρ ρ' coh e2)
   renE-coh ren ρ ρ' coh (glocalE sub1 sub2 e g) =
     cong₂ (λ w1 c → glocalS sub2 c w1) (renE-coh ren ρ ρ' coh e)
           (funext (λ a → cong (widenF̂ sub1) (renLsem-coh ren ρ ρ' coh g a)))
@@ -389,6 +397,8 @@ mutual
   subE-coh σs ρ' ρ coh (thenE sub e1 g) =
     cong upS (cong₂ (λ w1 c → thenS c w1) (subE-coh σs ρ' ρ coh e1)
                      (funext (λ a → cong (widenF̂ sub) (subLsem-coh σs ρ' ρ coh g a))))
+  subE-coh σs ρ' ρ coh (plusE e1 e2) =
+    cong₂ (λ w1 w2 → bindŜ w1 (λ r → bindŜ w2 (λ s → η̂ˢ (r + s)))) (subE-coh σs ρ' ρ coh e1) (subE-coh σs ρ' ρ coh e2)
   subE-coh σs ρ' ρ coh (glocalE sub1 sub2 e g) =
     cong₂ (λ w1 c → glocalS sub2 c w1) (subE-coh σs ρ' ρ coh e)
           (funext (λ a → cong (widenF̂ sub1) (subLsem-coh σs ρ' ρ coh g a)))
@@ -460,6 +470,24 @@ lemma-B6 (F-op m op) e ρ = cong (bindŜ (Esem e ρ)) (funext (λ a →
 lemma-B6 F-loss e ρ = cong (bindŜ (Esem e ρ)) (funext (λ a →
   sym (bindŜ-unitˡ (λ r → addLossŜ r (η̂ˢ tt)) a)))
 
+-- F-plusL/F-plusR: mirror F-pairL/F-pairR exactly, just combining via
+-- the LOSS TYPE's own _+_ instead of pairing.
+lemma-B6 {α = α} (F-plusL e₂) e ρ = cong (bindŜ (Esem e ρ)) (funext (λ a → sym (trans
+  (bindŜ-unitˡ (λ r → bindŜ (Esem (weaken1 e₂) (ρ ,, a)) (λ s → η̂ˢ (r + s))) a)
+  (cong (λ w → bindŜ w (λ s → η̂ˢ (a + s))) (weaken1-coh α e₂ ρ a)))))
+
+lemma-B6 {α = α} (F-plusR v) e ρ = trans (lemma-B4-3 v e ρ) (cong (bindŜ (Esem e ρ)) (funext per-a))
+  where
+  per-a : (a : ⟦ α ⟧) → η̂ˢ (Vsem v ρ + a) ≡ Esem (plusE (val (weaken1V v)) (val (vvar Z))) (ρ ,, a)
+  per-a a = sym step3
+    where
+    step12 : bindŜ (η̂ˢ (Vsem (weaken1V v) (ρ ,, a))) (λ r → bindŜ (η̂ˢ a) (λ s → η̂ˢ (r + s)))
+           ≡ η̂ˢ (Vsem (weaken1V v) (ρ ,, a) + a)
+    step12 = trans (bindŜ-unitˡ (λ r → bindŜ (η̂ˢ a) (λ s → η̂ˢ (r + s))) (Vsem (weaken1V v) (ρ ,, a)))
+                   (bindŜ-unitˡ (λ s → η̂ˢ (Vsem (weaken1V v) (ρ ,, a) + s)) a)
+    step3 : Esem (plusE (val (weaken1V v)) (val (vvar Z))) (ρ ,, a) ≡ η̂ˢ (Vsem v ρ + a)
+    step3 = trans step12 (cong (λ w → η̂ˢ (w + a)) (weaken1V-coh α v ρ a))
+
 -- F-handleP: NEW case, absent from agda_noparam's own lemma-B6 (its
 -- Frame has no parameter-evaluation frame at all -- handleE there has a
 -- single, S-frame-only hole). Reduces via bindŜ-unitˡ (peeling the val
@@ -502,6 +530,8 @@ Frame-effect-eq (F-appR _)    = refl
 Frame-effect-eq (F-op _ _)    = refl
 Frame-effect-eq F-loss        = refl
 Frame-effect-eq (F-handleP _ _) = refl
+Frame-effect-eq (F-plusL _)   = refl
+Frame-effect-eq (F-plusR _)   = refl
 
 promote : ∀ {Γ σ εH τ εO ℓ} (k : ContCxt Γ σ εH τ εO) → ¬ Handles k ℓ → ℓ ∈ εH → ℓ ∈ εO
 promote ▫ nh m = m
@@ -576,6 +606,25 @@ weaken1F-skip {α = α} (F-appR v) υ ρ c a = trans lhsRed (sym rhsRed)
                         (cong (λ φ → φ a) (weaken1V-coh α v ρ a)))
 weaken1F-skip (F-op m op) υ ρ c a = refl
 weaken1F-skip F-loss υ ρ c a = refl
+weaken1F-skip {α = α} (F-plusL e₂) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (plusE (val (vvar Z)) (weaken1 (weaken1 e₂))) ((ρ ,, c) ,, a) ≡ bindŜ (Esem e₂ ρ) (λ s → η̂ˢ (a + s))
+  lhsRed = trans (bindŜ-unitˡ (λ r → bindŜ (Esem (weaken1 (weaken1 e₂)) ((ρ ,, c) ,, a)) (λ s → η̂ˢ (r + s))) a)
+                 (trans (cong (λ w → bindŜ w (λ s → η̂ˢ (a + s))) (weaken1-coh α (weaken1 e₂) (ρ ,, c) a))
+                        (cong (λ w → bindŜ w (λ s → η̂ˢ (a + s))) (weaken1-coh υ e₂ ρ c)))
+  rhsRed : Esem (plusE (val (vvar Z)) (weaken1 e₂)) (ρ ,, a) ≡ bindŜ (Esem e₂ ρ) (λ s → η̂ˢ (a + s))
+  rhsRed = trans (bindŜ-unitˡ (λ r → bindŜ (Esem (weaken1 e₂) (ρ ,, a)) (λ s → η̂ˢ (r + s))) a)
+                 (cong (λ w → bindŜ w (λ s → η̂ˢ (a + s))) (weaken1-coh α e₂ ρ a))
+weaken1F-skip {α = α} (F-plusR v) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (plusE (val (weaken1V (weaken1V v))) (val (vvar Z))) ((ρ ,, c) ,, a) ≡ η̂ˢ (Vsem v ρ + a)
+  lhsRed = trans (bindŜ-unitˡ (λ x → bindŜ (η̂ˢ a) (λ y → η̂ˢ (x + y))) (Vsem (weaken1V (weaken1V v)) ((ρ ,, c) ,, a)))
+                 (trans (bindŜ-unitˡ (λ y → η̂ˢ (Vsem (weaken1V (weaken1V v)) ((ρ ,, c) ,, a) + y)) a)
+                        (cong (λ x → η̂ˢ (x + a)) (trans (weaken1V-coh α (weaken1V v) (ρ ,, c) a) (weaken1V-coh υ v ρ c))))
+  rhsRed : Esem (plusE (val (weaken1V v)) (val (vvar Z))) (ρ ,, a) ≡ η̂ˢ (Vsem v ρ + a)
+  rhsRed = trans (bindŜ-unitˡ (λ x → bindŜ (η̂ˢ a) (λ y → η̂ˢ (x + y))) (Vsem (weaken1V v) (ρ ,, a)))
+                 (trans (bindŜ-unitˡ (λ y → η̂ˢ (Vsem (weaken1V v) (ρ ,, a) + y)) a)
+                        (cong (λ x → η̂ˢ (x + a)) (weaken1V-coh α v ρ a)))
 weaken1F-skip {α = α} (F-handleP h b) υ ρ c a = trans lhsRed (sym rhsRed)
   where
   lhsRed : Esem (handleE (renH S (renH S h)) (val (vvar Z)) (weaken1 (weaken1 b))) ((ρ ,, c) ,, a) ≡ handlerSem h ρ a (Esem b ρ)
@@ -985,6 +1034,21 @@ thenS-upS g1' (pure x)      = mapF̂-0+-elim (g1' x)
 thenS-upS g1' (opF̂ m o v κ) = cong (opF̂ m o v) (funext (λ a →
   trans (cong (mapF̂ (0# +_)) (thenS-upS g1' (κ a))) (mapF̂-0+-elim (bindF̂ (κ a) g1')) ))
 
+-- bindŜ (upS W) (λ s → η̂ˢ (r + s)) ≡ upS (mapF̂ (r +_) W): running upS's
+-- own γ-independent report W through bindŜ at a "just add r" Kleisli
+-- arrow re-tags every LEAF of W by r+_ (F̂'s own mapF̂) and re-promotes
+-- the whole thing back via upS -- needed for (S2)'s new plusE-headed
+-- conclusion (OpSem.agda), which routes r through plusE/Rplus's own
+-- _+_ rather than through an extra administrative loss(r)▶_ layer.
+-- Proven by induction on W, mirroring thenS-upS's own shape; unlike
+-- thenS-upS (an F̂/R̂-level fact), this is an Ŝ-level one (bindŜ's own
+-- node case recurses through an Ŝ-valued, not F̂-valued, continuation),
+-- so each step goes through Ŝ-eq.
+bindŜ-upS-mapF̂ : ∀ {ε} (r : R) (W : F̂ ε R) → bindŜ (upS W) (λ s → η̂ˢ (r + s)) ≡ upS (mapF̂ (r +_) W)
+bindŜ-upS-mapF̂ r (pure x) = Ŝ-eq (λ γ → cong (λ z → z , leaf (r + x)) (+-identityˡ 0#))
+bindŜ-upS-mapF̂ r (opF̂ m o v κ) = Ŝ-eq (λ γ → cong (λ w → 0# , node m o v w)
+  (funext (λ a → bindŜ-upS-mapF̂ r (κ a))))
+
 -- bindŜ-addR: if P,P' agree up to a uniform r-shift SPECIFICALLY at
 -- γ' := λx→thenS γ(D x) (the one bindŜ's own definition feeds P/P'
 -- through -- its own proof, below, never needs the hypothesis at any
@@ -1128,6 +1192,7 @@ mutual
     wf-op     : ∀ {ℓ ε} {m : ℓ ∈ ε} {op : Op ℓ} {e : Γ ⊢ gnd (out op) ! ε} → WFE e → WFE (opE m op e)
     wf-loss   : ∀ {ε} {e : Γ ⊢ Loss ! ε} → WFE e → WFE (lossE e)
     wf-then   : ∀ {σ ε ε₁} {sub : ε₁ ⊆ᵉ ε} {e1 : Γ ⊢ σ ! ε} {g : LC Γ σ ε₁} → WFE e1 → WFG g → WFE (thenE sub e1 g)
+    wf-plus   : ∀ {ε} {e1 e2 : Γ ⊢ Loss ! ε} → WFE e1 → WFE e2 → WFE (plusE e1 e2)
     wf-glocal : ∀ {σ ε₂ ε₁ ε} {sub1 : ε₂ ⊆ᵉ ε₁} {sub2 : ε₁ ⊆ᵉ ε} {e : Γ ⊢ σ ! ε₁} {g : LC Γ σ ε₂} → WFE e → WFG g → WFE (glocalE sub1 sub2 e g)
     wf-reset  : ∀ {σ ε} {e : Γ ⊢ σ ! ε} → WFE e → WFE (resetE e)
     wf-handle : ∀ {ℓ par σ σ' ε} {h : Handler Γ ℓ par σ σ' ε} {e1 : Γ ⊢ gnd par ! ε} {e2 : Γ ⊢ σ ! (ε ,ℓ ℓ)}
@@ -1163,6 +1228,7 @@ mutual
   WFE-renE ρ (wf-op wfe)         = wf-op (WFE-renE ρ wfe)
   WFE-renE ρ (wf-loss wfe)       = wf-loss (WFE-renE ρ wfe)
   WFE-renE ρ (wf-then wfe wfg)   = wf-then (WFE-renE ρ wfe) (WFG-renV ρ wfg)
+  WFE-renE ρ (wf-plus wfe1 wfe2) = wf-plus (WFE-renE ρ wfe1) (WFE-renE ρ wfe2)
   WFE-renE ρ (wf-glocal wfe wfg) = wf-glocal (WFE-renE ρ wfe) (WFG-renV ρ wfg)
   WFE-renE ρ (wf-reset wfe)      = wf-reset (WFE-renE ρ wfe)
   WFE-renE ρ (wf-handle wfh wfe1 wfe2) = wf-handle (WFH-renH ρ wfh) (WFE-renE ρ wfe1) (WFE-renE ρ wfe2)
@@ -1204,6 +1270,7 @@ mutual
   WFE-subE wfσs (wf-op wfe)         = wf-op (WFE-subE wfσs wfe)
   WFE-subE wfσs (wf-loss wfe)       = wf-loss (WFE-subE wfσs wfe)
   WFE-subE wfσs (wf-then wfe wfg)   = wf-then (WFE-subE wfσs wfe) (WFG-subV wfσs wfg)
+  WFE-subE wfσs (wf-plus wfe1 wfe2) = wf-plus (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2)
   WFE-subE wfσs (wf-glocal wfe wfg) = wf-glocal (WFE-subE wfσs wfe) (WFG-subV wfσs wfg)
   WFE-subE wfσs (wf-reset wfe)      = wf-reset (WFE-subE wfσs wfe)
   WFE-subE wfσs (wf-handle wfh wfe1 wfe2) = wf-handle (WFH-subH wfσs wfh) (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2)
@@ -1247,6 +1314,8 @@ WFE-plugF (F-appR v)     (wf-app _ wfe)    = wfe
 WFE-plugF (F-op m op)    (wf-op wfe)       = wfe
 WFE-plugF F-loss         (wf-loss wfe)     = wfe
 WFE-plugF (F-handleP h b) (wf-handle _ wfe _) = wfe
+WFE-plugF (F-plusL e₂)    (wf-plus wfe _)     = wfe
+WFE-plugF (F-plusR v)     (wf-plus _ wfe)     = wfe
 
 -- WFE-plugS: WFE-plugF's own analogue for the four SFrame shapes.
 WFE-plugS : ∀ {Γ α ε τ ε'} (s : SFrame Γ α ε τ ε') {e : Γ ⊢ α ! ε} → WFE (plugS s e) → WFE e
@@ -1288,6 +1357,8 @@ WFE-plugF-fill (F-appR v)      (wf-app wfv _)         wfe' = wf-app wfv wfe'
 WFE-plugF-fill (F-op m op)     (wf-op _)              wfe' = wf-op wfe'
 WFE-plugF-fill F-loss          (wf-loss _)            wfe' = wf-loss wfe'
 WFE-plugF-fill (F-handleP h b) (wf-handle wfh _ wfb)  wfe' = wf-handle wfh wfe' wfb
+WFE-plugF-fill (F-plusL e₂)    (wf-plus _ wfe2)       wfe' = wf-plus wfe' wfe2
+WFE-plugF-fill (F-plusR v)     (wf-plus wfv _)        wfe' = wf-plus wfv wfe'
 
 -- WFE-plugK-fill: WFE-plugF-fill/WFE-plugS-fill's own analogue for a
 -- whole ContCxt, no renaming (unlike WFE-plugK-ren-fill, needed by R5's
@@ -1318,6 +1389,8 @@ WFE-frame-fill (F-appR v)      (wf-app (wf-val wfv) _)  wfe' = wf-app (wf-val (W
 WFE-frame-fill (F-op m op)     _                        wfe' = wf-op wfe'
 WFE-frame-fill F-loss          _                        wfe' = wf-loss wfe'
 WFE-frame-fill (F-handleP h b) (wf-handle wfh _ wfb)    wfe' = wf-handle (WFH-renH S wfh) wfe' (WFE-renE S wfb)
+WFE-frame-fill (F-plusL e₂)    (wf-plus _ wfe2)         wfe' = wf-plus wfe' (WFE-renE S wfe2)
+WFE-frame-fill (F-plusR v)     (wf-plus (wf-val wfv) _) wfe' = wf-plus (wf-val (WFV-renV S wfv)) wfe'
 
 -- WFE-sframe-fill: WFE-frame-fill's own analogue for SFrame, needed by
 -- WFE-plugK-ren-fill below (R5's own k'/yArg construction weakens EVERY
@@ -1466,11 +1539,9 @@ theorem-B9-S2 : ∀ {Γ ε εg εamb σ} (sub : εg ⊆ᵉ ε) {subamb : εamb �
                    → _⊢_-[_]→_ {sub = sub} g1 e r e'
                    → WFE (thenE sub e g1) → (ρ : Env Γ)
                    → runSelWith (Esem (thenE sub e g1) ρ) ⌊ g ⌋[ subamb , ρ ]
-                   ≡ addR 0# (runSelWith (Esem (thenE ⊆ᵉ-refl (lossE (val (vgnd r))) (vabs (weaken1 (thenE sub e' g1)))) ρ) ⌊ g ⌋[ subamb , ρ ])
+                   ≡ addR 0# (runSelWith (Esem (plusE (val (vgnd r)) (thenE sub e' g1)) ρ) ⌊ g ⌋[ subamb , ρ ])
 theorem-B9-S2 {Γ} {ε} {σ = σ} sub {subamb} {g} g1 {e} {e'} {r} stp (wf-then wfe _) ρ =
-  trans (cong (λ W → runSelWith (upS W) γ) (trans eqLHS mapEq))
-        (trans (sym (addR-0 (runSelWith (upS (mapF̂ ((r + 0#) +_) D)) γ)))
-               (cong (λ w → addR 0# (runSelWith w γ)) (sym eqRHS-Esem)))
+  trans (cong (λ W → runSelWith (upS W) γ) eqLHS) final
   where
   γ = ⌊ g ⌋[ subamb , ρ ]
   g1' : ⟦ σ ⟧ → R̂ ε
@@ -1479,19 +1550,16 @@ theorem-B9-S2 {Γ} {ε} {σ = σ} sub {subamb} {g} g1 {e} {e'} {r} stp (wf-then 
   D = thenS g1' (Esem e' ρ)
   eqLHS : thenS g1' (Esem e ρ) ≡ mapF̂ (r +_) D
   eqLHS = thenS-addR r g1' (Esem e ρ) (Esem e' ρ) (theorem-B9 stp wfe ρ)
-  mapEq : mapF̂ (r +_) D ≡ mapF̂ ((r + 0#) +_) D
-  mapEq = mapF̂-cong (λ y → sym (trans (+-assoc r 0# y) (cong (r +_) (+-identityˡ y)))) D
-  g2 : LC Γ UnitTy ε
-  g2 = vabs (weaken1 (thenE sub e' g1))
-  step-a : Lsem g2 ρ tt ≡ D
-  step-a = trans (cong (thenS pure) (weaken1-coh UnitTy (thenE sub e' g1) ρ tt)) (trans (thenS-upS pure D) (bindF̂-unitʳ D))
-  g2'tt-eq : widenF̂ ⊆ᵉ-refl (Lsem g2 ρ tt) ≡ D
-  g2'tt-eq = trans (cong (widenF̂ ⊆ᵉ-refl) step-a) (widenF̂-refl D)
-  thenSg2'-eq : thenS (λ tt' → widenF̂ ⊆ᵉ-refl (Lsem g2 ρ tt')) (Esem (lossE (val (vgnd r))) ρ) ≡ mapF̂ ((r + 0#) +_) D
-  thenSg2'-eq = trans (cong (thenS (λ tt' → widenF̂ ⊆ᵉ-refl (Lsem g2 ρ tt'))) (bindŜ-unitˡ (λ r' → addLossŜ r' (η̂ˢ tt)) r))
-                      (cong (mapF̂ ((r + 0#) +_)) g2'tt-eq)
-  eqRHS-Esem : Esem (thenE ⊆ᵉ-refl (lossE (val (vgnd r))) g2) ρ ≡ upS (mapF̂ ((r + 0#) +_) D)
-  eqRHS-Esem = cong upS thenSg2'-eq
+  -- Esem(r + (e'▶g1))ρ: r's own summand collapses via bindŜ-unitˡ
+  -- (Esem(val(vgnd r))ρ = η̂ˢ r), leaving bindŜ(Esem(thenE...)ρ)(...),
+  -- which IS bindŜ(upS D)(...) by Esem's own thenE clause -- exactly
+  -- bindŜ-upS-mapF̂'s own shape.
+  eqRHS-Esem : Esem (plusE (val (vgnd r)) (thenE sub e' g1)) ρ ≡ upS (mapF̂ (r +_) D)
+  eqRHS-Esem = trans (bindŜ-unitˡ (λ r' → bindŜ (Esem (thenE sub e' g1) ρ) (λ s → η̂ˢ (r' + s))) r)
+                      (bindŜ-upS-mapF̂ r D)
+  final : runSelWith (upS (mapF̂ (r +_) D)) γ ≡ addR 0# (runSelWith (Esem (plusE (val (vgnd r)) (thenE sub e' g1)) ρ) γ)
+  final = trans (sym (addR-0 (runSelWith (upS (mapF̂ (r +_) D)) γ)))
+                (cong (addR 0#) (cong (λ w → runSelWith w γ) (sym eqRHS-Esem)))
 
 -- theorem-B9-R5: PROVEN, at the specific γ := ⌊g⌋[sub,ρ] -- mirroring
 -- agda_noparam's own theorem-B9-R5-WF (see its own comment for why the
@@ -1660,6 +1728,13 @@ theorem-B9 (R4 {sub = sub} {g = g} r) _ ρ =
   cong (λ w → runSelWith w γ) (bindŜ-unitˡ (λ r' → addLossŜ r' (η̂ˢ tt)) r)
   where γ = ⌊ g ⌋[ sub , ρ ]
 
+theorem-B9 (Rplus {sub = sub} {g = g} r w) _ ρ =
+  trans (cong (λ p → runSelWith p γ)
+              (trans (bindŜ-unitˡ (λ r' → bindŜ (η̂ˢ w) (λ s → η̂ˢ (r' + s))) r)
+                     (bindŜ-unitˡ (λ s → η̂ˢ (r + s)) w)))
+        (cong (λ z → z , leaf (r + w)) (sym (+-identityˡ 0#)))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
 theorem-B9 (R6 {sub = sub} {g = g} h v1 v2) _ ρ =
   trans (cong (λ w → runSelWith w γ) (bindŜ-unitˡ (λ p → handlerSem h ρ p (η̂ˢ (Vsem v2 ρ))) (Vsem v1 ρ)))
         (cong (λ w → addR 0# (runSelWith w γ)) (sym eqSub))
@@ -1774,6 +1849,7 @@ WFE-preserved (R6 h v1 v2) wfg (wf-handle (wf-handler wfc wfr) (wf-val wfv1) (wf
 WFE-preserved (R7 sub v e) wfg (wf-then (wf-val wfv) wfge) = wf-glocal (WFG-e[v] wfge wfv) wf-zero
 WFE-preserved (R8 sub1 sub2 v g1) wfg (wf-glocal (wf-val wfv) wfg1) = wf-val wfv
 WFE-preserved (R9 v) wfg (wf-reset (wf-val wfv)) = wf-val wfv
+WFE-preserved (Rplus r w) wfg (wf-plus (wf-val (wf-vgnd _)) (wf-val (wf-vgnd _))) = wf-val (wf-vgnd _)
 WFE-preserved (F-rule sub f stp) wfg wfpe =
   WFE-plugF-fill f wfpe (WFE-preserved stp newg-wfg (WFE-plugF f wfpe))
   where
@@ -1783,7 +1859,7 @@ WFE-preserved (S1 sub h v stp) wfg (wf-handle wfh (wf-val wfv) wfe) =
   where
   newg-wfg = wf-then (retApplied-wf wfh wfv) (WFG-renV S wfg)
 WFE-preserved (S2 sub g1 stp) wfg (wf-then wfe wfg1) =
-  wf-then (wf-loss (wf-val (wf-vgnd _))) (wf-then (WFE-renE S (WFE-preserved stp wfg1 wfe)) (WFG-renV S wfg1))
+  wf-plus (wf-val (wf-vgnd _)) (wf-then (WFE-preserved stp wfg1 wfe) wfg1)
 WFE-preserved (S3 sub1 sub2 g1 stp) wfg (wf-glocal wfe wfg1) =
   wf-glocal (WFE-preserved stp wfg1 wfe) wfg1
 WFE-preserved (S4 stp) wfg (wf-reset wfe) =

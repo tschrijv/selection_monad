@@ -89,6 +89,17 @@ mutual
     opE     : ∀ {ℓ ε}       → ℓ ∈ ε → (op : Op ℓ) → Γ ⊢ gnd (out op) ! ε → Γ ⊢ gnd (in′ op) ! ε
     lossE   : ∀ {ε}         → Γ ⊢ Loss ! ε → Γ ⊢ UnitTy ! ε
     thenE   : ∀ {σ ε ε₁}     → ε₁ ⊆ᵉ ε → Γ ⊢ σ ! ε → LC Γ σ ε₁ → Γ ⊢ Loss ! ε
+    -- "e1 + e2" (Fig. 6's own admissible notation "r + e", S2's
+    -- conclusion): a runtime-only artifact, never written by a source
+    -- program, that hoists a known loss out in front of whatever e2
+    -- itself later reports. Both operands are ordinary expressions
+    -- (symmetric with pair, fst/snd), NOT one baked-in raw R constant
+    -- plus one expression -- realised here as its own regular-frame-
+    -- shaped constructor (rather than desugared via thenE/lossE, which
+    -- loops: see OpSem.agda's S2 comment), so that e1+e2's only
+    -- reduction, once BOTH operands are values v1 v2 : loss, is the
+    -- LOSS TYPE's own _+_ (a Sig field) applied directly to v1 and v2.
+    plusE   : ∀ {ε}         → Γ ⊢ Loss ! ε → Γ ⊢ Loss ! ε → Γ ⊢ Loss ! ε
     -- GLOCAL: Γ⊢g:σ→loss!ε₂  Γ⊢e:σ!ε₁  (ε₂⊆ε₁⊆ε) ⟹ Γ⊢⟨e⟩^ε₁_g:σ!ε -- note
     -- *two* separate inclusions (g's own effect can be smaller than e's,
     -- which in turn can be smaller than the ambient ε the whole

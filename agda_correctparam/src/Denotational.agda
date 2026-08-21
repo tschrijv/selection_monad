@@ -95,6 +95,11 @@ mutual
   -- mapŴ bookkeeping to establish it.
   Esem (thenE sub e1 g) ρ = upS (thenS (λ a → widenF̂ sub (Lsem g ρ a)) (Esem e1 ρ))
 
+  -- Ssem(e1 + e2)(ρ) : run e1 to a loss value r, run e2 to a loss value
+  -- s, report r+s -- the LOSS TYPE's own Sig-provided _+_, matching
+  -- Rplus's own operational reduction directly (OpSem.agda).
+  Esem (plusE e1 e2) ρ = bindŜ (Esem e1 ρ) (λ r → bindŜ (Esem e2 ρ) (λ s → η̂ˢ (r + s)))
+
   -- Ssem(⟨e⟩^ε₁_g)(ρ) : fix e's own loss-continuation to (widened) g,
   -- ignoring whatever γ is later supplied, throughout -- `glocalS` fuses
   -- this with widening e's own tree from its natural ε₁ up to ε (sub2),
