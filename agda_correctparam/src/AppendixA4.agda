@@ -31,7 +31,13 @@ open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Data.Unit using (⊤; tt)
 open import Data.Product using (Σ; _,_; proj₁; proj₂; _×_)
 open import Relation.Nullary using (¬_)
-open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym; trans; subst)
+open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; cong₂; sym; trans; subst)
+open import Axiom.Extensionality.Propositional using (Extensionality)
+
+-- Same axiom as Proofs.agda's own funext (postulated locally here too,
+-- rather than importing Proofs.agda, to keep this file's own import
+-- footprint -- and hence its compile cycle -- independent of it).
+postulate funext : ∀ {a b} → Extensionality a b
 
 -- ---------------------------------------------------------------------
 -- labelsTy: e(σ)/e(ε), "the effect labels appearing in σ or ε" -- as an
@@ -342,4 +348,416 @@ lemma-A6 {σ} {ε₁} {ε₂} {ε} sub1 sub2 {g} lossCompG = go
     ... | inj₁ t = ⊥-elim (nterm t)
     ... | inj₂ (r0 , e0' , stp0) with step-det-with (S3 sub1 sub2 g stp0) stp
     ...   | (refl , refl) = go (ih {sub = sub1} {g = g} (refl , refl) stp0)
+
+-- ---------------------------------------------------------------------
+-- Lemma A.7 (page 33). "r + e" is now plusE (val (vgnd r)) e directly
+-- (Syntax.agda/OpSem.agda), NOT desugared through thenE/lossE -- see
+-- OpSem.agda's own S2 comment for why the original desugaring diverges.
+-- ---------------------------------------------------------------------
+
+-- plusE (val (vgnd r)) (val v) is always R-computable: one further
+-- Rplus step settles it directly (v is already vgnd-shaped, being a
+-- closed Loss value). Reusable base case for Lemma A.7(1)'s own gc-val
+-- clause below, and likely again for A.7(2)/A.8.
+plusVal-RComputable : ∀ {ε} (r : R) (v : Val ∅ Loss) → RComputable {ε} (plusE (val (vgnd r)) (val v))
+plusVal-RComputable {ε} r v with val-closed-gnd v
+... | (v' , refl) = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (Rplus r v')) step-case
+  where
+  step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → Σ (εg ≡ ε) (λ eq → subst (λ ε' → LC ∅ Loss ε') eq g₁ ≡ zeroLC)
+            → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (plusE (val (vgnd r)) (val (vgnd v'))) r2 e''
+            → RComputable {ε} e''
+  step-case _ stp with step-det-with (Rplus r v') stp
+  ... | (refl , refl) = gc-val tt
+
+-- Lemma A.7(1): if e:loss!ε₁ is R-computable, so is r + ⟨e⟩^{ε₁}_{0}
+-- : loss!ε (ε₁⊆ε). Proceeds by R-induction on e, exactly mirroring
+-- Lemma A.6's own three cases, but through F-plusR's own congruence
+-- (a REGULAR frame, hence a single, direct step at each level) rather
+-- than thenE/S2's administrative machinery -- much simpler than the
+-- old (buggy) encoding would have needed.
+lemma-A7-1 : ∀ {ε₁ ε} (sub2 : ε₁ ⊆ᵉ ε) (r : R) {e : ∅ ⊢ Loss ! ε₁}
+           → RComputable e
+           → RComputable {ε} (plusE (val (vgnd r)) (glocalE ⊆ᵉ-refl sub2 e zeroLC))
+lemma-A7-1 {ε₁} {ε} sub2 r = go
+  where
+  go : ∀ {e} → RComputable e → RComputable {ε} (plusE (val (vgnd r)) (glocalE ⊆ᵉ-refl sub2 e zeroLC))
+  go (gc-val {v} _) = gc-step nterm step-case
+    where
+    nterm = ¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC}
+              (F-rule ⊆ᵉ-refl (F-plusR (vgnd r)) (R8 ⊆ᵉ-refl sub2 v zeroLC))
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → Σ (εg ≡ ε) (λ eq → subst (λ ε' → LC ∅ Loss ε') eq g₁ ≡ zeroLC)
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (plusE (val (vgnd r)) (glocalE ⊆ᵉ-refl sub2 (val v) zeroLC)) r2 e''
+              → RComputable {ε} e''
+    step-case {subX = subX} _ stp with step-det-with (F-rule subX (F-plusR (vgnd r)) (R8 ⊆ᵉ-refl sub2 v zeroLC)) stp
+    ... | (refl , refl) = plusVal-RComputable r v
+  go (gc-stuck {K = K} nh ihK) =
+    gc-stuck {K = F∘ (S∘ K (S-glocal ⊆ᵉ-refl sub2 zeroLC)) (F-plusR (vgnd r))} nh (λ {v1} → go (ihK {v1}))
+  go (gc-step {e} nterm ih) = gc-step nterm' step-case
+    where
+    nterm' : ¬ Terminal (plusE (val (vgnd r)) (glocalE ⊆ᵉ-refl sub2 e zeroLC))
+    nterm' term with progress-dichotomy {sub = ⊆ᵉ-refl} {g = zeroLC} e
+    ... | inj₁ t = nterm t
+    ... | inj₂ (r0 , e0' , stp0) =
+      theorem-A4-1 {sub = ⊆ᵉ-refl} {g = zeroLC} term
+        (F-rule ⊆ᵉ-refl (F-plusR (vgnd r)) (S3 ⊆ᵉ-refl sub2 zeroLC stp0))
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → Σ (εg ≡ ε) (λ eq → subst (λ ε' → LC ∅ Loss ε') eq g₁ ≡ zeroLC)
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (plusE (val (vgnd r)) (glocalE ⊆ᵉ-refl sub2 e zeroLC)) r2 e''
+              → RComputable {ε} e''
+    step-case {subX = subX} _ stp with progress-dichotomy {sub = ⊆ᵉ-refl} {g = zeroLC} e
+    ... | inj₁ t = ⊥-elim (nterm t)
+    ... | inj₂ (r0 , e0' , stp0) with step-det-with (F-rule subX (F-plusR (vgnd r)) (S3 ⊆ᵉ-refl sub2 zeroLC stp0)) stp
+    ...   | (refl , refl) = go (ih {sub = ⊆ᵉ-refl} {g = zeroLC} (refl , refl) stp0)
+
+-- ---------------------------------------------------------------------
+-- Substitution lemmas needed for Lemma A.7(2): substituting the freshly
+-- bound variable of `vabs (... (weaken1V g))` back in must collapse to
+-- plain `g` (g being closed already), which Agda does not see
+-- definitionally -- no such lemma exists yet anywhere in Subst.agda /
+-- OpSemProofs.agda / Proofs.agda. Standard PLFA-style rename/subst
+-- fusion, plus "identity substitution is a no-op", both by mutual
+-- induction on Val/Handler/Expr.
+-- ---------------------------------------------------------------------
+
+Handler-eq : ∀ {Γ ℓ par σ σ' ε} {h1 h2 : Handler Γ ℓ par σ σ' ε}
+           → (∀ op → clause h1 op ≡ clause h2 op) → ret h1 ≡ ret h2 → h1 ≡ h2
+Handler-eq {h1 = h1} {h2 = h2} cEq rEq = cong₂ (λ c r → record { clause = c ; ret = r }) (funext cEq) rEq
+
+-- Every "substitute, given two POINTWISE-equal substitutions" fact
+-- below is proved by structural induction on the term (never by
+-- packaging the two substitutions into one Sub-level `_≡_` and using
+-- `cong`/pattern-matching on it: cong's implicit {A} metavariable
+-- cannot be solved when A is itself the rank-2, implicitly-quantified-
+-- over-σ Sub type, and Agda also refuses to split on `refl : σs ≡ σs'`
+-- for the very same reason -- so the induction carries the pointwise
+-- hypothesis through directly instead, PLFA-style).
+mutual
+  subV-cong : ∀ {Γ Γ' σ} {σs σs' : Sub Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → σs x ≡ σs' x) → (v : Val Γ σ) → subV σs v ≡ subV σs' v
+  subV-cong eq (vvar x)    = eq x
+  subV-cong eq (vgnd x)    = refl
+  subV-cong eq (vpair v w) = cong₂ vpair (subV-cong eq v) (subV-cong eq w)
+  subV-cong eq (vabs e)    = cong vabs (subE-cong (extS-cong eq) e)
+
+  extS-cong : ∀ {Γ Γ' τ0} {σs σs' : Sub Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → σs x ≡ σs' x) → ∀ {τ} (x : (Γ , τ0) ∋ τ) → extS σs x ≡ extS σs' x
+  extS-cong eq Z     = refl
+  extS-cong eq (S x) = cong weaken1V (eq x)
+
+  subH-cong : ∀ {Γ Γ' ℓ par σ σ' ε} {σs σs' : Sub Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → σs x ≡ σs' x) → (h : Handler Γ ℓ par σ σ' ε) → subH σs h ≡ subH σs' h
+  subH-cong eq h = Handler-eq
+    (λ op → subE-cong (extS-cong (extS-cong (extS-cong (extS-cong eq)))) (clause h op))
+    (subE-cong (extS-cong (extS-cong eq)) (ret h))
+
+  subE-cong : ∀ {Γ Γ' σ ε} {σs σs' : Sub Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → σs x ≡ σs' x) → (e : Γ ⊢ σ ! ε) → subE σs e ≡ subE σs' e
+  subE-cong eq (val v)          = cong val (subV-cong eq v)
+  subE-cong eq (fun f e)        = cong (fun f) (subE-cong eq e)
+  subE-cong eq (pair e e₁)      = cong₂ pair (subE-cong eq e) (subE-cong eq e₁)
+  subE-cong eq (fst e)          = cong fst (subE-cong eq e)
+  subE-cong eq (snd e)          = cong snd (subE-cong eq e)
+  subE-cong eq (app e e₁)       = cong₂ app (subE-cong eq e) (subE-cong eq e₁)
+  subE-cong eq (opE m op e)     = cong (opE m op) (subE-cong eq e)
+  subE-cong eq (lossE e)        = cong lossE (subE-cong eq e)
+  subE-cong eq (thenE s e g)    = cong₂ (thenE s) (subE-cong eq e) (subV-cong eq g)
+  subE-cong eq (plusE e1 e2)    = cong₂ plusE (subE-cong eq e1) (subE-cong eq e2)
+  subE-cong eq (glocalE s1 s2 e g) = cong₂ (glocalE s1 s2) (subE-cong eq e) (subV-cong eq g)
+  subE-cong eq (resetE e)       = cong resetE (subE-cong eq e)
+  subE-cong {σs = σs} {σs' = σs'} eq (handleE h e e₁) =
+    trans (cong (λ h' → handleE h' (subE σs e) (subE σs e₁)) (subH-cong eq h))
+          (cong₂ (handleE (subH σs' h)) (subE-cong eq e) (subE-cong eq e₁))
+
+extS-extR-pointwise : ∀ {Γ Γ' Γ'' τ0 τ} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (x : (Γ , τ0) ∋ τ)
+                     → extS σs (extR ρ x) ≡ extS (λ y → σs (ρ y)) x
+extS-extR-pointwise σs ρ Z     = refl
+extS-extR-pointwise σs ρ (S x) = refl
+
+extS²-extR²-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (x : ((Γ , τ0) , τ1) ∋ τ)
+                       → extS (extS σs) (extR (extR ρ) x) ≡ extS (extS (λ y → σs (ρ y))) x
+extS²-extR²-pointwise σs ρ Z     = refl
+extS²-extR²-pointwise σs ρ (S x) = cong weaken1V (extS-extR-pointwise σs ρ x)
+
+extS³-extR³-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (x : (((Γ , τ0) , τ1) , τ2) ∋ τ)
+                       → extS (extS (extS σs)) (extR (extR (extR ρ)) x) ≡ extS (extS (extS (λ y → σs (ρ y)))) x
+extS³-extR³-pointwise σs ρ Z     = refl
+extS³-extR³-pointwise σs ρ (S x) = cong weaken1V (extS²-extR²-pointwise σs ρ x)
+
+extS⁴-extR⁴-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ3 τ} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (x : ((((Γ , τ0) , τ1) , τ2) , τ3) ∋ τ)
+                       → extS (extS (extS (extS σs))) (extR (extR (extR (extR ρ))) x) ≡ extS (extS (extS (extS (λ y → σs (ρ y))))) x
+extS⁴-extR⁴-pointwise σs ρ Z     = refl
+extS⁴-extR⁴-pointwise σs ρ (S x) = cong weaken1V (extS³-extR³-pointwise σs ρ x)
+
+mutual
+  subV-renV-fuse : ∀ {Γ Γ' Γ'' σ} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (v : Val Γ σ)
+                  → subV σs (renV ρ v) ≡ subV (λ x → σs (ρ x)) v
+  subV-renV-fuse σs ρ (vvar x)    = refl
+  subV-renV-fuse σs ρ (vgnd x)    = refl
+  subV-renV-fuse σs ρ (vpair v w) = cong₂ vpair (subV-renV-fuse σs ρ v) (subV-renV-fuse σs ρ w)
+  subV-renV-fuse σs ρ (vabs e)    =
+    cong vabs (trans (subE-renE-fuse (extS σs) (extR ρ) e)
+                      (subE-cong (extS-extR-pointwise σs ρ) e))
+
+  subH-renH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
+                  → subH σs (renH ρ h) ≡ subH (λ x → σs (ρ x)) h
+  subH-renH-fuse σs ρ h = Handler-eq
+    (λ op → trans (subE-renE-fuse (extS (extS (extS (extS σs)))) (extR (extR (extR (extR ρ)))) (clause h op))
+                  (subE-cong (extS⁴-extR⁴-pointwise σs ρ) (clause h op)))
+    (trans (subE-renE-fuse (extS (extS σs)) (extR (extR ρ)) (ret h))
+           (subE-cong (extS²-extR²-pointwise σs ρ) (ret h)))
+
+  subE-renE-fuse : ∀ {Γ Γ' Γ'' σ ε} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (e : Γ ⊢ σ ! ε)
+                  → subE σs (renE ρ e) ≡ subE (λ x → σs (ρ x)) e
+  subE-renE-fuse σs ρ (val v)          = cong val (subV-renV-fuse σs ρ v)
+  subE-renE-fuse σs ρ (fun f e)        = cong (fun f) (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (pair e e₁)      = cong₂ pair (subE-renE-fuse σs ρ e) (subE-renE-fuse σs ρ e₁)
+  subE-renE-fuse σs ρ (fst e)          = cong fst (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (snd e)          = cong snd (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (app e e₁)       = cong₂ app (subE-renE-fuse σs ρ e) (subE-renE-fuse σs ρ e₁)
+  subE-renE-fuse σs ρ (opE m op e)     = cong (opE m op) (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (lossE e)        = cong lossE (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (thenE s e g)    = cong₂ (thenE s) (subE-renE-fuse σs ρ e) (subV-renV-fuse σs ρ g)
+  subE-renE-fuse σs ρ (plusE e1 e2)    = cong₂ plusE (subE-renE-fuse σs ρ e1) (subE-renE-fuse σs ρ e2)
+  subE-renE-fuse σs ρ (glocalE s1 s2 e g) = cong₂ (glocalE s1 s2) (subE-renE-fuse σs ρ e) (subV-renV-fuse σs ρ g)
+  subE-renE-fuse σs ρ (resetE e)       = cong resetE (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (handleE h e e₁) =
+    trans (cong (λ h' → handleE h' (subE σs (renE ρ e)) (subE σs (renE ρ e₁))) (subH-renH-fuse σs ρ h))
+          (cong₂ (handleE (subH (λ x → σs (ρ x)) h)) (subE-renE-fuse σs ρ e) (subE-renE-fuse σs ρ e₁))
+
+extS-idSub-pointwise : ∀ {Γ τ0 τ} (x : (Γ , τ0) ∋ τ) → extS idSub x ≡ idSub x
+extS-idSub-pointwise Z     = refl
+extS-idSub-pointwise (S x) = refl
+
+extS²-idSub-pointwise : ∀ {Γ τ0 τ1 τ} (x : ((Γ , τ0) , τ1) ∋ τ) → extS (extS idSub) x ≡ idSub x
+extS²-idSub-pointwise Z     = refl
+extS²-idSub-pointwise (S x) = cong weaken1V (extS-idSub-pointwise x)
+
+extS³-idSub-pointwise : ∀ {Γ τ0 τ1 τ2 τ} (x : (((Γ , τ0) , τ1) , τ2) ∋ τ) → extS (extS (extS idSub)) x ≡ idSub x
+extS³-idSub-pointwise Z     = refl
+extS³-idSub-pointwise (S x) = cong weaken1V (extS²-idSub-pointwise x)
+
+extS⁴-idSub-pointwise : ∀ {Γ τ0 τ1 τ2 τ3 τ} (x : ((((Γ , τ0) , τ1) , τ2) , τ3) ∋ τ) → extS (extS (extS (extS idSub))) x ≡ idSub x
+extS⁴-idSub-pointwise Z     = refl
+extS⁴-idSub-pointwise (S x) = cong weaken1V (extS³-idSub-pointwise x)
+
+mutual
+  subV-idSub : ∀ {Γ σ} (v : Val Γ σ) → subV idSub v ≡ v
+  subV-idSub (vvar x)    = refl
+  subV-idSub (vgnd x)    = refl
+  subV-idSub (vpair v w) = cong₂ vpair (subV-idSub v) (subV-idSub w)
+  subV-idSub (vabs e)    = cong vabs (trans (subE-cong extS-idSub-pointwise e) (subE-idSub e))
+
+  subH-idSub : ∀ {Γ ℓ par σ σ' ε} (h : Handler Γ ℓ par σ σ' ε) → subH idSub h ≡ h
+  subH-idSub h = Handler-eq
+    (λ op → trans (subE-cong extS⁴-idSub-pointwise (clause h op)) (subE-idSub (clause h op)))
+    (trans (subE-cong extS²-idSub-pointwise (ret h)) (subE-idSub (ret h)))
+
+  subE-idSub : ∀ {Γ σ ε} (e : Γ ⊢ σ ! ε) → subE idSub e ≡ e
+  subE-idSub (val v)          = cong val (subV-idSub v)
+  subE-idSub (fun f e)        = cong (fun f) (subE-idSub e)
+  subE-idSub (pair e e₁)      = cong₂ pair (subE-idSub e) (subE-idSub e₁)
+  subE-idSub (fst e)          = cong fst (subE-idSub e)
+  subE-idSub (snd e)          = cong snd (subE-idSub e)
+  subE-idSub (app e e₁)       = cong₂ app (subE-idSub e) (subE-idSub e₁)
+  subE-idSub (opE m op e)     = cong (opE m op) (subE-idSub e)
+  subE-idSub (lossE e)        = cong lossE (subE-idSub e)
+  subE-idSub (thenE s e g)    = cong₂ (thenE s) (subE-idSub e) (subV-idSub g)
+  subE-idSub (plusE e1 e2)    = cong₂ plusE (subE-idSub e1) (subE-idSub e2)
+  subE-idSub (glocalE s1 s2 e g) = cong₂ (glocalE s1 s2) (subE-idSub e) (subV-idSub g)
+  subE-idSub (resetE e)       = cong resetE (subE-idSub e)
+  subE-idSub (handleE h e e₁) =
+    trans (cong (λ h' → handleE h' (subE idSub e) (subE idSub e₁)) (subH-idSub h))
+          (cong₂ (handleE h) (subE-idSub e) (subE-idSub e₁))
+
+-- Instantiating the fusion+identity lemmas at σs = cons v idSub, ρ = S
+-- gives exactly "weaken1V then substitute the fresh variable to v
+-- collapses to the identity": the middle term of the trans below is
+-- convertible to `subV idSub g` since `cons v idSub (S x)` reduces to
+-- `idSub x` by cons's own S-clause, and `λ x → idSub x` is `idSub` by
+-- eta -- so Agda accepts the two `subV-renV-fuse`/`subV-idSub` calls
+-- chaining directly without any further rewriting.
+weaken1V-sub1-cancel : ∀ {Γ σ τ} (v : Val Γ τ) (g : Val Γ σ) → subV (cons v idSub) (renV S g) ≡ g
+weaken1V-sub1-cancel v g = trans (subV-renV-fuse (cons v idSub) S g) (subV-idSub g)
+
+-- Lemma A.7(2): if g:loss→loss!ε₁ is loss-computable, so is λ^ε
+-- x:loss.(r+x)▶g (ε₁⊆ε), for any r. Proceeds by exhibiting the paper's
+-- own two-step reduction (S2, unfreezing r+v via Rplus, THEN F-rule/
+-- F-plusR/R7, unfreezing the resulting v▶g via g's own value clause)
+-- directly, via gc-step/step-det-with at each step (both steps are
+-- deterministic, so "the successor is computable" suffices to show the
+-- SOURCE is too), landing on lemma-A7-1's own conclusion at the very
+-- end -- exactly "we apply part 1", per the paper's own proof.
+lemma-A7-2 : ∀ {ε₁ ε} (sub : ε₁ ⊆ᵉ ε) (r : R) {g : LC ∅ Loss ε₁}
+           → LossComputable (ComputableV Loss) g
+           → LossComputable (ComputableV Loss) (vabs (thenE sub (plusE (val (vgnd r)) (val (vvar Z))) (weaken1V g)))
+lemma-A7-2 {ε₁} {ε} sub r {g} lc-g {v} _ with val-closed-gnd v
+... | (v' , refl) with val-closed-abs g
+...   | (e , refl) =
+        subst (λ g' → RComputable {ε} (thenE sub (plusE (val (vgnd r)) (val (vgnd v'))) g'))
+              (sym (weaken1V-sub1-cancel (vgnd v') (vabs e))) step1-back
+  where
+  s : R
+  s = r + v'
+  final : RComputable {ε} (plusE (val (vgnd 0#)) (glocalE ⊆ᵉ-refl sub (e [ vgnd s ]) zeroLC))
+  final = lemma-A7-1 sub 0# (lc-g {vgnd s} tt)
+  step2-back : RComputable {ε} (plusE (val (vgnd 0#)) (thenE sub (val (vgnd s)) (vabs e)))
+  step2-back = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (F-rule ⊆ᵉ-refl (F-plusR (vgnd 0#)) (R7 sub (vgnd s) e))) step2-case
+    where
+    step2-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → Σ (εg ≡ ε) (λ eq → subst (λ ε' → LC ∅ Loss ε') eq g₁ ≡ zeroLC)
+               → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (plusE (val (vgnd 0#)) (thenE sub (val (vgnd s)) (vabs e))) r2 e''
+               → RComputable {ε} e''
+    step2-case {subX = subX} _ stp with step-det-with (F-rule subX (F-plusR (vgnd 0#)) (R7 sub (vgnd s) e)) stp
+    ... | (refl , refl) = final
+  step1-back : RComputable {ε} (thenE sub (plusE (val (vgnd r)) (val (vgnd v'))) (vabs e))
+  step1-back = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (S2 sub (vabs e) (Rplus r v'))) step1-case
+    where
+    step1-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → Σ (εg ≡ ε) (λ eq → subst (λ ε' → LC ∅ Loss ε') eq g₁ ≡ zeroLC)
+               → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (thenE sub (plusE (val (vgnd r)) (val (vgnd v'))) (vabs e)) r2 e''
+               → RComputable {ε} e''
+    step1-case _ stp with step-det-with (S2 sub (vabs e) (Rplus r v')) stp
+    ... | (refl , refl) = step2-back
+
+-- ---------------------------------------------------------------------
+-- Lemma A.8 (page 34).
+-- ---------------------------------------------------------------------
+
+-- Lemma A.8(1): if e:loss!ε is (fully) computable, so is r+e, for any
+-- r:R. Proceeds by L_loss,ε-induction on e -- the FULL notion (any
+-- loss-computable g at any εg⊆ε), unlike Lemma A.7's own {0}-restricted
+-- R-induction -- mirroring lemma-A6's own three-case template with
+-- plusE/Rplus/F-plusR standing in for glocalE/R8/S3/S-glocal. Unlike
+-- lemma-A7-1's gc-step case, the ambient g here is a genuinely
+-- arbitrary loss-computable g₁ (not pinned to zeroLC by G₀), so
+-- progress-dichotomy/F-rule inside step-case must be applied at the
+-- step-case's OWN {subX}/{g₁}, not a fixed ⊆ᵉ-refl/zeroLC (only
+-- nterm'/theorem-A4-1's throwaway witness may use a fixed choice, since
+-- Terminal itself does not depend on which sub/g is used to build it).
+lemma-A8-1 : ∀ {ε} (r : R) {e : ∅ ⊢ Loss ! ε} → ComputableE Loss ε e → ComputableE Loss ε (plusE (val (vgnd r)) e)
+lemma-A8-1 {ε} r = go
+  where
+  go : ∀ {e} → ComputableE Loss ε e → ComputableE Loss ε (plusE (val (vgnd r)) e)
+  go (gc-val {v} _) with val-closed-gnd v
+  ... | (v' , refl) = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (Rplus r v')) step-case
+    where
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → LossComputable (ComputableV Loss) g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (plusE (val (vgnd r)) (val (vgnd v'))) r2 e''
+              → GComputable (ComputableV Loss) (λ _ g' → LossComputable (ComputableV Loss) g') e''
+    step-case _ stp with step-det-with (Rplus r v') stp
+    ... | (refl , refl) = gc-val tt
+  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = F∘ K (F-plusR (vgnd r))} nh (λ {v1} → go (ihK {v1}))
+  go (gc-step {e} nterm ih) = gc-step nterm' step-case
+    where
+    -- F-rule's premise needs a step of e under a BOOSTED ambient (a
+    -- fresh vabs whose body first re-plugs the F-plusR frame back
+    -- around a bound-variable placeholder before falling through to
+    -- the real ambient) -- NOT e's step under the plain outer ambient
+    -- directly; progress-dichotomy's own plusE case (OpSemProofs.agda)
+    -- builds exactly this shape internally when inverting a step out of
+    -- a regular-frame-wrapped source, so it is reproduced here
+    -- explicitly. Crucially, this boosted continuation is EXACTLY
+    -- lemma-A7-2's own subject (plusE(val(vgnd r))(val(vvar Z)), up to
+    -- the definitional plugF/weaken1F unfoldings), so lemma-A7-2 itself
+    -- supplies its loss-computability -- meaning `ih` can be invoked at
+    -- this boosted ambient directly, rather than at (subX, g₁).
+    nterm' : ¬ Terminal (plusE (val (vgnd r)) e)
+    nterm' term with progress-dichotomy {g = vabs (thenE ⊆ᵉ-refl (plusE (val (vgnd r)) (val (vvar Z))) (weaken1V zeroLC))} e
+    ... | inj₁ t = nterm t
+    ... | inj₂ (r0 , e0' , stp0) = theorem-A4-1 {sub = ⊆ᵉ-refl} {g = zeroLC} term (F-rule ⊆ᵉ-refl (F-plusR (vgnd r)) stp0)
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → LossComputable (ComputableV Loss) g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (plusE (val (vgnd r)) e) r2 e''
+              → GComputable (ComputableV Loss) (λ _ g' → LossComputable (ComputableV Loss) g') e''
+    step-case {subX = subX} {g₁ = g₁} Gg₁ stp
+      with progress-dichotomy {g = vabs (thenE subX (plusE (val (vgnd r)) (val (vvar Z))) (weaken1V g₁))} e
+    ... | inj₁ t = ⊥-elim (nterm t)
+    ... | inj₂ (r0 , e0' , stp0) with step-det-with (F-rule subX (F-plusR (vgnd r)) stp0) stp
+    ...   | (refl , refl) =
+            go (ih {sub = ⊆ᵉ-refl}
+                   {g = vabs (thenE subX (plusE (val (vgnd r)) (val (vvar Z))) (weaken1V g₁))}
+                   (lemma-A7-2 subX r Gg₁) stp0)
+
+-- G-computability is antitone in G: a bigger set of admissible ambient
+-- continuations is a STRONGER hypothesis for gc-step's own induction
+-- step, so anything G-computable is automatically G'-computable for
+-- any G'⊆G (page 33's "as an example" remark, generalised from its own
+-- G'⊆G-is-computable-too phrasing into a reusable combinator -- needed
+-- twice in Lemma A.8(3) below, going both from the FULL "is loss-
+-- computable" G down to a single Gsingle g, and down to R-
+-- computability's own G₀ = Gsingle zeroLC).
+GComputable-antimono : ∀ {σ ε} {P : Val ∅ σ → Set} {G G' : ∀ {εg} → εg ⊆ᵉ ε → LC ∅ σ εg → Set}
+                      → (∀ {εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} → G' sub g → G sub g)
+                      → ∀ {e} → GComputable P G e → GComputable P G' e
+GComputable-antimono G'⊆G (gc-val Pv) = gc-val Pv
+GComputable-antimono G'⊆G (gc-stuck {K = K} nh ihK) = gc-stuck {K = K} nh (λ {v1} → GComputable-antimono G'⊆G (ihK {v1}))
+GComputable-antimono G'⊆G (gc-step {e = e} nterm ih) =
+  gc-step {e = e} nterm (λ {εg} {sub} {g} G'sg {r} {e'} stp → GComputable-antimono G'⊆G (ih {sub = sub} {g = g} (G'⊆G G'sg) stp))
+
+-- zeroLC is (trivially) loss-computable for any value predicate P: its
+-- body is the closed constant `val (vgnd 0#)`, substitution into it is
+-- a no-op, and R-computability of a bare ground value is immediate
+-- (ComputableV-acc's own (gnd γ) case is unconditionally ⊤).
+zeroLC-lossComputable : ∀ {ε} → LossComputable (ComputableV Loss) (zeroLC {ε = ε})
+zeroLC-lossComputable {v = v} _ = gc-val tt
+
+-- Lemma A.8(2): if g:σ→loss!ε' is loss-computable and e:σ!ε is {g}-
+-- computable (ε'⊆ε), then e▶g:loss!ε is (fully) computable. Proceeds
+-- by {g}-induction on e, mirroring lemma-A6's own three-case template
+-- with thenE/R7/S-then standing in for glocalE/R8/S-glocal -- unlike
+-- lemma-A6's own gc-val case (which lands directly on a value via R8),
+-- here R7's own result is glocalE-shaped, so lemma-A6 itself (with
+-- g=zeroLC, itself always loss-computable) finishes it off; the
+-- gc-step case's S2 step is ambient-transparent (unlike F-rule, its
+-- premise already uses thenE's own sub/g1 directly, no boosted
+-- continuation needed), landing on lemma-A8-1 to close the "r+(-)"
+-- wrapping S2 introduces.
+lemma-A8-2 : ∀ {σ ε' ε} (sub : ε' ⊆ᵉ ε) {g : LC ∅ σ ε'} {e : ∅ ⊢ σ ! ε}
+           → LossComputable (ComputableV σ) g
+           → GComputable (ComputableV σ) (Gsingle g) e
+           → ComputableE Loss ε (thenE sub e g)
+lemma-A8-2 {σ} {ε'} {ε} sub {g} lossCompG = go
+  where
+  go : ∀ {e} → GComputable (ComputableV σ) (Gsingle g) e → ComputableE Loss ε (thenE sub e g)
+  go (gc-val {v} Pv) with val-closed-abs g
+  ... | (e0 , refl) = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (R7 sub v e0)) step-case
+    where
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → LossComputable (ComputableV Loss) g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (thenE sub (val v) (vabs e0)) r2 e''
+              → GComputable (ComputableV Loss) (λ _ g' → LossComputable (ComputableV Loss) g') e''
+    step-case _ stp with step-det-with (R7 sub v e0) stp
+    ... | (refl , refl) = lemma-A6 {σ = Loss} ⊆ᵉ-refl sub {g = zeroLC} (λ {v = v1} → zeroLC-lossComputable {ε = ε'} {v = v1}) (lossCompG {v} Pv)
+  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = S∘ K (S-then sub g)} nh (λ {v1} → go (ihK {v1}))
+  go (gc-step {e} nterm ih) = gc-step nterm' step-case
+    where
+    nterm' : ¬ Terminal (thenE sub e g)
+    nterm' term with progress-dichotomy {sub = sub} {g = g} e
+    ... | inj₁ t = nterm t
+    ... | inj₂ (r0 , e0' , stp0) = theorem-A4-1 {sub = ⊆ᵉ-refl} {g = zeroLC} term (S2 sub g stp0)
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ Loss εg} → LossComputable (ComputableV Loss) g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (thenE sub e g) r2 e''
+              → GComputable (ComputableV Loss) (λ _ g' → LossComputable (ComputableV Loss) g') e''
+    step-case _ stp with progress-dichotomy {sub = sub} {g = g} e
+    ... | inj₁ t = ⊥-elim (nterm t)
+    ... | inj₂ (r0 , e0' , stp0) with step-det-with (S2 sub g stp0) stp
+    ...   | (refl , refl) = lemma-A8-1 r0 (go (ih {sub = sub} {g = g} (refl , refl) stp0))
+
+-- Lemma A.8(3): a direct corollary of part 2 -- go from a FULLY
+-- computable e[v]:σ!ε (part 2's own {g}-computable hypothesis is
+-- strictly weaker, via GComputable-antimono since Gsingle g ⊆ the full
+-- "is loss-computable" G, g itself being loss-computable), through
+-- lemma-A8-2, then a second GComputable-antimono call narrows the
+-- FULLY-computable *result* down to R-computable specifically (since
+-- LossComputable's own body clause demands RComputable, not full
+-- ComputableE -- G₀ = Gsingle zeroLC ⊆ full G too, zeroLC itself always
+-- being loss-computable), and weaken1V-sub1-cancel discharges the
+-- administrative weaken1V/sub1 mismatch between the substituted goal
+-- and lemma-A8-2's own g-shaped conclusion (the same gap lemma-A7-2
+-- closed).
+lemma-A8-3 : ∀ {σ τ ε' ε} (sub : ε' ⊆ᵉ ε) {g : LC ∅ σ ε'} {e : (∅ , τ) ⊢ σ ! ε}
+           → LossComputable (ComputableV σ) g
+           → (∀ {v : Val ∅ τ} → ComputableV τ v → ComputableE σ ε (e [ v ]))
+           → LossComputable (ComputableV τ) (vabs (thenE sub e (weaken1V g)))
+lemma-A8-3 {σ} {τ} {ε'} {ε} sub {g} {e} lossCompG compE {v} Pv =
+  subst (λ g' → RComputable {ε} (thenE sub (e [ v ]) g'))
+        (sym (weaken1V-sub1-cancel v g))
+        (GComputable-antimono {σ = Loss} {ε = ε}
+          {G = λ _ g0 → LossComputable (ComputableV Loss) g0} {G' = Gsingle zeroLC}
+          (λ { (refl , refl) {v = v1} → zeroLC-lossComputable {v = v1} })
+          (lemma-A8-2 sub lossCompG
+            (GComputable-antimono {σ = σ} {ε = ε}
+              {G = λ _ g0 → LossComputable (ComputableV σ) g0} {G' = Gsingle g}
+              (λ { (refl , refl) → lossCompG }) (compE Pv))))
 
