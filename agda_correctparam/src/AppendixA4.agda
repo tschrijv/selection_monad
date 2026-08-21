@@ -1096,3 +1096,66 @@ retApplied-sub1 {par = par} {σ = σ} h v1 v2 =
   pointwise Z     = refl
   pointwise (S Z) = weaken1V-sub1-cancel v2 v1
 
+-- ---------------------------------------------------------------------
+-- Lemma A.10's f_k/f_l are built (R5) from h/K weakened one variable
+-- (into the fresh pair-parameter's context) and then, once that pair
+-- is destructured, immediately paired back against a concrete value --
+-- so plugF/plugS/plugK "commute" with weaken-then-substitute-back
+-- (a strictly more general form of subE-plugF-weaken1F above, which is
+-- exactly this fact specialised at the plugged-in expression being the
+-- bound variable itself, val (vvar Z)).
+-- ---------------------------------------------------------------------
+
+subE-plugF-weaken1F-gen : ∀ {α τ ε τ0} (F : Frame ∅ α ε τ ε) (v : Val ∅ τ0) (X : (∅ , τ0) ⊢ α ! ε)
+                         → subE (cons v idSub) (plugF (weaken1F F) X) ≡ plugF F (subE (cons v idSub) X)
+subE-plugF-weaken1F-gen (F-fun f)       v X = refl
+subE-plugF-weaken1F-gen (F-pairL e)     v X = cong (pair (subE (cons v idSub) X)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F-gen (F-pairR w)     v X = cong (λ w' → pair (val w') (subE (cons v idSub) X)) (weaken1V-sub1-cancel v w)
+subE-plugF-weaken1F-gen F-fst           v X = refl
+subE-plugF-weaken1F-gen F-snd           v X = refl
+subE-plugF-weaken1F-gen (F-appL e)      v X = cong (app (subE (cons v idSub) X)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F-gen (F-appR w)      v X = cong (λ w' → app (val w') (subE (cons v idSub) X)) (weaken1V-sub1-cancel v w)
+subE-plugF-weaken1F-gen (F-op m op)     v X = refl
+subE-plugF-weaken1F-gen F-loss          v X = refl
+subE-plugF-weaken1F-gen (F-handleP h b) v X = cong₂ (λ h' b' → handleE h' (subE (cons v idSub) X) b') (weaken1-sub1-cancelH v h) (weaken1-sub1-cancelE v b)
+subE-plugF-weaken1F-gen (F-plusL e)     v X = cong (plusE (subE (cons v idSub) X)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F-gen (F-plusR w)     v X = cong (λ w' → plusE (val w') (subE (cons v idSub) X)) (weaken1V-sub1-cancel v w)
+
+subE-plugS-weaken1S-gen : ∀ {α τ ε ε' τ0} (s : SFrame ∅ α ε τ ε') (v : Val ∅ τ0) (X : (∅ , τ0) ⊢ α ! ε)
+                         → subE (cons v idSub) (plugS (renS S s) X) ≡ plugS s (subE (cons v idSub) X)
+subE-plugS-weaken1S-gen (S-handleB h w) v X = cong₂ (λ h' w' → handleE h' (val w') (subE (cons v idSub) X)) (weaken1-sub1-cancelH v h) (weaken1V-sub1-cancel v w)
+subE-plugS-weaken1S-gen (S-then sub g)  v X = cong (thenE sub (subE (cons v idSub) X)) (weaken1V-sub1-cancel v g)
+subE-plugS-weaken1S-gen (S-glocal s1 s2 g) v X = cong (glocalE s1 s2 (subE (cons v idSub) X)) (weaken1V-sub1-cancel v g)
+subE-plugS-weaken1S-gen S-reset         v X = refl
+
+-- Every regular frame's own hole ambient literally IS its codomain
+-- ambient (every one of the 12 constructors uses the same EffCxt
+-- variable in both slots) -- but Frame's own general type signature
+-- allows them to differ in principle (it is a property of every
+-- INHABITANT, not encoded in the type itself), so a frame `f`
+-- extracted opaquely from a ContCxt (as F∘'s own second field) is not
+-- automatically known to satisfy it until pattern-matched down to a
+-- concrete constructor. Needed to let weaken1K-sub1-plugK's own F∘
+-- case invoke subE-plugF-weaken1F-gen (which, like every lemma in this
+-- file, is stated at a single shared ambient).
+Frame-amb-eq : ∀ {Γ σ ε τ ε'} → Frame Γ σ ε τ ε' → ε ≡ ε'
+Frame-amb-eq (F-fun f)       = refl
+Frame-amb-eq (F-pairL e)     = refl
+Frame-amb-eq (F-pairR v)     = refl
+Frame-amb-eq F-fst           = refl
+Frame-amb-eq F-snd           = refl
+Frame-amb-eq (F-appL e)      = refl
+Frame-amb-eq (F-appR v)      = refl
+Frame-amb-eq (F-op m op)     = refl
+Frame-amb-eq F-loss          = refl
+Frame-amb-eq (F-handleP h b) = refl
+Frame-amb-eq (F-plusL e)     = refl
+Frame-amb-eq (F-plusR v)     = refl
+
+weaken1K-sub1-plugK : ∀ {α εα σ ε τ0} (v : Val ∅ τ0) (k : ContCxt ∅ α εα σ ε) (e : (∅ , τ0) ⊢ α ! εα)
+                     → subE (cons v idSub) (plugK (weaken1K k) e) ≡ plugK k (subE (cons v idSub) e)
+weaken1K-sub1-plugK v ▫        e = refl
+weaken1K-sub1-plugK v (F∘ k f) e with Frame-amb-eq f
+... | refl = trans (subE-plugF-weaken1F-gen f v (plugK (weaken1K k) e)) (cong (plugF f) (weaken1K-sub1-plugK v k e))
+weaken1K-sub1-plugK v (S∘ k s) e = trans (subE-plugS-weaken1S-gen s v (plugK (weaken1K k) e)) (cong (plugS s) (weaken1K-sub1-plugK v k e))
+
