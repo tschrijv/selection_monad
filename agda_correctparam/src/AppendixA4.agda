@@ -858,3 +858,241 @@ lemma-A9 {α} {τ} {ε} {ε'} F sub {g} lossCompG Fcomp {e} compE = go compE'
     ... | inj₂ (r0 , e0'' , stp0) with step-det-with (F-rule subX F stp0) stp
     ...   | (refl , refl) = go (ih {sub = ⊆ᵉ-refl} {g = boosted subX} (refl , subX , refl) stp0)
 
+-- ---------------------------------------------------------------------
+-- A further substitution-algebra layer Lemma A.10 needs: composing TWO
+-- substitutions (retApplied's own substitution of the handler param,
+-- then the OUTER substitution of the return value) into a single one,
+-- to match R6's own one-shot conclusion. Built bottom-up: pointwise
+-- renaming congruence and rename-rename fusion first (renV-renV-fuse),
+-- since rename-then-substitute fusion's own vabs case needs it, and
+-- THAT in turn is what substitute-then-substitute fusion's own vabs
+-- case needs.
+-- ---------------------------------------------------------------------
+
+mutual
+  renV-cong : ∀ {Γ Γ' σ} {ρ ρ' : Ren Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → ρ x ≡ ρ' x) → (v : Val Γ σ) → renV ρ v ≡ renV ρ' v
+  renV-cong eq (vvar x)    = cong vvar (eq x)
+  renV-cong eq (vgnd x)    = refl
+  renV-cong eq (vpair v w) = cong₂ vpair (renV-cong eq v) (renV-cong eq w)
+  renV-cong eq (vabs e)    = cong vabs (renE-cong (extR-cong eq) e)
+
+  extR-cong : ∀ {Γ Γ' τ0} {ρ ρ' : Ren Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → ρ x ≡ ρ' x) → ∀ {τ} (x : (Γ , τ0) ∋ τ) → extR ρ x ≡ extR ρ' x
+  extR-cong eq Z     = refl
+  extR-cong eq (S x) = cong S (eq x)
+
+  renH-cong : ∀ {Γ Γ' ℓ par σ σ' ε} {ρ ρ' : Ren Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → ρ x ≡ ρ' x) → (h : Handler Γ ℓ par σ σ' ε) → renH ρ h ≡ renH ρ' h
+  renH-cong eq h = Handler-eq
+    (λ op → renE-cong (extR-cong (extR-cong (extR-cong (extR-cong eq)))) (clause h op))
+    (renE-cong (extR-cong (extR-cong eq)) (ret h))
+
+  renE-cong : ∀ {Γ Γ' σ ε} {ρ ρ' : Ren Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → ρ x ≡ ρ' x) → (e : Γ ⊢ σ ! ε) → renE ρ e ≡ renE ρ' e
+  renE-cong eq (val v)          = cong val (renV-cong eq v)
+  renE-cong eq (fun f e)        = cong (fun f) (renE-cong eq e)
+  renE-cong eq (pair e e₁)      = cong₂ pair (renE-cong eq e) (renE-cong eq e₁)
+  renE-cong eq (fst e)          = cong fst (renE-cong eq e)
+  renE-cong eq (snd e)          = cong snd (renE-cong eq e)
+  renE-cong eq (app e e₁)       = cong₂ app (renE-cong eq e) (renE-cong eq e₁)
+  renE-cong eq (opE m op e)     = cong (opE m op) (renE-cong eq e)
+  renE-cong eq (lossE e)        = cong lossE (renE-cong eq e)
+  renE-cong eq (thenE s e g)    = cong₂ (thenE s) (renE-cong eq e) (renV-cong eq g)
+  renE-cong eq (plusE e1 e2)    = cong₂ plusE (renE-cong eq e1) (renE-cong eq e2)
+  renE-cong eq (glocalE s1 s2 e g) = cong₂ (glocalE s1 s2) (renE-cong eq e) (renV-cong eq g)
+  renE-cong eq (resetE e)       = cong resetE (renE-cong eq e)
+  renE-cong {ρ = ρ} {ρ' = ρ'} eq (handleE h e e₁) =
+    trans (cong (λ h' → handleE h' (renE ρ e) (renE ρ e₁)) (renH-cong eq h))
+          (cong₂ (handleE (renH ρ' h)) (renE-cong eq e) (renE-cong eq e₁))
+
+extR-extR-pointwise : ∀ {Γ Γ' Γ'' τ0 τ} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (x : (Γ , τ0) ∋ τ)
+                     → extR ρ2 (extR ρ1 x) ≡ extR (λ y → ρ2 (ρ1 y)) x
+extR-extR-pointwise ρ2 ρ1 Z     = refl
+extR-extR-pointwise ρ2 ρ1 (S x) = refl
+
+extR²-extR²-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (x : ((Γ , τ0) , τ1) ∋ τ)
+                       → extR (extR ρ2) (extR (extR ρ1) x) ≡ extR (extR (λ y → ρ2 (ρ1 y))) x
+extR²-extR²-pointwise ρ2 ρ1 Z     = refl
+extR²-extR²-pointwise ρ2 ρ1 (S x) = cong S (extR-extR-pointwise ρ2 ρ1 x)
+
+extR³-extR³-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (x : (((Γ , τ0) , τ1) , τ2) ∋ τ)
+                       → extR (extR (extR ρ2)) (extR (extR (extR ρ1)) x) ≡ extR (extR (extR (λ y → ρ2 (ρ1 y)))) x
+extR³-extR³-pointwise ρ2 ρ1 Z     = refl
+extR³-extR³-pointwise ρ2 ρ1 (S x) = cong S (extR²-extR²-pointwise ρ2 ρ1 x)
+
+extR⁴-extR⁴-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ3 τ} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (x : ((((Γ , τ0) , τ1) , τ2) , τ3) ∋ τ)
+                       → extR (extR (extR (extR ρ2))) (extR (extR (extR (extR ρ1))) x) ≡ extR (extR (extR (extR (λ y → ρ2 (ρ1 y))))) x
+extR⁴-extR⁴-pointwise ρ2 ρ1 Z     = refl
+extR⁴-extR⁴-pointwise ρ2 ρ1 (S x) = cong S (extR³-extR³-pointwise ρ2 ρ1 x)
+
+mutual
+  renV-renV-fuse : ∀ {Γ Γ' Γ'' σ} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (v : Val Γ σ)
+                  → renV ρ2 (renV ρ1 v) ≡ renV (λ x → ρ2 (ρ1 x)) v
+  renV-renV-fuse ρ2 ρ1 (vvar x)    = refl
+  renV-renV-fuse ρ2 ρ1 (vgnd x)    = refl
+  renV-renV-fuse ρ2 ρ1 (vpair v w) = cong₂ vpair (renV-renV-fuse ρ2 ρ1 v) (renV-renV-fuse ρ2 ρ1 w)
+  renV-renV-fuse ρ2 ρ1 (vabs e)    =
+    cong vabs (trans (renE-renE-fuse (extR ρ2) (extR ρ1) e)
+                      (renE-cong (extR-extR-pointwise ρ2 ρ1) e))
+
+  renH-renH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
+                  → renH ρ2 (renH ρ1 h) ≡ renH (λ x → ρ2 (ρ1 x)) h
+  renH-renH-fuse ρ2 ρ1 h = Handler-eq
+    (λ op → trans (renE-renE-fuse (extR (extR (extR (extR ρ2)))) (extR (extR (extR (extR ρ1)))) (clause h op))
+                  (renE-cong (extR⁴-extR⁴-pointwise ρ2 ρ1) (clause h op)))
+    (trans (renE-renE-fuse (extR (extR ρ2)) (extR (extR ρ1)) (ret h))
+           (renE-cong (extR²-extR²-pointwise ρ2 ρ1) (ret h)))
+
+  renE-renE-fuse : ∀ {Γ Γ' Γ'' σ ε} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (e : Γ ⊢ σ ! ε)
+                  → renE ρ2 (renE ρ1 e) ≡ renE (λ x → ρ2 (ρ1 x)) e
+  renE-renE-fuse ρ2 ρ1 (val v)          = cong val (renV-renV-fuse ρ2 ρ1 v)
+  renE-renE-fuse ρ2 ρ1 (fun f e)        = cong (fun f) (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (pair e e₁)      = cong₂ pair (renE-renE-fuse ρ2 ρ1 e) (renE-renE-fuse ρ2 ρ1 e₁)
+  renE-renE-fuse ρ2 ρ1 (fst e)          = cong fst (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (snd e)          = cong snd (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (app e e₁)       = cong₂ app (renE-renE-fuse ρ2 ρ1 e) (renE-renE-fuse ρ2 ρ1 e₁)
+  renE-renE-fuse ρ2 ρ1 (opE m op e)     = cong (opE m op) (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (lossE e)        = cong lossE (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (thenE s e g)    = cong₂ (thenE s) (renE-renE-fuse ρ2 ρ1 e) (renV-renV-fuse ρ2 ρ1 g)
+  renE-renE-fuse ρ2 ρ1 (plusE e1 e2)    = cong₂ plusE (renE-renE-fuse ρ2 ρ1 e1) (renE-renE-fuse ρ2 ρ1 e2)
+  renE-renE-fuse ρ2 ρ1 (glocalE s1 s2 e g) = cong₂ (glocalE s1 s2) (renE-renE-fuse ρ2 ρ1 e) (renV-renV-fuse ρ2 ρ1 g)
+  renE-renE-fuse ρ2 ρ1 (resetE e)       = cong resetE (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (handleE h e e₁) =
+    trans (cong (λ h' → handleE h' (renE ρ2 (renE ρ1 e)) (renE ρ2 (renE ρ1 e₁))) (renH-renH-fuse ρ2 ρ1 h))
+          (cong₂ (handleE (renH (λ x → ρ2 (ρ1 x)) h)) (renE-renE-fuse ρ2 ρ1 e) (renE-renE-fuse ρ2 ρ1 e₁))
+
+-- "weaken then substitute (or rename) commutes with weaken" -- the
+-- pointwise engine behind every depth->1 extR-extS/extS-extS-pointwise
+-- S-case below (each such case is exactly one of these two facts,
+-- composed with the depth-(n-1) fact at the peeled-off variable).
+renV-S-commute : ∀ {Γ Γ' τ0 σ} (ρ : Ren Γ Γ') (v : Val Γ σ) → renV (extR {τ = τ0} ρ) (renV S v) ≡ renV S (renV ρ v)
+renV-S-commute ρ v = trans (renV-renV-fuse (extR ρ) S v) (sym (renV-renV-fuse S ρ v))
+
+extR-extS-pointwise : ∀ {Γ Γ' Γ'' τ0 τ} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (x : (Γ , τ0) ∋ τ)
+                     → renV (extR ρ) (extS σs x) ≡ extS (λ y → renV ρ (σs y)) x
+extR-extS-pointwise ρ σs Z     = refl
+extR-extS-pointwise ρ σs (S x) = renV-S-commute ρ (σs x)
+
+extR²-extS²-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (x : ((Γ , τ0) , τ1) ∋ τ)
+                       → renV (extR (extR ρ)) (extS (extS σs) x) ≡ extS (extS (λ y → renV ρ (σs y))) x
+extR²-extS²-pointwise ρ σs Z     = refl
+extR²-extS²-pointwise ρ σs (S x) = trans (renV-S-commute (extR ρ) (extS σs x)) (cong (renV S) (extR-extS-pointwise ρ σs x))
+
+extR³-extS³-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (x : (((Γ , τ0) , τ1) , τ2) ∋ τ)
+                       → renV (extR (extR (extR ρ))) (extS (extS (extS σs)) x) ≡ extS (extS (extS (λ y → renV ρ (σs y)))) x
+extR³-extS³-pointwise ρ σs Z     = refl
+extR³-extS³-pointwise ρ σs (S x) = trans (renV-S-commute (extR (extR ρ)) (extS (extS σs) x)) (cong (renV S) (extR²-extS²-pointwise ρ σs x))
+
+extR⁴-extS⁴-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ3 τ} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (x : ((((Γ , τ0) , τ1) , τ2) , τ3) ∋ τ)
+                       → renV (extR (extR (extR (extR ρ)))) (extS (extS (extS (extS σs))) x) ≡ extS (extS (extS (extS (λ y → renV ρ (σs y))))) x
+extR⁴-extS⁴-pointwise ρ σs Z     = refl
+extR⁴-extS⁴-pointwise ρ σs (S x) = trans (renV-S-commute (extR (extR (extR ρ))) (extS (extS (extS σs)) x)) (cong (renV S) (extR³-extS³-pointwise ρ σs x))
+
+mutual
+  renV-subV-fuse : ∀ {Γ Γ' Γ'' σ} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (v : Val Γ σ)
+                  → renV ρ (subV σs v) ≡ subV (λ x → renV ρ (σs x)) v
+  renV-subV-fuse ρ σs (vvar x)    = refl
+  renV-subV-fuse ρ σs (vgnd x)    = refl
+  renV-subV-fuse ρ σs (vpair v w) = cong₂ vpair (renV-subV-fuse ρ σs v) (renV-subV-fuse ρ σs w)
+  renV-subV-fuse ρ σs (vabs e)    =
+    cong vabs (trans (renE-subE-fuse (extR ρ) (extS σs) e)
+                      (subE-cong (extR-extS-pointwise ρ σs) e))
+
+  renH-subH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
+                  → renH ρ (subH σs h) ≡ subH (λ x → renV ρ (σs x)) h
+  renH-subH-fuse ρ σs h = Handler-eq
+    (λ op → trans (renE-subE-fuse (extR (extR (extR (extR ρ)))) (extS (extS (extS (extS σs)))) (clause h op))
+                  (subE-cong (extR⁴-extS⁴-pointwise ρ σs) (clause h op)))
+    (trans (renE-subE-fuse (extR (extR ρ)) (extS (extS σs)) (ret h))
+           (subE-cong (extR²-extS²-pointwise ρ σs) (ret h)))
+
+  renE-subE-fuse : ∀ {Γ Γ' Γ'' σ ε} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (e : Γ ⊢ σ ! ε)
+                  → renE ρ (subE σs e) ≡ subE (λ x → renV ρ (σs x)) e
+  renE-subE-fuse ρ σs (val v)          = cong val (renV-subV-fuse ρ σs v)
+  renE-subE-fuse ρ σs (fun f e)        = cong (fun f) (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (pair e e₁)      = cong₂ pair (renE-subE-fuse ρ σs e) (renE-subE-fuse ρ σs e₁)
+  renE-subE-fuse ρ σs (fst e)          = cong fst (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (snd e)          = cong snd (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (app e e₁)       = cong₂ app (renE-subE-fuse ρ σs e) (renE-subE-fuse ρ σs e₁)
+  renE-subE-fuse ρ σs (opE m op e)     = cong (opE m op) (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (lossE e)        = cong lossE (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (thenE s e g)    = cong₂ (thenE s) (renE-subE-fuse ρ σs e) (renV-subV-fuse ρ σs g)
+  renE-subE-fuse ρ σs (plusE e1 e2)    = cong₂ plusE (renE-subE-fuse ρ σs e1) (renE-subE-fuse ρ σs e2)
+  renE-subE-fuse ρ σs (glocalE s1 s2 e g) = cong₂ (glocalE s1 s2) (renE-subE-fuse ρ σs e) (renV-subV-fuse ρ σs g)
+  renE-subE-fuse ρ σs (resetE e)       = cong resetE (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (handleE h e e₁) =
+    trans (cong (λ h' → handleE h' (renE ρ (subE σs e)) (renE ρ (subE σs e₁))) (renH-subH-fuse ρ σs h))
+          (cong₂ (handleE (subH (λ x → renV ρ (σs x)) h)) (renE-subE-fuse ρ σs e) (renE-subE-fuse ρ σs e₁))
+
+subV-S-commute : ∀ {Γ Γ' τ0 σ} (σs : Sub Γ Γ') (v : Val Γ σ) → subV (extS {τ = τ0} σs) (renV S v) ≡ renV S (subV σs v)
+subV-S-commute σs v = trans (subV-renV-fuse (extS σs) S v) (sym (renV-subV-fuse S σs v))
+
+extS-extS-pointwise : ∀ {Γ Γ' Γ'' τ0 τ} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (x : (Γ , τ0) ∋ τ)
+                     → subV (extS σs2) (extS σs1 x) ≡ extS (λ y → subV σs2 (σs1 y)) x
+extS-extS-pointwise σs2 σs1 Z     = refl
+extS-extS-pointwise σs2 σs1 (S x) = subV-S-commute σs2 (σs1 x)
+
+extS²-extS²-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (x : ((Γ , τ0) , τ1) ∋ τ)
+                       → subV (extS (extS σs2)) (extS (extS σs1) x) ≡ extS (extS (λ y → subV σs2 (σs1 y))) x
+extS²-extS²-pointwise σs2 σs1 Z     = refl
+extS²-extS²-pointwise σs2 σs1 (S x) = trans (subV-S-commute (extS σs2) (extS σs1 x)) (cong (renV S) (extS-extS-pointwise σs2 σs1 x))
+
+extS³-extS³-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (x : (((Γ , τ0) , τ1) , τ2) ∋ τ)
+                       → subV (extS (extS (extS σs2))) (extS (extS (extS σs1)) x) ≡ extS (extS (extS (λ y → subV σs2 (σs1 y)))) x
+extS³-extS³-pointwise σs2 σs1 Z     = refl
+extS³-extS³-pointwise σs2 σs1 (S x) = trans (subV-S-commute (extS (extS σs2)) (extS (extS σs1) x)) (cong (renV S) (extS²-extS²-pointwise σs2 σs1 x))
+
+extS⁴-extS⁴-pointwise : ∀ {Γ Γ' Γ'' τ0 τ1 τ2 τ3 τ} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (x : ((((Γ , τ0) , τ1) , τ2) , τ3) ∋ τ)
+                       → subV (extS (extS (extS (extS σs2)))) (extS (extS (extS (extS σs1))) x) ≡ extS (extS (extS (extS (λ y → subV σs2 (σs1 y))))) x
+extS⁴-extS⁴-pointwise σs2 σs1 Z     = refl
+extS⁴-extS⁴-pointwise σs2 σs1 (S x) = trans (subV-S-commute (extS (extS (extS σs2))) (extS (extS (extS σs1)) x)) (cong (renV S) (extS³-extS³-pointwise σs2 σs1 x))
+
+mutual
+  subV-subV-fuse : ∀ {Γ Γ' Γ'' σ} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (v : Val Γ σ)
+                  → subV σs2 (subV σs1 v) ≡ subV (λ x → subV σs2 (σs1 x)) v
+  subV-subV-fuse σs2 σs1 (vvar x)    = refl
+  subV-subV-fuse σs2 σs1 (vgnd x)    = refl
+  subV-subV-fuse σs2 σs1 (vpair v w) = cong₂ vpair (subV-subV-fuse σs2 σs1 v) (subV-subV-fuse σs2 σs1 w)
+  subV-subV-fuse σs2 σs1 (vabs e)    =
+    cong vabs (trans (subE-subE-fuse (extS σs2) (extS σs1) e)
+                      (subE-cong (extS-extS-pointwise σs2 σs1) e))
+
+  subH-subH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
+                  → subH σs2 (subH σs1 h) ≡ subH (λ x → subV σs2 (σs1 x)) h
+  subH-subH-fuse σs2 σs1 h = Handler-eq
+    (λ op → trans (subE-subE-fuse (extS (extS (extS (extS σs2)))) (extS (extS (extS (extS σs1)))) (clause h op))
+                  (subE-cong (extS⁴-extS⁴-pointwise σs2 σs1) (clause h op)))
+    (trans (subE-subE-fuse (extS (extS σs2)) (extS (extS σs1)) (ret h))
+           (subE-cong (extS²-extS²-pointwise σs2 σs1) (ret h)))
+
+  subE-subE-fuse : ∀ {Γ Γ' Γ'' σ ε} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (e : Γ ⊢ σ ! ε)
+                  → subE σs2 (subE σs1 e) ≡ subE (λ x → subV σs2 (σs1 x)) e
+  subE-subE-fuse σs2 σs1 (val v)          = cong val (subV-subV-fuse σs2 σs1 v)
+  subE-subE-fuse σs2 σs1 (fun f e)        = cong (fun f) (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (pair e e₁)      = cong₂ pair (subE-subE-fuse σs2 σs1 e) (subE-subE-fuse σs2 σs1 e₁)
+  subE-subE-fuse σs2 σs1 (fst e)          = cong fst (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (snd e)          = cong snd (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (app e e₁)       = cong₂ app (subE-subE-fuse σs2 σs1 e) (subE-subE-fuse σs2 σs1 e₁)
+  subE-subE-fuse σs2 σs1 (opE m op e)     = cong (opE m op) (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (lossE e)        = cong lossE (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (thenE s e g)    = cong₂ (thenE s) (subE-subE-fuse σs2 σs1 e) (subV-subV-fuse σs2 σs1 g)
+  subE-subE-fuse σs2 σs1 (plusE e1 e2)    = cong₂ plusE (subE-subE-fuse σs2 σs1 e1) (subE-subE-fuse σs2 σs1 e2)
+  subE-subE-fuse σs2 σs1 (glocalE s1 s2 e g) = cong₂ (glocalE s1 s2) (subE-subE-fuse σs2 σs1 e) (subV-subV-fuse σs2 σs1 g)
+  subE-subE-fuse σs2 σs1 (resetE e)       = cong resetE (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (handleE h e e₁) =
+    trans (cong (λ h' → handleE h' (subE σs2 (subE σs1 e)) (subE σs2 (subE σs1 e₁))) (subH-subH-fuse σs2 σs1 h))
+          (cong₂ (handleE (subH (λ x → subV σs2 (σs1 x)) h)) (subE-subE-fuse σs2 σs1 e) (subE-subE-fuse σs2 σs1 e₁))
+
+-- retApplied h v1, applied to v2, collapses to R6's own one-shot
+-- substitution: the composed substitution (cons v2 idSub)∘(cons(vvarZ)
+-- (cons(weaken1Vv1)wkSub)) agrees pointwise with cons v2(consv1idSub)
+-- -- at Z (retApplied's own vvarZ placeholder) it is v2 directly, and
+-- at SZ (retApplied's own weaken1Vv1) it is v1, via
+-- weaken1V-sub1-cancel (the same cancellation Lemma A.7(2) needed).
+retApplied-sub1 : ∀ {ℓ par σ σ' ε} (h : Handler ∅ ℓ par σ σ' ε) (v1 : Val ∅ (gnd par)) (v2 : Val ∅ σ)
+                 → subE (cons v2 idSub) (retApplied h v1) ≡ subE (cons v2 (cons v1 idSub)) (ret h)
+retApplied-sub1 {par = par} {σ = σ} h v1 v2 =
+  trans (subE-subE-fuse (cons v2 idSub) (cons (vvar Z) (cons (weaken1V v1) wkSub)) (ret h))
+        (subE-cong pointwise (ret h))
+  where
+  pointwise : ∀ {τ} (x : ((∅ , gnd par) , σ) ∋ τ) → subV (cons v2 idSub) ((cons (vvar Z) (cons (weaken1V v1) wkSub)) x) ≡ (cons v2 (cons v1 idSub)) x
+  pointwise Z     = refl
+  pointwise (S Z) = weaken1V-sub1-cancel v2 v1
+
