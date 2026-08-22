@@ -1514,3 +1514,73 @@ lemma-A10 {ℓ} {par} {σ} {σ'} {ε} h (hClause , hRet) {e} compE {v0} v0Comp =
       hRet' : ∀ {w : Val ∅ σ} → ComputableV σ w → ComputableE σ' ε ((retApplied h v) [ w ])
       hRet' {w} wComp = subst (ComputableE σ' ε) (sym (retApplied-sub1 h v w)) (hRet vComp wComp)
 
+-- ---------------------------------------------------------------------
+-- Lemma A.11 (page 33-37): the Fundamental Lemma -- every well-typed
+-- (open) expression is computable once its free variables are
+-- instantiated at computable closed values. Proceeds by ordinary
+-- structural induction on the expression's own syntax (mutually with
+-- values/handlers) rather than the paper's own size-based induction:
+-- for this development's own concrete, fixed set of Frame/SFrame
+-- constructors, the paper's "F[x] is computable via the induction
+-- hypothesis, applied at the size-smaller F[x]" step reduces, case by
+-- case, to either a direct value-value redex (independent of any
+-- subterm), or a dependency on F's own OTHER component, which is
+-- always a genuine syntactic subterm of e itself (e.g. e2 in F-pairL,
+-- b in F-handleP) -- so Lemma A.9/lemma-reset's own internal induction
+-- (over e's computability, not its size) already does everything the
+-- paper's separate size-argument was for.
+--
+-- First, the substitution-algebra plumbing every binder case (vabs,
+-- clause, ret) needs: composing an extended substitution (extS^n σs,
+-- leaving the n freshly-bound variables open) with a substitution that
+-- instantiates exactly those n variables, into a single n-ary
+-- extension of σs itself.
+-- ---------------------------------------------------------------------
+
+cons-weaken1V-cancel : ∀ {Γ σ τ} (v : Val ∅ τ) (σs : Sub Γ ∅) (g : Val Γ σ) → subV (cons v σs) (renV S g) ≡ subV σs g
+cons-weaken1V-cancel v σs g = subV-renV-fuse (cons v σs) S g
+
+subE-ext-cons : ∀ {Γ σ τ ε} (σs : Sub Γ ∅) (v : Val ∅ σ) (e : (Γ , σ) ⊢ τ ! ε)
+              → subE (cons v idSub) (subE (extS σs) e) ≡ subE (cons v σs) e
+subE-ext-cons σs v e = trans (subE-subE-fuse (cons v idSub) (extS σs) e) (subE-cong pointwise e)
+  where
+  pointwise : ∀ {τ'} (x : (_ , _) ∋ τ') → subV (cons v idSub) (extS σs x) ≡ cons v σs x
+  pointwise Z     = refl
+  pointwise (S x) = weaken1V-sub1-cancel v (σs x)
+
+subE-ext2-cons2 : ∀ {Γ σ1 σ2 τ ε} (σs : Sub Γ ∅) (v1 : Val ∅ σ1) (v2 : Val ∅ σ2) (e : ((Γ , σ1) , σ2) ⊢ τ ! ε)
+                 → subE (cons v2 (cons v1 idSub)) (subE (extS (extS σs)) e) ≡ subE (cons v2 (cons v1 σs)) e
+subE-ext2-cons2 {σ1 = σ1} {σ2 = σ2} σs v1 v2 e = trans (subE-subE-fuse (cons v2 (cons v1 idSub)) (extS (extS σs)) e) (subE-cong pointwise e)
+  where
+  pointwise : ∀ {τ'} (x : ((_ , σ1) , σ2) ∋ τ') → subV (cons v2 (cons v1 idSub)) (extS (extS σs) x) ≡ cons v2 (cons v1 σs) x
+  pointwise Z         = refl
+  pointwise (S Z)     = refl
+  pointwise (S (S x)) = trans (cons-weaken1V-cancel v2 (cons v1 idSub) (weaken1V (σs x))) (weaken1V-sub1-cancel v1 (σs x))
+
+subE-ext4-cons4 : ∀ {Γ σ1 σ2 σ3 σ4 τ ε} (σs : Sub Γ ∅) (v1 : Val ∅ σ1) (v2 : Val ∅ σ2) (v3 : Val ∅ σ3) (v4 : Val ∅ σ4)
+                 (e : ((((Γ , σ1) , σ2) , σ3) , σ4) ⊢ τ ! ε)
+                 → subE (cons v4 (cons v3 (cons v2 (cons v1 idSub)))) (subE (extS (extS (extS (extS σs)))) e)
+                 ≡ subE (cons v4 (cons v3 (cons v2 (cons v1 σs)))) e
+subE-ext4-cons4 {σ1 = σ1} {σ2 = σ2} {σ3 = σ3} {σ4 = σ4} σs v1 v2 v3 v4 e =
+  trans (subE-subE-fuse (cons v4 (cons v3 (cons v2 (cons v1 idSub)))) (extS (extS (extS (extS σs)))) e) (subE-cong pointwise e)
+  where
+  pointwise : ∀ {τ'} (x : (((( _ , σ1) , σ2) , σ3) , σ4) ∋ τ')
+            → subV (cons v4 (cons v3 (cons v2 (cons v1 idSub)))) (extS (extS (extS (extS σs))) x) ≡ cons v4 (cons v3 (cons v2 (cons v1 σs))) x
+  pointwise Z             = refl
+  pointwise (S Z)         = refl
+  pointwise (S (S Z))     = refl
+  pointwise (S (S (S Z))) = refl
+  pointwise (S (S (S (S x)))) =
+    trans (cons-weaken1V-cancel v4 (cons v3 (cons v2 (cons v1 idSub))) (weaken1V (weaken1V (weaken1V (σs x)))))
+    (trans (cons-weaken1V-cancel v3 (cons v2 (cons v1 idSub)) (weaken1V (weaken1V (σs x))))
+    (trans (cons-weaken1V-cancel v2 (cons v1 idSub) (weaken1V (σs x)))
+           (weaken1V-sub1-cancel v1 (σs x))))
+
+-- Every free variable of Γ instantiated at a computable closed value.
+ComputableSub : ∀ {Γ} → Sub Γ ∅ → Set
+ComputableSub {Γ} σs = ∀ {τ} (x : Γ ∋ τ) → ComputableV τ (σs x)
+
+ComputableSub-cons : ∀ {Γ σ} {σs : Sub Γ ∅} {v : Val ∅ σ} → ComputableV σ v → ComputableSub σs → ComputableSub (cons v σs)
+ComputableSub-cons Pv Cσs Z     = Pv
+ComputableSub-cons Pv Cσs (S x) = Cσs x
+
