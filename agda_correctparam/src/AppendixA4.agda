@@ -30,7 +30,7 @@ open import Data.Empty using (⊥; ⊥-elim)
 open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Data.Unit using (⊤; tt)
 open import Data.Product using (Σ; _,_; proj₁; proj₂; _×_)
-open import Relation.Nullary using (¬_)
+open import Relation.Nullary using (¬_; Dec; yes; no)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; cong₂; sym; trans; subst)
 open import Axiom.Extensionality.Propositional using (Extensionality)
 
@@ -1209,4 +1209,207 @@ plugK-cong (S∘ k (S-handleB h v)) r hyp {sub2 = sub2} {g2 = g2} =
 plugK-cong (S∘ k (S-then sub g)) r hyp = S2 sub g (plugK-cong k r hyp {sub2 = sub} {g2 = g})
 plugK-cong (S∘ k (S-glocal s1 s2 g)) r hyp = S3 s1 s2 g (plugK-cong k r hyp {sub2 = s1} {g2 = g})
 plugK-cong (S∘ k S-reset) r hyp = S4 (plugK-cong k r hyp)
+
+-- ---------------------------------------------------------------------
+-- The one gap in this development. R5's f_k/f_l apply their own
+-- (single-variable) argument via fst/snd, since the source calculus
+-- only has single-variable binders (there is no primitive pattern-
+-- matching lambda the way the paper's own "λ(p,y).e" notation has) --
+-- so plugging in a computable pair leaves an fst/snd reduction that
+-- has to be pushed through the captured continuation K, same as
+-- plugK-cong. But K-target's own shape (built for a step of the HOLE
+-- propagating outward) does not, in general, coincide with what a
+-- value already sitting in K's hole further reduces to on its own: at
+-- an S-then layer, whether S2 (hoist-and-wrap) or R7 (already a value,
+-- proceed directly) actually fires depends on whether the content
+-- strictly inside that layer is itself already a value -- a fact about
+-- K's own internals this development has no decision procedure for.
+-- Believed true (ComputableE is closed under the operational
+-- semantics' own rewriting, and K-target is exactly an attempt to
+-- describe that rewriting), but not yet proven here: postulated,
+-- narrowly, as exactly the fact lemma-A10's f_k/f_l need and nothing
+-- more.
+postulate
+  K-settle : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) (v : Val ∅ α)
+           → ComputableE τ ε (plugK K (val v))
+           → ComputableE τ ε (K-target K 0# (val v))
+
+-- A second, much more mundane postulate: ComputableV-acc's own
+-- well-founded recursion (over Ty, via _<M_) means a computability
+-- proof arriving through an outer arrow-case's own Acc field (e.g. the
+-- domain-computability hypothesis ComputableV's arrow clause supplies)
+-- carries a DIFFERENT (opaque, pattern-bound) Acc witness than the one
+-- <M-wellFounded builds fresh at top level -- so Agda's definitional
+-- equality does not, by itself, identify ComputableV (σ `× τ) (vpair
+-- v1 v2) arriving that way with the "clean" ComputableV σ v1 ×
+-- ComputableV τ v2 shape (both are propositionally the very same
+-- thing, Acc proofs being interchangeable -- unlike K-settle above,
+-- this one is unconditionally true and provable, just by a mechanical
+-- induction on Ty threading Acc-irrelevance through every case, not
+-- yet carried out here).
+postulate
+  ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
+                         → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
+
+-- The same Acc-irrelevance issue recurs one level up: ComputableV's
+-- own arrow case checks its codomain obligation using ITS OWN nested
+-- Acc witness (via the arrow-decrease-cod field), not the fresh one
+-- <M-wellFounded builds for the "clean" top-level ComputableE -- so a
+-- computability fact built via lemma-A6/lemma-A8-2 (using the clean
+-- notion) needs converting to match. Same status as
+-- ComputableV-pair-proj: unconditionally true, not yet proven here.
+postulate
+  ComputableE-acc-conv : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
+                        → ComputableE σ ε e
+                        → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
+
+-- A handler h : par,σ!(ε,ℓ) ⇒ σ'!ε is computable if each of its
+-- operation clauses (extended open in FOUR variables: the handler
+-- param, the operation's own argument, and the two continuations
+-- fl/fk R5 threads through) and its return clause (extended open in
+-- the param and the handled value) are computable once every free
+-- variable is instantiated at a computable closed value -- the
+-- paper's own "extend computability to open expressions" remark
+-- (page 33), specialised to clause/ret's own fixed context shapes.
+ComputableH : ∀ {ℓ par σ σ' ε} → Handler ∅ ℓ par σ σ' ε → Set
+ComputableH {ℓ} {par} {σ} {σ'} {ε} h =
+  (∀ (op : Op ℓ) {v1 : Val ∅ (gnd par)} {v2 : Val ∅ (gnd (out op))}
+     {fl : Val ∅ ((gnd par `× gnd (in′ op)) ⇒ Loss ! ε)} {fk : Val ∅ ((gnd par `× gnd (in′ op)) ⇒ σ' ! ε)}
+   → ComputableV (gnd par) v1 → ComputableV (gnd (out op)) v2
+   → ComputableV ((gnd par `× gnd (in′ op)) ⇒ Loss ! ε) fl → ComputableV ((gnd par `× gnd (in′ op)) ⇒ σ' ! ε) fk
+   → ComputableE σ' ε (subE (cons fk (cons fl (cons v2 (cons v1 idSub)))) (clause h op)))
+  × (∀ {v1 : Val ∅ (gnd par)} {v2 : Val ∅ σ}
+   → ComputableV (gnd par) v1 → ComputableV σ v2
+   → ComputableE σ' ε (subE (cons v2 (cons v1 idSub)) (ret h)))
+
+-- Lemma A.10 (page 34): the handler construct. Proceeds by (full)
+-- induction on e's own computability -- e's gc-val/gc-stuck cases use
+-- R6/R5 directly (the operation-triggering gc-stuck case further
+-- splitting, via _≟ᵉ_, on whether the stuck operation is one of h's
+-- own), and the gc-step case mirrors Lemma A.8(1)'s own style (S1
+-- playing F-rule's role, Lemma A.8(3) supplying the boosted
+-- continuation's loss-computability fresh, per ambient, exactly as
+-- Lemma A.8(1) needed for plusE).
+lemma-A10 : ∀ {ℓ par σ σ' ε} (h : Handler ∅ ℓ par σ σ' ε) → ComputableH h
+          → ∀ {e : ∅ ⊢ σ ! (ε ,ℓ ℓ)} → ComputableE σ (ε ,ℓ ℓ) e
+          → ∀ {v0 : Val ∅ (gnd par)} → ComputableV (gnd par) v0
+          → ComputableE σ' ε (handleE h (val v0) e)
+lemma-A10 {ℓ} {par} {σ} {σ'} {ε} h (hClause , hRet) {e} compE {v0} v0Comp = go compE v0Comp
+  where
+  go : ∀ {e} → ComputableE σ (ε ,ℓ ℓ) e → ∀ {v : Val ∅ (gnd par)} → ComputableV (gnd par) v → ComputableE σ' ε (handleE h (val v) e)
+  go (gc-val {w} wComp) {v} vComp = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (R6 h v w)) step-case
+    where
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ σ' εg} → LossComputable (ComputableV σ') g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (handleE h (val v) (val w)) r2 e''
+              → GComputable (ComputableV σ') (λ _ g0 → LossComputable (ComputableV σ') g0) e''
+    step-case _ stp with step-det-with (R6 h v w) stp
+    ... | (refl , refl) = hRet vComp wComp
+  go (gc-stuck {ℓ = ℓop} {m = m} {op = op} {v = w} {K = K} nh ihK) {v} vComp with ℓ ≟ᵉ ℓop
+  ... | no neq = gc-stuck {K = S∘ K (S-handleB h v)} (λ { (inj₁ eq2) → neq (sym eq2) ; (inj₂ hk) → nh hk })
+                          (λ {w1} → go (ihK {w1}) vComp)
+  ... | yes eq with eq
+  ...   | refl = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (R5 ⊆ᵉ-refl h v m op w K nh)) step-case
+    where
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ σ' εg} → LossComputable (ComputableV σ') g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (handleE h (val v) (plugK K (opE m op (val w)))) r2 e''
+              → GComputable (ComputableV σ') (λ _ g0 → LossComputable (ComputableV σ') g0) e''
+    step-case {εg = εg} {subX = subX} {g₁ = g₁} Gg₁ stp with step-det-with (R5 subX h v m op w K nh) stp
+    ... | (refl , refl) = hClause op vComp tt flComp fkComp
+      where
+      g' : LC (∅ , (gnd par `× gnd (in′ op))) σ' εg
+      g' = renV S g₁
+      handled : (∅ , (gnd par `× gnd (in′ op))) ⊢ σ' ! ε
+      handled = handleE (renH S h) (fst (val (vvar Z))) (plugK (weaken1K K) (snd (val (vvar Z))))
+      fk : Val ∅ ((gnd par `× gnd (in′ op)) ⇒ σ' ! ε)
+      fk = vabs {σ = gnd par `× gnd (in′ op)} (glocalE subX ⊆ᵉ-refl handled g')
+      fl : Val ∅ ((gnd par `× gnd (in′ op)) ⇒ Loss ! ε)
+      fl = vabs {σ = gnd par `× gnd (in′ op)} (thenE subX handled g')
+
+      -- {g}-computable "with h from q handle K[y]", for an arbitrary
+      -- computable q, given y is fixed and already computable: pushes
+      -- snd's own reduction through K (plugK-cong), then bridges
+      -- K-target's shape back to computability via K-settle, using
+      -- go(ihK{y}) (the SAME recursive fact used throughout this
+      -- module) at the arbitrary q.
+      Fcomp-inner : (p : Val ∅ (gnd par)) (y : Val ∅ (gnd (in′ op))) → ComputableV (gnd (in′ op)) y → ∀ {q : Val ∅ (gnd par)} → ComputableV (gnd par) q
+                  → ComputableE σ' ε (handleE h (val q) (plugK K (snd (val (vpair p y)))))
+      Fcomp-inner p y yComp {q} qComp = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC}
+                                        (plugK-cong (S∘ K (S-handleB h q)) 0# (λ {sub} {g} → R2-snd p y) {sub2 = ⊆ᵉ-refl} {g2 = zeroLC}))
+                                      step-case2
+        where
+        step-case2 : ∀ {εg2} {subX2 : εg2 ⊆ᵉ ε} {g₂ : LC ∅ σ' εg2} → LossComputable (ComputableV σ') g₂
+                   → ∀ {r3 e'''} → _⊢_-[_]→_ {sub = subX2} g₂ (handleE h (val q) (plugK K (snd (val (vpair p y))))) r3 e'''
+                   → GComputable (ComputableV σ') (λ _ g0 → LossComputable (ComputableV σ') g0) e'''
+        step-case2 {subX2 = subX2} {g₂ = g₂} _ stp2
+          with step-det-with (plugK-cong (S∘ K (S-handleB h q)) 0# (λ {sub} {g} → R2-snd p y) {sub2 = subX2} {g2 = g₂}) stp2
+        ... | (refl , refl) = K-settle (S∘ K (S-handleB h q)) y (go (ihK {y}) qComp)
+
+      -- Full computability of "with h from (fst (p,y)) handle K[snd
+      -- (p,y)]" -- fst's own reduction via F-rule/R2-fst directly
+      -- (no plugK-cong needed here, F-handleP being a single frame),
+      -- landing on Fcomp-inner at q=p.
+      handledComp : (p : Val ∅ (gnd par)) (y : Val ∅ (gnd (in′ op))) → ComputableV (gnd par) p → ComputableV (gnd (in′ op)) y
+                  → ComputableE σ' ε (handleE h (fst (val (vpair p y))) (plugK K (snd (val (vpair p y)))))
+      handledComp p y pComp yComp = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC}
+                              (F-rule ⊆ᵉ-refl (F-handleP h (plugK K (snd (val (vpair p y))))) (R2-fst p y)))
+                            step-case3
+        where
+        step-case3 : ∀ {εg3} {subX3 : εg3 ⊆ᵉ ε} {g₃ : LC ∅ σ' εg3} → LossComputable (ComputableV σ') g₃
+                   → ∀ {r4 e''''} → _⊢_-[_]→_ {sub = subX3} g₃ (handleE h (fst (val (vpair p y))) (plugK K (snd (val (vpair p y))))) r4 e''''
+                   → GComputable (ComputableV σ') (λ _ g0 → LossComputable (ComputableV σ') g0) e''''
+        step-case3 {subX3 = subX3} _ stp3
+          with step-det-with (F-rule subX3 (F-handleP h (plugK K (snd (val (vpair p y))))) (R2-fst p y)) stp3
+        ... | (refl , refl) = Fcomp-inner p y yComp pComp
+
+      -- handled[pyPair] = handleE h (fst(val pyPair)) (plugK K (snd
+      -- (val pyPair))), and g'[pyPair] = g₁ -- both via the weaken-
+      -- then-substitute-back cancellation lemmas (Lemma A.9's own
+      -- weaken1K-sub1-plugK, and Lemma A.7's weaken1-sub1-cancelH/V).
+      handled-eq : (p : Val ∅ (gnd par)) (y : Val ∅ (gnd (in′ op))) → subE (cons (vpair p y) idSub) handled
+                 ≡ handleE h (fst (val (vpair p y))) (plugK K (snd (val (vpair p y))))
+      handled-eq p y = cong₂ (λ h'' k'' → handleE h'' (fst (val (vpair p y))) k'')
+                              (weaken1-sub1-cancelH (vpair p y) h)
+                              (weaken1K-sub1-plugK (vpair p y) K (snd (val (vvar Z))))
+      g'-eq : (p : Val ∅ (gnd par)) (y : Val ∅ (gnd (in′ op))) → subV (cons (vpair p y) idSub) g' ≡ g₁
+      g'-eq p y = weaken1V-sub1-cancel (vpair p y) g₁
+
+      fkComp : ComputableV ((gnd par `× gnd (in′ op)) ⇒ σ' ! ε) fk
+      fkComp {pyPair} pyComp with val-closed-pair pyPair
+      ... | (p , y , refl) =
+              ComputableE-acc-conv
+                (subst (ComputableE σ' ε) (sym (cong₂ (glocalE subX ⊆ᵉ-refl) (handled-eq p y) (g'-eq p y)))
+                      (lemma-A6 subX ⊆ᵉ-refl Gg₁
+                        (GComputable-antimono {σ = σ'} {ε = ε}
+                          {G = λ _ g0 → LossComputable (ComputableV σ') g0} {G' = Gsingle g₁}
+                          (λ { (refl , refl) → Gg₁ })
+                          (handledComp p y (proj₁ (ComputableV-pair-proj p y pyComp)) (proj₂ (ComputableV-pair-proj p y pyComp))))))
+      flComp : ComputableV ((gnd par `× gnd (in′ op)) ⇒ Loss ! ε) fl
+      flComp {pyPair} pyComp with val-closed-pair pyPair
+      ... | (p , y , refl) =
+              ComputableE-acc-conv {accX = <M-wellFounded (mVal Loss)}
+                (subst (ComputableE Loss ε) (sym (cong₂ (thenE subX) (handled-eq p y) (g'-eq p y)))
+                      (lemma-A8-2 subX Gg₁
+                        (GComputable-antimono {σ = σ'} {ε = ε}
+                          {G = λ _ g0 → LossComputable (ComputableV σ') g0} {G' = Gsingle g₁}
+                          (λ { (refl , refl) → Gg₁ })
+                          (handledComp p y (proj₁ (ComputableV-pair-proj p y pyComp)) (proj₂ (ComputableV-pair-proj p y pyComp))))))
+  go (gc-step {e0} nterm ih) {v} vComp = gc-step nterm' step-case
+    where
+    nterm' : ¬ Terminal (handleE h (val v) e0)
+    nterm' term with progress-dichotomy {sub = ⊆ᵉ-,ℓ} {g = vabs (thenE ⊆ᵉ-refl (retApplied h v) (weaken1V zeroLC))} e0
+    ... | inj₁ t = nterm t
+    ... | inj₂ (r0 , e0' , stp0) = theorem-A4-1 {sub = ⊆ᵉ-refl} {g = zeroLC} term (S1 ⊆ᵉ-refl h v stp0)
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ σ' εg} → LossComputable (ComputableV σ') g₁
+              → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ (handleE h (val v) e0) r2 e''
+              → GComputable (ComputableV σ') (λ _ g0 → LossComputable (ComputableV σ') g0) e''
+    step-case {subX = subX} {g₁ = g₁} Gg₁ stp
+      with progress-dichotomy {sub = ⊆ᵉ-,ℓ} {g = vabs (thenE subX (retApplied h v) (weaken1V g₁))} e0
+    ... | inj₁ t = ⊥-elim (nterm t)
+    ... | inj₂ (r0 , e0'' , stp0) with step-det-with (S1 subX h v stp0) stp
+    ...   | (refl , refl) =
+            go (ih {sub = ⊆ᵉ-,ℓ} {g = vabs (thenE subX (retApplied h v) (weaken1V g₁))}
+                   (lemma-A8-3 subX Gg₁ hRet') stp0) vComp
+      where
+      hRet' : ∀ {w : Val ∅ σ} → ComputableV σ w → ComputableE σ' ε ((retApplied h v) [ w ])
+      hRet' {w} wComp = subst (ComputableE σ' ε) (sym (retApplied-sub1 h v w)) (hRet vComp wComp)
 
