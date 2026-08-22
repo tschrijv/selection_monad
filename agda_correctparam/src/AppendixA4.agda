@@ -859,6 +859,45 @@ lemma-A9 {α} {τ} {ε} F Fcomp {e} compE = go compE'
     ...   | (refl , refl) = go (ih {sub = ⊆ᵉ-refl} {g = boosted subX g₁} (refl , _ , subX , g₁ , lossCompG1 , refl) stp0)
 
 -- ---------------------------------------------------------------------
+-- The last regular-congruence-style prerequisite Lemma A.11 needs:
+-- "reset e is computable given e is" (its own case 5(d), proven there
+-- by an inline L_σ,ε-induction on e). Much simpler than Lemma A.9's F
+-- case: S4's own conclusion evaluates e under the very SAME ambient g
+-- (no boosted continuation, no antimono narrowing needed at all) --
+-- Terminal(reset e) is refuted uniformly via theorem-A4-1 applied to
+-- whichever of R9 (e a value)/S4 (e steps) actually fires, using
+-- progress-dichotomy on e itself to rule out e being stuck (which nterm
+-- already excludes in the gc-step case).
+-- ---------------------------------------------------------------------
+
+lemma-reset : ∀ {σ ε} {e : ∅ ⊢ σ ! ε} → ComputableE σ ε e → ComputableE σ ε (resetE e)
+lemma-reset {σ} {ε} = go
+  where
+  go : ∀ {e} → ComputableE σ ε e → ComputableE σ ε (resetE e)
+  go (gc-val {v} Pv) = gc-step nterm' step-case
+    where
+    nterm' : ¬ Terminal (resetE (val v))
+    nterm' t = theorem-A4-1 {sub = ⊆ᵉ-refl} {g = zeroLC} t (R9 v)
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ σ εg} → LossComputable (ComputableV σ) g₁
+              → ∀ {r e'} → _⊢_-[_]→_ {sub = subX} g₁ (resetE (val v)) r e' → ComputableE σ ε e'
+    step-case {subX = subX} {g₁ = g₁} _ stp with step-det-with (R9 {sub = subX} {g = g₁} v) stp
+    ... | (refl , refl) = gc-val Pv
+  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = S∘ K S-reset} nh (λ {v1} → go (ihK {v1}))
+  go (gc-step {e0} nterm ih) = gc-step nterm' step-case
+    where
+    nterm' : ¬ Terminal (resetE e0)
+    nterm' t with progress-dichotomy {sub = ⊆ᵉ-refl} {g = zeroLC} e0
+    ... | inj₁ te0 = nterm te0
+    ... | inj₂ (r0 , e0' , stp0) = theorem-A4-1 {sub = ⊆ᵉ-refl} {g = zeroLC} t (S4 stp0)
+    step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ σ εg} → LossComputable (ComputableV σ) g₁
+              → ∀ {r e'} → _⊢_-[_]→_ {sub = subX} g₁ (resetE e0) r e' → ComputableE σ ε e'
+    step-case {subX = subX} {g₁ = g₁} lossCompG1 stp
+      with progress-dichotomy {sub = subX} {g = g₁} e0
+    ... | inj₁ t = ⊥-elim (nterm t)
+    ... | inj₂ (r0 , e0'' , stp0) with step-det-with (S4 {sub = subX} {g = g₁} stp0) stp
+    ...   | (refl , refl) = go (ih {sub = subX} {g = g₁} lossCompG1 stp0)
+
+-- ---------------------------------------------------------------------
 -- A further substitution-algebra layer Lemma A.10 needs: composing TWO
 -- substitutions (retApplied's own substitution of the handler param,
 -- then the OUTER substitution of the return value) into a single one,
