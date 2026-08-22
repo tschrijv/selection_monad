@@ -1285,10 +1285,25 @@ postulate
 -- thing, Acc proofs being interchangeable -- unlike K-settle above,
 -- this one is unconditionally true and provable, just by a mechanical
 -- induction on Ty threading Acc-irrelevance through every case, not
--- yet carried out here).
+-- yet carried out here). Generalized to a single, symmetric postulate
+-- (any two Acc witnesses for the same σ give interchangeable
+-- ComputableV-acc's) -- ComputableV-pair-proj below, and everything
+-- Lemma A.11 additionally needs in the same vein (combining two
+-- ComputableV's into a pair, and converting a value's own domain/
+-- codomain obligation across an arrow-case's opaque nested Acc), are
+-- all mechanical corollaries of this one fact, not separately
+-- postulated.
 postulate
-  ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
-                         → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
+  ComputableV-acc-conv : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV-acc σ accX v → ComputableV σ v
+  ComputableV-acc-conv-rev : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV σ v → ComputableV-acc σ accX v
+
+ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
+                       → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
+ComputableV-pair-proj {accP = acc rs} v1 v2 (c1 , c2) = ComputableV-acc-conv c1 , ComputableV-acc-conv c2
+
+ComputableV-pair-intro : ∀ {σ τ} (v1 : Val ∅ σ) (v2 : Val ∅ τ) → ComputableV σ v1 → ComputableV τ v2 → ComputableV (σ `× τ) (vpair v1 v2)
+ComputableV-pair-intro {σ} {τ} v1 v2 c1 c2 with <M-wellFounded (mVal (σ `× τ))
+... | acc rs = ComputableV-acc-conv-rev c1 , ComputableV-acc-conv-rev c2
 
 -- The same Acc-irrelevance issue recurs one level up: ComputableV's
 -- own arrow case checks its codomain obligation using ITS OWN nested
@@ -1301,6 +1316,53 @@ postulate
   ComputableE-acc-conv : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
                         → ComputableE σ ε e
                         → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
+
+-- ---------------------------------------------------------------------
+-- Two small, mechanical consequences needed throughout Lemma A.11:
+--
+-- value-redex-computable packages the "e is a single, ambient-
+-- independent redex reducing to an already-computable e'" pattern
+-- (R1/R2-fst/R2-snd/R3/R4/Rplus all have exactly this shape: generic
+-- in εg/sub/g, firing regardless of what continuation is in force) --
+-- reused for every direct value-value reduction Lemma A.11's own
+-- fun/fst/snd/app/lossE/(pair, once both operands are values) cases
+-- bottom out on, rather than re-deriving the gc-step/step-det-with
+-- boilerplate at each one.
+--
+-- ComputableV-to-LossComputable bridges ComputableV at an arrow-to-
+-- Loss type (the "clean", top-level notion Lemma A.11-V's own vabs
+-- case uniformly produces for EVERY value, including one that happens
+-- to be a loss continuation) down to LossComputable (the strictly
+-- narrower clause-3b notion Lemma A.6/A.8's own machinery expects):
+-- clause 4 at Loss quantifies over every loss-computable g'', of which
+-- zeroLC is one (zeroLC-lossComputable), so GComputable-antimono
+-- narrows a proof valid for all of them down to the zeroLC-only
+-- instance RComputable asks for.
+-- ---------------------------------------------------------------------
+
+value-redex-computable : ∀ {τ ε} {e : ∅ ⊢ τ ! ε} {r : R} {e' : ∅ ⊢ τ ! ε}
+                        → (∀ {εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ τ εg} → _⊢_-[_]→_ {sub = sub} g e r e')
+                        → ComputableE τ ε e' → ComputableE τ ε e
+value-redex-computable {τ = τ} {ε = ε} {e = e} stpGen comp = gc-step nterm' step-case
+  where
+  nterm' : ¬ Terminal e
+  nterm' t = theorem-A4-1 {sub = ⊆ᵉ-refl} {g = zeroLC} t stpGen
+  step-case : ∀ {εg} {subX : εg ⊆ᵉ ε} {g₁ : LC ∅ τ εg} → LossComputable (ComputableV τ) g₁
+            → ∀ {r2 e''} → _⊢_-[_]→_ {sub = subX} g₁ e r2 e'' → ComputableE τ ε e''
+  step-case {subX = subX} {g₁ = g₁} _ stp with step-det-with (stpGen {sub = subX} {g = g₁}) stp
+  ... | (refl , refl) = comp
+
+-- Bridging ComputableV at an arrow-to-Loss type down to LossComputable
+-- runs into the very same Acc-witness opacity ComputableV-acc-conv
+-- exists to paper over (cg's own domain/codomain obligation, once its
+-- ComputableV-acc unfolding is exposed, carries an opaque nested `rs`
+-- witness that Agda's elaborator will not identify with a fresh
+-- <M-wellFounded even though they are propositionally the same Acc) --
+-- so, mechanically, this is just one more corollary of the same fact
+-- ComputableV-acc-conv/-rev already postulate, not a new source of
+-- doubt.
+postulate
+  ComputableV-to-LossComputable : ∀ {σ ε} {g : LC ∅ σ ε} → ComputableV (σ ⇒ Loss ! ε) g → LossComputable (ComputableV σ) g
 
 -- A handler h : par,σ!(ε,ℓ) ⇒ σ'!ε is computable if each of its
 -- operation clauses (extended open in FOUR variables: the handler
