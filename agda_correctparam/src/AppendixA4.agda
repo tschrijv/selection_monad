@@ -1690,3 +1690,84 @@ mutual
     Fcomp : ∀ {v : Val ∅ (gnd par)} → ComputableV (gnd par) v → ComputableE σ' ε (plugF (F-handleP (subH σs h) (subE σs b)) (val v))
     Fcomp {v} Pv = lemma-A10 (subH σs h) (lemma-A11-H h Cσs) (lemma-A11-E b Cσs) Pv
 
+-- Every closed, well-typed expression is (unconditionally) computable
+-- -- Γ = ∅ has no free variables, so ComputableSub idSub is vacuous.
+lemma-A11-E-closed : ∀ {σ ε} (e : ∅ ⊢ σ ! ε) → ComputableE σ ε e
+lemma-A11-E-closed e = subst (ComputableE _ _) (subE-idSub e) (lemma-A11-E e (λ ()))
+
+lemma-A11-V-closed : ∀ {σ} (v : Val ∅ σ) → ComputableV σ v
+lemma-A11-V-closed v = subst (ComputableV _) (subV-idSub v) (lemma-A11-V v (λ ()))
+
+-- ---------------------------------------------------------------------
+-- Theorem A.12 (page 37): termination -- for every e : σ ! ε and every
+-- loss-computable g : σ → loss ! ε' (ε' ⊆ ε), there is no infinite
+-- sequence of steps g ⊢ e0 -[r0]-> e1 -[r1]-> e2 -> ... starting from
+-- e0 = e. Proceeds exactly as the paper's own one-line proof says: by
+-- the Fundamental Lemma e is computable (lemma-A11-E-closed), hence
+-- L_σ,ε-computable, and an "evident L-induction" (structural recursion
+-- on the ComputableE witness -- gc-val/gc-stuck both preclude any step
+-- at all via theorem-A4-1, and gc-step's own function field, applied
+-- to the sequence's very next step, hands back a strictly smaller
+-- ComputableE witness for the shifted sequence) shows no such sequence
+-- exists.
+-- ---------------------------------------------------------------------
+
+theorem-A12 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} → LossComputable (ComputableV σ) g
+             → (f : ℕ → ∅ ⊢ σ ! ε) → (∀ n → Σ R (λ r → _⊢_-[_]→_ {sub = sub} g (f n) r (f (suc n)))) → ⊥
+theorem-A12 {σ} {ε} {sub = sub} {g = g} gComp = go
+  where
+  go : (f : ℕ → ∅ ⊢ σ ! ε) → (∀ n → Σ R (λ r → _⊢_-[_]→_ {sub = sub} g (f n) r (f (suc n)))) → ⊥
+  go f steps = go' f steps (f 0) refl (lemma-A11-E-closed (f 0))
+    where
+    go' : (f : ℕ → ∅ ⊢ σ ! ε) → (∀ n → Σ R (λ r → _⊢_-[_]→_ {sub = sub} g (f n) r (f (suc n))))
+        → (e : ∅ ⊢ σ ! ε) → f 0 ≡ e → ComputableE σ ε e → ⊥
+    go' f steps e eq (gc-val {v} _) =
+      ¬Terminal-of-step (subst (λ x → _⊢_-[_]→_ {sub = sub} g x (proj₁ (steps 0)) (f 1)) eq (proj₂ (steps 0))) (terminalVal v)
+    go' f steps e eq (gc-stuck {m = m} {op = op} {v = v} {K = K} nh _) =
+      ¬Terminal-of-step (subst (λ x → _⊢_-[_]→_ {sub = sub} g x (proj₁ (steps 0)) (f 1)) eq (proj₂ (steps 0))) (terminalOp m op v K nh)
+    go' f steps e eq (gc-step nterm ih) =
+      go' (λ n → f (suc n)) (λ n → steps (suc n)) (f 1) refl
+          (ih {sub = sub} {g = g} gComp (subst (λ x → _⊢_-[_]→_ {sub = sub} g x (proj₁ (steps 0)) (f 1)) eq (proj₂ (steps 0))))
+
+-- ---------------------------------------------------------------------
+-- Theorem A.13 (existence half; page 37, combined with Corollary A.5
+-- above for uniqueness): every e : σ ! ε and loss-computable
+-- g : σ → loss ! ε' evaluate, in finitely many steps, to SOME terminal
+-- w with SOME total loss r -- i.e. g ⊢ e ⇒[r] w. Exactly
+-- theorem-A4-4's own statement (OpSemProofs.agda), postulated there
+-- and left undischarged since termination is genuinely the crux of
+-- Appendix A.4 -- proved here as a direct corollary of the Fundamental
+-- Lemma (lemma-A11-E-closed) by the same structural recursion
+-- theorem-A12 uses, this time building the big-step derivation itself
+-- (via `done`/`step`) rather than deriving a contradiction: gc-val/
+-- gc-stuck are already terminal (0 steps, `done`); gc-step exhibits
+-- e's own next step via progress-dichotomy (ruled out from being
+-- Terminal by nterm), recurses on the strictly smaller ComputableE
+-- witness ih hands back, and prepends the exhibited step via `step`.
+-- ---------------------------------------------------------------------
+
+theorem-A13-exists : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} → LossComputable (ComputableV σ) g
+                    → (e : ∅ ⊢ σ ! ε) → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))
+theorem-A13-exists {σ} {ε} {sub = sub} {g = g} gComp e = go (lemma-A11-E-closed e)
+  where
+  go : ∀ {e} → ComputableE σ ε e → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))
+  go (gc-val {v} _)                = 0# , val v , done (val v) , terminalVal v
+  go (gc-stuck {m = m} {op = op} {v = v} {K = K} nh _) =
+    0# , plugK K (opE m op (val v)) , done (plugK K (opE m op (val v))) , terminalOp m op v K nh
+  go (gc-step {e0} nterm ih) with progress-dichotomy {sub = sub} {g = g} e0
+  ... | inj₁ term = ⊥-elim (nterm term)
+  ... | inj₂ (r0 , e0' , stp0) with go (ih {sub = sub} {g = g} gComp stp0)
+  ...   | (s , w , d , tw) = r0 + s , w , step stp0 d , tw
+
+-- Matches theorem-A4-4's own type exactly.
+theorem-A13-exists-A4-4 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} (e : ∅ ⊢ σ ! ε)
+                         → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))
+theorem-A13-exists-A4-4 {g = g} e = theorem-A13-exists (ComputableV-to-LossComputable (lemma-A11-V-closed g)) e
+
+-- Existence + uniqueness combined, matching the paper's own Theorem
+-- A.13 statement directly: g ⊢ e ⇒[r] w for a UNIQUE r and terminal w.
+theorem-A13 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg}
+            → (e : ∅ ⊢ σ ! ε) → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))
+            × (∀ {r1 r2 w1 w2} → _⊢_⇒[_]_ {sub = sub} g e r1 w1 → Terminal w1 → _⊢_⇒[_]_ {sub = sub} g e r2 w2 → Terminal w2 → r1 ≡ r2 × w1 ≡ w2)
+theorem-A13 {g = g} e = theorem-A13-exists-A4-4 e , corollary-A5
+
