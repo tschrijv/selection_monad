@@ -1319,19 +1319,40 @@ ComputableV-pair-intro {σ} {τ} v1 v2 c1 c2 with <M-wellFounded (mVal (σ `× �
 -- Acc witness (via the arrow-decrease-cod field), not the fresh one
 -- <M-wellFounded builds for the "clean" top-level ComputableE -- so a
 -- computability fact built via lemma-A6/lemma-A8-2 (using the clean
--- notion) needs converting to match. Same status as
--- ComputableV-pair-proj: unconditionally true, not yet proven here.
-postulate
-  ComputableE-acc-conv : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
-                        → ComputableE σ ε e
-                        → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
-  -- The reverse direction, same status: Lemma A.11-E's own app case
-  -- consumes a ComputableV at an arrow type applied to an argument,
-  -- landing on an accX-based ComputableE-at obligation that needs
-  -- converting back down to the clean, top-level ComputableE.
-  ComputableE-acc-conv-rev : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
-                            → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
-                            → ComputableE σ ε e
+-- notion) needs converting to match. Discharged the same way as
+-- ComputableV-acc-conv above: ComputableV-acc σ is a function of the
+-- Acc witness, so Acc-irrelevant's equality between witnesses gives,
+-- via cong, an equality of PREDICATES (ComputableV σ ≡
+-- ComputableV-acc σ accX, as functions Val ∅ σ → Set) -- and
+-- ComputableE/GComputable's own G field is built UNIFORMLY from
+-- whichever predicate P is supplied (λ _ g → LossComputable P g), so
+-- substituting P throughout, via a single motive parametrised by P
+-- alone, converts the whole GComputable structure at once (no
+-- separate induction over its own gc-val/gc-stuck/gc-step shape
+-- needed).
+ComputableE-acc-conv : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
+                      → ComputableE σ ε e
+                      → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
+ComputableE-acc-conv {σ} {ε} {accX} {e} = subst motive eq
+  where
+  eq : ComputableV σ ≡ ComputableV-acc σ accX
+  eq = cong (ComputableV-acc σ) (Acc-irrelevant (<M-wellFounded (mVal σ)) accX)
+  motive : (Val ∅ σ → Set) → Set
+  motive P = GComputable P (λ _ g → LossComputable P g) e
+
+-- The reverse direction: Lemma A.11-E's own app case consumes a
+-- ComputableV at an arrow type applied to an argument, landing on an
+-- accX-based ComputableE-at obligation that needs converting back
+-- down to the clean, top-level ComputableE.
+ComputableE-acc-conv-rev : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
+                          → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
+                          → ComputableE σ ε e
+ComputableE-acc-conv-rev {σ} {ε} {accX} {e} = subst motive eq
+  where
+  eq : ComputableV-acc σ accX ≡ ComputableV σ
+  eq = cong (ComputableV-acc σ) (Acc-irrelevant accX (<M-wellFounded (mVal σ)))
+  motive : (Val ∅ σ → Set) → Set
+  motive P = GComputable P (λ _ g → LossComputable P g) e
 
 -- ---------------------------------------------------------------------
 -- Two small, mechanical consequences needed throughout Lemma A.11:
