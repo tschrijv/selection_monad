@@ -32,12 +32,26 @@ open import Data.Unit using (⊤; tt)
 open import Data.Product using (Σ; _,_; proj₁; proj₂; _×_)
 open import Relation.Nullary using (¬_; Dec; yes; no)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; cong₂; sym; trans; subst)
-open import Axiom.Extensionality.Propositional using (Extensionality)
+open import Axiom.Extensionality.Propositional using (Extensionality; implicit-extensionality)
 
 -- Same axiom as Proofs.agda's own funext (postulated locally here too,
 -- rather than importing Proofs.agda, to keep this file's own import
 -- footprint -- and hence its compile cycle -- independent of it).
 postulate funext : ∀ {a b} → Extensionality a b
+
+-- Accessibility witnesses for the same relation/element are
+-- propositionally unique -- a standard fact (Acc's own constructor
+-- takes a FUNCTION, so proving two Acc's equal needs function
+-- extensionality one level down at every recursive layer). This is
+-- what actually discharges the various "Acc-irrelevance" postulates
+-- ComputableV-acc's own well-founded recursion (over Ty, via _<M_)
+-- otherwise needs below: rather than separately postulating that
+-- differently-obtained Acc witnesses give interchangeable
+-- ComputableV-acc's, that fact now follows by ordinary subst along
+-- this equality.
+Acc-irrelevant : ∀ {A : Set} {R : A → A → Set} {x : A} (a1 a2 : Acc R x) → a1 ≡ a2
+Acc-irrelevant (acc rs1) (acc rs2) =
+  cong acc (implicit-extensionality funext (λ {y} → funext (λ r → Acc-irrelevant (rs1 r) (rs2 r))))
 
 -- ---------------------------------------------------------------------
 -- labelsTy: e(σ)/e(ε), "the effect labels appearing in σ or ε" -- as an
@@ -1273,37 +1287,32 @@ postulate
            → ComputableE τ ε (plugK K (val v))
            → ComputableE τ ε (K-target K 0# (val v))
 
--- A second, much more mundane postulate: ComputableV-acc's own
--- well-founded recursion (over Ty, via _<M_) means a computability
--- proof arriving through an outer arrow-case's own Acc field (e.g. the
--- domain-computability hypothesis ComputableV's arrow clause supplies)
--- carries a DIFFERENT (opaque, pattern-bound) Acc witness than the one
--- <M-wellFounded builds fresh at top level -- so Agda's definitional
--- equality does not, by itself, identify ComputableV (σ `× τ) (vpair
--- v1 v2) arriving that way with the "clean" ComputableV σ v1 ×
--- ComputableV τ v2 shape (both are propositionally the very same
--- thing, Acc proofs being interchangeable -- unlike K-settle above,
--- this one is unconditionally true and provable, just by a mechanical
--- induction on Ty threading Acc-irrelevance through every case, not
--- yet carried out here). Generalized to a single, symmetric postulate
--- (any two Acc witnesses for the same σ give interchangeable
--- ComputableV-acc's) -- ComputableV-pair-proj below, and everything
--- Lemma A.11 additionally needs in the same vein (combining two
--- ComputableV's into a pair, and converting a value's own domain/
--- codomain obligation across an arrow-case's opaque nested Acc), are
--- all mechanical corollaries of this one fact, not separately
--- postulated.
-postulate
-  ComputableV-acc-conv : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV-acc σ accX v → ComputableV σ v
-  ComputableV-acc-conv-rev : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV σ v → ComputableV-acc σ accX v
-  -- Stated directly (rather than derived from ComputableV-acc-conv/-rev
-  -- above, which hit unrelated metavariable-solving trouble at some
-  -- call sites -- likely Agda deferring the accP=acc rs match past the
-  -- point its two components' own Acc metas need solving): the exact
-  -- same, already-in-use-and-working shape Lemma A.10 relied on.
-  ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
-                         → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
-  ComputableV-pair-intro : ∀ {σ τ} (v1 : Val ∅ σ) (v2 : Val ∅ τ) → ComputableV σ v1 → ComputableV τ v2 → ComputableV (σ `× τ) (vpair v1 v2)
+-- ComputableV-acc's own well-founded recursion (over Ty, via _<M_)
+-- means a computability proof arriving through an outer arrow-case's
+-- own Acc field (e.g. the domain-computability hypothesis ComputableV's
+-- arrow clause supplies) carries a DIFFERENT (opaque, pattern-bound)
+-- Acc witness than the one <M-wellFounded builds fresh at top level --
+-- so Agda's definitional equality does not, by itself, identify
+-- ComputableV (σ `× τ) (vpair v1 v2) arriving that way with the
+-- "clean" ComputableV σ v1 × ComputableV τ v2 shape. Both are
+-- propositionally the very same thing (Acc proofs being
+-- interchangeable, per Acc-irrelevant above), so a plain subst along
+-- Acc-irrelevant's equality -- applied through ComputableV-acc σ,
+-- which is a well-defined FUNCTION of the Acc witness -- discharges
+-- this directly, no separate induction on Ty needed.
+ComputableV-acc-conv : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV-acc σ accX v → ComputableV σ v
+ComputableV-acc-conv {σ} {accX} = subst (λ a → ComputableV-acc σ a _) (Acc-irrelevant accX (<M-wellFounded (mVal σ)))
+
+ComputableV-acc-conv-rev : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV σ v → ComputableV-acc σ accX v
+ComputableV-acc-conv-rev {σ} {accX} = subst (λ a → ComputableV-acc σ a _) (Acc-irrelevant (<M-wellFounded (mVal σ)) accX)
+
+ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
+                       → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
+ComputableV-pair-proj {accP = acc rs} v1 v2 (c1 , c2) = ComputableV-acc-conv c1 , ComputableV-acc-conv c2
+
+ComputableV-pair-intro : ∀ {σ τ} (v1 : Val ∅ σ) (v2 : Val ∅ τ) → ComputableV σ v1 → ComputableV τ v2 → ComputableV (σ `× τ) (vpair v1 v2)
+ComputableV-pair-intro {σ} {τ} v1 v2 c1 c2 with <M-wellFounded (mVal (σ `× τ))
+... | acc rs = ComputableV-acc-conv-rev c1 , ComputableV-acc-conv-rev c2
 
 -- The same Acc-irrelevance issue recurs one level up: ComputableV's
 -- own arrow case checks its codomain obligation using ITS OWN nested
