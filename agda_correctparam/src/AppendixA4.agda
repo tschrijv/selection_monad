@@ -1296,14 +1296,14 @@ postulate
 postulate
   ComputableV-acc-conv : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV-acc σ accX v → ComputableV σ v
   ComputableV-acc-conv-rev : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV σ v → ComputableV-acc σ accX v
-
-ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
-                       → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
-ComputableV-pair-proj {accP = acc rs} v1 v2 (c1 , c2) = ComputableV-acc-conv c1 , ComputableV-acc-conv c2
-
-ComputableV-pair-intro : ∀ {σ τ} (v1 : Val ∅ σ) (v2 : Val ∅ τ) → ComputableV σ v1 → ComputableV τ v2 → ComputableV (σ `× τ) (vpair v1 v2)
-ComputableV-pair-intro {σ} {τ} v1 v2 c1 c2 with <M-wellFounded (mVal (σ `× τ))
-... | acc rs = ComputableV-acc-conv-rev c1 , ComputableV-acc-conv-rev c2
+  -- Stated directly (rather than derived from ComputableV-acc-conv/-rev
+  -- above, which hit unrelated metavariable-solving trouble at some
+  -- call sites -- likely Agda deferring the accP=acc rs match past the
+  -- point its two components' own Acc metas need solving): the exact
+  -- same, already-in-use-and-working shape Lemma A.10 relied on.
+  ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
+                         → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
+  ComputableV-pair-intro : ∀ {σ τ} (v1 : Val ∅ σ) (v2 : Val ∅ τ) → ComputableV σ v1 → ComputableV τ v2 → ComputableV (σ `× τ) (vpair v1 v2)
 
 -- The same Acc-irrelevance issue recurs one level up: ComputableV's
 -- own arrow case checks its codomain obligation using ITS OWN nested
@@ -1316,6 +1316,13 @@ postulate
   ComputableE-acc-conv : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
                         → ComputableE σ ε e
                         → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
+  -- The reverse direction, same status: Lemma A.11-E's own app case
+  -- consumes a ComputableV at an arrow type applied to an argument,
+  -- landing on an accX-based ComputableE-at obligation that needs
+  -- converting back down to the clean, top-level ComputableE.
+  ComputableE-acc-conv-rev : ∀ {σ ε} {accX : Acc _<M_ (mVal σ)} {e : ∅ ⊢ σ ! ε}
+                            → GComputable (ComputableV-acc σ accX) (λ _ g → LossComputable (ComputableV-acc σ accX) g) e
+                            → ComputableE σ ε e
 
 -- ---------------------------------------------------------------------
 -- Two small, mechanical consequences needed throughout Lemma A.11:
@@ -1583,4 +1590,103 @@ ComputableSub {Γ} σs = ∀ {τ} (x : Γ ∋ τ) → ComputableV τ (σs x)
 ComputableSub-cons : ∀ {Γ σ} {σs : Sub Γ ∅} {v : Val ∅ σ} → ComputableV σ v → ComputableSub σs → ComputableSub (cons v σs)
 ComputableSub-cons Pv Cσs Z     = Pv
 ComputableSub-cons Pv Cσs (S x) = Cσs x
+
+mutual
+  lemma-A11-V : ∀ {Γ σ} (v : Val Γ σ) {σs : Sub Γ ∅} → ComputableSub σs → ComputableV σ (subV σs v)
+  lemma-A11-V (vvar x)    Cσs = Cσs x
+  lemma-A11-V (vgnd x)    Cσs = tt
+  lemma-A11-V (vpair v w) Cσs = ComputableV-pair-intro _ _ (lemma-A11-V v Cσs) (lemma-A11-V w Cσs)
+  lemma-A11-V {Γ} (vabs {σ = σ} {τ = τ} {ε = ε} e) {σs} Cσs {v'} v'Comp =
+    subst (ComputableE-at τ ε _) (sym (subE-ext-cons σs v' e))
+      (ComputableE-acc-conv (lemma-A11-E e (ComputableSub-cons (ComputableV-acc-conv v'Comp) Cσs)))
+
+  lemma-A11-H : ∀ {Γ ℓ par σ σ' ε} (h : Handler Γ ℓ par σ σ' ε) {σs : Sub Γ ∅} → ComputableSub σs → ComputableH (subH σs h)
+  lemma-A11-H {Γ} {ℓ} {par} {σ} {σ'} {ε} h {σs} Cσs = clauseComp , retComp
+    where
+    clauseComp : ∀ (op : Op ℓ) {v1 : Val ∅ (gnd par)} {v2 : Val ∅ (gnd (out op))}
+                   {fl : Val ∅ ((gnd par `× gnd (in′ op)) ⇒ Loss ! ε)} {fk : Val ∅ ((gnd par `× gnd (in′ op)) ⇒ σ' ! ε)}
+               → ComputableV (gnd par) v1 → ComputableV (gnd (out op)) v2
+               → ComputableV ((gnd par `× gnd (in′ op)) ⇒ Loss ! ε) fl → ComputableV ((gnd par `× gnd (in′ op)) ⇒ σ' ! ε) fk
+               → ComputableE σ' ε (subE (cons fk (cons fl (cons v2 (cons v1 idSub)))) (clause (subH σs h) op))
+    clauseComp op {v1} {v2} {fl} {fk} v1Comp v2Comp flComp fkComp =
+      subst (ComputableE σ' ε) (sym (subE-ext4-cons4 σs v1 v2 fl fk (clause h op)))
+            (lemma-A11-E (clause h op)
+              (ComputableSub-cons fkComp (ComputableSub-cons flComp (ComputableSub-cons v2Comp (ComputableSub-cons v1Comp Cσs)))))
+    retComp : ∀ {v1 : Val ∅ (gnd par)} {v2 : Val ∅ σ} → ComputableV (gnd par) v1 → ComputableV σ v2
+            → ComputableE σ' ε (subE (cons v2 (cons v1 idSub)) (ret (subH σs h)))
+    retComp {v1} {v2} v1Comp v2Comp =
+      subst (ComputableE σ' ε) (sym (subE-ext2-cons2 σs v1 v2 (ret h)))
+            (lemma-A11-E (ret h) (ComputableSub-cons v2Comp (ComputableSub-cons v1Comp Cσs)))
+
+  lemma-A11-E : ∀ {Γ σ ε} (e : Γ ⊢ σ ! ε) {σs : Sub Γ ∅} → ComputableSub σs → ComputableE σ ε (subE σs e)
+  lemma-A11-E (val v) Cσs = gc-val (lemma-A11-V v Cσs)
+  lemma-A11-E {Γ} (fun {γ} {δ} {ε} f e0) {σs} Cσs = lemma-A9 (F-fun f) Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ (gnd γ)} → ComputableV (gnd γ) v → ComputableE (gnd δ) ε (plugF (F-fun f) (val v))
+    Fcomp {v} _ with val-closed-gnd v
+    ... | (x , refl) = value-redex-computable (R1 f x) (gc-val tt)
+  lemma-A11-E {Γ} (pair {σ} {τ} {ε} e1 e2) {σs} Cσs = lemma-A9 (F-pairL (subE σs e2)) Fcomp1 (lemma-A11-E e1 Cσs)
+    where
+    Fcomp1 : ∀ {v : Val ∅ σ} → ComputableV σ v → ComputableE (σ `× τ) ε (plugF (F-pairL (subE σs e2)) (val v))
+    Fcomp1 {v} Pv = lemma-A9 (F-pairR v) Fcomp2 (lemma-A11-E e2 Cσs)
+      where
+      Fcomp2 : ∀ {w : Val ∅ τ} → ComputableV τ w → ComputableE (σ `× τ) ε (plugF (F-pairR v) (val w))
+      Fcomp2 {w} Pw = value-redex-computable (R2-pair v w) (gc-val (ComputableV-pair-intro v w Pv Pw))
+  lemma-A11-E {Γ} (fst {σ} {τ} {ε} e0) {σs} Cσs = lemma-A9 F-fst Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ (σ `× τ)} → ComputableV (σ `× τ) v → ComputableE σ ε (plugF F-fst (val v))
+    Fcomp {v} Pv with val-closed-pair v
+    ... | (v1 , v2 , refl) = value-redex-computable (R2-fst v1 v2) (gc-val (proj₁ (ComputableV-pair-proj {accP = <M-wellFounded (mVal (σ `× τ))} v1 v2 Pv)))
+  lemma-A11-E {Γ} (snd {σ} {τ} {ε} e0) {σs} Cσs = lemma-A9 F-snd Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ (σ `× τ)} → ComputableV (σ `× τ) v → ComputableE τ ε (plugF F-snd (val v))
+    Fcomp {v} Pv with val-closed-pair v
+    ... | (v1 , v2 , refl) = value-redex-computable (R2-snd v1 v2) (gc-val (proj₂ (ComputableV-pair-proj {accP = <M-wellFounded (mVal (σ `× τ))} v1 v2 Pv)))
+  lemma-A11-E {Γ} (app {σ} {τ} {ε} e1 e2) {σs} Cσs = lemma-A9 (F-appL (subE σs e2)) Fcomp1 (lemma-A11-E e1 Cσs)
+    where
+    Fcomp1 : ∀ {v : Val ∅ (σ ⇒ τ ! ε)} → ComputableV (σ ⇒ τ ! ε) v → ComputableE τ ε (plugF (F-appL (subE σs e2)) (val v))
+    Fcomp1 {v} Pv = lemma-A9 (F-appR v) Fcomp2 (lemma-A11-E e2 Cσs)
+      where
+      Fcomp2 : ∀ {w : Val ∅ σ} → ComputableV σ w → ComputableE τ ε (plugF (F-appR v) (val w))
+      Fcomp2 {w} Pw with val-closed-abs v
+      ... | (e' , refl) = value-redex-computable (R3 e' w) (ComputableE-acc-conv-rev (Pv {w} (ComputableV-acc-conv-rev Pw)))
+  lemma-A11-E {Γ} (opE {ℓ} {ε} m op e0) {σs} Cσs = lemma-A9 (F-op m op) Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ (gnd (out op))} → ComputableV (gnd (out op)) v → ComputableE (gnd (in′ op)) ε (plugF (F-op m op) (val v))
+    Fcomp {v} _ = gc-stuck {K = ▫} (λ ()) (λ {v1} → gc-val tt)
+  lemma-A11-E {Γ} (lossE {ε} e0) {σs} Cσs = lemma-A9 F-loss Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ Loss} → ComputableV Loss v → ComputableE UnitTy ε (plugF F-loss (val v))
+    Fcomp {v} _ with val-closed-gnd v
+    ... | (r , refl) = value-redex-computable (R4 r) (gc-val tt)
+  lemma-A11-E {Γ} (thenE {σ} {ε} sub e0 g) {σs} Cσs =
+    lemma-A8-2 sub gComp
+      (GComputable-antimono {σ = σ} {ε = ε}
+        {G = λ _ g' → LossComputable (ComputableV σ) g'} {G' = Gsingle (subV σs g)}
+        (λ { (refl , refl) → gComp }) (lemma-A11-E e0 Cσs))
+    where
+    gComp : LossComputable (ComputableV σ) (subV σs g)
+    gComp = ComputableV-to-LossComputable (lemma-A11-V g Cσs)
+  lemma-A11-E {Γ} (plusE {ε} e1 e2) {σs} Cσs = lemma-A9 (F-plusL (subE σs e2)) Fcomp1 (lemma-A11-E e1 Cσs)
+    where
+    Fcomp1 : ∀ {v : Val ∅ Loss} → ComputableV Loss v → ComputableE Loss ε (plugF (F-plusL (subE σs e2)) (val v))
+    Fcomp1 {v} _ = lemma-A9 (F-plusR v) Fcomp2 (lemma-A11-E e2 Cσs)
+      where
+      Fcomp2 : ∀ {w : Val ∅ Loss} → ComputableV Loss w → ComputableE Loss ε (plugF (F-plusR v) (val w))
+      Fcomp2 {w} _ with val-closed-gnd v | val-closed-gnd w
+      ... | (r , refl) | (r2 , refl) = value-redex-computable (Rplus r r2) (gc-val tt)
+  lemma-A11-E {Γ} (glocalE {σ} {ε₂} {ε₁} {ε} s1 s2 e0 g) {σs} Cσs =
+    lemma-A6 s1 s2 gComp
+      (GComputable-antimono {σ = σ} {ε = ε₁}
+        {G = λ _ g' → LossComputable (ComputableV σ) g'} {G' = Gsingle (subV σs g)}
+        (λ { (refl , refl) → gComp }) (lemma-A11-E e0 Cσs))
+    where
+    gComp : LossComputable (ComputableV σ) (subV σs g)
+    gComp = ComputableV-to-LossComputable (lemma-A11-V g Cσs)
+  lemma-A11-E (resetE e0) Cσs = lemma-reset (lemma-A11-E e0 Cσs)
+  lemma-A11-E {Γ} (handleE {ℓ} {par} {σ} {σ'} {ε} h p b) {σs} Cσs =
+    lemma-A9 (F-handleP (subH σs h) (subE σs b)) Fcomp (lemma-A11-E p Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ (gnd par)} → ComputableV (gnd par) v → ComputableE σ' ε (plugF (F-handleP (subH σs h) (subE σs b)) (val v))
+    Fcomp {v} Pv = lemma-A10 (subH σs h) (lemma-A11-H h Cσs) (lemma-A11-E b Cσs) Pv
 
