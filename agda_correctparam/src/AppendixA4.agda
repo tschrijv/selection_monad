@@ -1520,6 +1520,64 @@ ComputableH {ℓ} {par} {σ} {σ'} {ε} h =
    → ComputableV (gnd par) v1 → ComputableV σ v2
    → ComputableE σ' ε (subE (cons v2 (cons v1 idSub)) (ret h)))
 
+-- Double-weakening analogues of weaken1V-sub1-cancel/
+-- weaken1-sub1-cancelE/weaken1-sub1-cancelH -- cancelling TWO
+-- weakenings against a TWO-variable substitution at once, each proved
+-- by chaining the underlying *-renE/renV/renH-fuse fact twice against
+-- the SAME single-weakening cancellation lemma. Needed below to relate
+-- a K/h/g wrapped in TWO nested vabs (Lemma A.10's own curried
+-- reconstruction of f_k/f_l, replacing the earlier fst/snd-projecting
+-- single-pair-argument encoding) back down to K/h/g applied directly.
+-- (Also needed by Lemma A.11's own binder cases further below, which
+-- reuse it directly rather than redefining it.)
+cons-weaken1V-cancel : ∀ {Γ σ τ} (v : Val ∅ τ) (σs : Sub Γ ∅) (g : Val Γ σ) → subV (cons v σs) (renV S g) ≡ subV σs g
+cons-weaken1V-cancel v σs g = subV-renV-fuse (cons v σs) S g
+
+weaken2-sub2-cancelV : ∀ {Γ σ τ1 τ2} (v1 : Val Γ τ1) (v2 : Val Γ τ2) (g : Val Γ σ) → subV (cons v2 (cons v1 idSub)) (renV S (renV S g)) ≡ g
+weaken2-sub2-cancelV v1 v2 g = trans (subV-renV-fuse (cons v2 (cons v1 idSub)) S (renV S g)) (weaken1V-sub1-cancel v1 g)
+
+weaken2-sub2-cancelE : ∀ {Γ σ ε τ1 τ2} (v1 : Val Γ τ1) (v2 : Val Γ τ2) (e : Γ ⊢ σ ! ε) → subE (cons v2 (cons v1 idSub)) (renE S (renE S e)) ≡ e
+weaken2-sub2-cancelE v1 v2 e = trans (subE-renE-fuse (cons v2 (cons v1 idSub)) S (renE S e)) (weaken1-sub1-cancelE v1 e)
+
+weaken2-sub2-cancelH : ∀ {Γ ℓ par σ σ' ε τ1 τ2} (v1 : Val Γ τ1) (v2 : Val Γ τ2) (h : Handler Γ ℓ par σ σ' ε) → subH (cons v2 (cons v1 idSub)) (renH S (renH S h)) ≡ h
+weaken2-sub2-cancelH v1 v2 h = trans (subH-renH-fuse (cons v2 (cons v1 idSub)) S (renH S h)) (weaken1-sub1-cancelH v1 h)
+
+-- Double-weakening analogue of weaken1K-sub1-plugK (itself built from
+-- subE-plugF-weaken1F-gen/subE-plugS-weaken1S-gen), mirroring its
+-- structural recursion on K exactly but cancelling TWO weakening
+-- layers against a two-variable substitution throughout -- everything
+-- stays closed (Γ = ∅) exactly as the single-weakening original does,
+-- since Frame/SFrame/ContCxt have no substitution operation of their
+-- own to fall back on for a genuinely open Γ.
+subE-plugF-weaken2F-gen : ∀ {α τ ε τ1 τ2} (F : Frame ∅ α ε τ ε) (v1 : Val ∅ τ1) (v2 : Val ∅ τ2) (X : ((∅ , τ1) , τ2) ⊢ α ! ε)
+                         → subE (cons v2 (cons v1 idSub)) (plugF (weaken1F (weaken1F F)) X) ≡ plugF F (subE (cons v2 (cons v1 idSub)) X)
+subE-plugF-weaken2F-gen (F-fun f)       v1 v2 X = refl
+subE-plugF-weaken2F-gen (F-pairL e)     v1 v2 X = cong (pair (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelE v1 v2 e)
+subE-plugF-weaken2F-gen (F-pairR w)     v1 v2 X = cong (λ w' → pair (val w') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 w)
+subE-plugF-weaken2F-gen F-fst           v1 v2 X = refl
+subE-plugF-weaken2F-gen F-snd           v1 v2 X = refl
+subE-plugF-weaken2F-gen (F-appL e)      v1 v2 X = cong (app (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelE v1 v2 e)
+subE-plugF-weaken2F-gen (F-appR w)      v1 v2 X = cong (λ w' → app (val w') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 w)
+subE-plugF-weaken2F-gen (F-op m op)     v1 v2 X = refl
+subE-plugF-weaken2F-gen F-loss          v1 v2 X = refl
+subE-plugF-weaken2F-gen (F-handleP h b) v1 v2 X = cong₂ (λ h' b' → handleE h' (subE (cons v2 (cons v1 idSub)) X) b') (weaken2-sub2-cancelH v1 v2 h) (weaken2-sub2-cancelE v1 v2 b)
+subE-plugF-weaken2F-gen (F-plusL e)     v1 v2 X = cong (plusE (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelE v1 v2 e)
+subE-plugF-weaken2F-gen (F-plusR w)     v1 v2 X = cong (λ w' → plusE (val w') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 w)
+
+subE-plugS-weaken2S-gen : ∀ {α τ ε ε' τ1 τ2} (s : SFrame ∅ α ε τ ε') (v1 : Val ∅ τ1) (v2 : Val ∅ τ2) (X : ((∅ , τ1) , τ2) ⊢ α ! ε)
+                         → subE (cons v2 (cons v1 idSub)) (plugS (renS S (renS S s)) X) ≡ plugS s (subE (cons v2 (cons v1 idSub)) X)
+subE-plugS-weaken2S-gen (S-handleB h w) v1 v2 X = cong₂ (λ h' w' → handleE h' (val w') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelH v1 v2 h) (weaken2-sub2-cancelV v1 v2 w)
+subE-plugS-weaken2S-gen (S-then sub g)  v1 v2 X = cong (thenE sub (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 g)
+subE-plugS-weaken2S-gen (S-glocal s1 s2 g) v1 v2 X = cong (glocalE s1 s2 (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 g)
+subE-plugS-weaken2S-gen S-reset         v1 v2 X = refl
+
+weaken2K-sub2-plugK : ∀ {α εα σ ε τ1 τ2} (v1 : Val ∅ τ1) (v2 : Val ∅ τ2) (k : ContCxt ∅ α εα σ ε) (e : ((∅ , τ1) , τ2) ⊢ α ! εα)
+                     → subE (cons v2 (cons v1 idSub)) (plugK (weaken1K (weaken1K k)) e) ≡ plugK k (subE (cons v2 (cons v1 idSub)) e)
+weaken2K-sub2-plugK v1 v2 ▫        e = refl
+weaken2K-sub2-plugK v1 v2 (F∘ k f) e with Frame-amb-eq f
+... | refl = trans (subE-plugF-weaken2F-gen f v1 v2 (plugK (weaken1K (weaken1K k)) e)) (cong (plugF f) (weaken2K-sub2-plugK v1 v2 k e))
+weaken2K-sub2-plugK v1 v2 (S∘ k s) e = trans (subE-plugS-weaken2S-gen s v1 v2 (plugK (weaken1K (weaken1K k)) e)) (cong (plugS s) (weaken2K-sub2-plugK v1 v2 k e))
+
 -- Lemma A.10 (page 34): the handler construct. Proceeds by (full)
 -- induction on e's own computability -- e's gc-val/gc-stuck cases use
 -- R6/R5 directly (the operation-triggering gc-stuck case further
@@ -1671,11 +1729,9 @@ lemma-A10 {ℓ} {par} {σ} {σ'} {ε} h (hClause , hRet) {e} compE {v0} v0Comp =
 -- clause, ret) needs: composing an extended substitution (extS^n σs,
 -- leaving the n freshly-bound variables open) with a substitution that
 -- instantiates exactly those n variables, into a single n-ary
--- extension of σs itself.
+-- extension of σs itself. (cons-weaken1V-cancel itself now lives
+-- earlier in the file, just before Lemma A.10, which needs it too.)
 -- ---------------------------------------------------------------------
-
-cons-weaken1V-cancel : ∀ {Γ σ τ} (v : Val ∅ τ) (σs : Sub Γ ∅) (g : Val Γ σ) → subV (cons v σs) (renV S g) ≡ subV σs g
-cons-weaken1V-cancel v σs g = subV-renV-fuse (cons v σs) S g
 
 subE-ext-cons : ∀ {Γ σ τ ε} (σs : Sub Γ ∅) (v : Val ∅ σ) (e : (Γ , σ) ⊢ τ ! ε)
               → subE (cons v idSub) (subE (extS σs) e) ≡ subE (cons v σs) e
