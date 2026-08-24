@@ -1305,16 +1305,53 @@ K-target-plugK-eq (S∘ k S-reset) (nst-reset nst) r e' = cong resetE (K-target-
 -- has to be pushed through the captured continuation K, same as
 -- plugK-cong. But K-target's own shape (built for a step of the HOLE
 -- propagating outward) does not, in general, coincide with what a
--- value already sitting in K's hole further reduces to on its own: at
--- an S-then layer, whether S2 (hoist-and-wrap) or R7 (already a value,
--- proceed directly) actually fires depends on whether the content
--- strictly inside that layer is itself already a value -- a fact about
--- K's own internals this development has no decision procedure for.
+-- value already sitting in K's hole further reduces to on its own.
+--
+-- NoSThen/K-target-plugK-eq above pin this down exactly: K-target and
+-- plugK are the SAME TERM, syntactically, on every layer except
+-- S-then (F-frames, S-handleB, S-glocal, and even S-reset all check
+-- out -- S-reset's own K-target clause doesn't consult K-outer-r at
+-- all). S-then is the only place K-target inserts its
+-- plusE(val(vgnd _))(-) wrapper (mirroring what rule S2 -- hoist the
+-- inner step's own loss out front -- would produce for a GENUINE step
+-- of the hole), but whether S2 or R7 (hole already a value, no
+-- hoisting) actually fires for K[v] depends on whether the content
+-- strictly inside that S-then layer is itself already a value -- a
+-- fact about K's own internals this development has no decision
+-- procedure for.
+--
+-- Concretely, proving this needs "X := plugK k (val v) is computable"
+-- (k the continuation below the S-then layer) as a stepping stone
+-- towards K[v]'s target, but the only fact in hand is computability of
+-- the WHOLE thenE-wrapped term -- and this style of Tait/reducibility
+-- proof does not, in general, let you extract a subterm's own
+-- computability from the computability of a compound term built
+-- around it (only the reverse: lemma-A9/A10-style congruence). Three
+-- routes were tried and each hits a real wall, not a superficial one:
+--   (a) Rebuild X's computability co-recursively, driving its
+--       reduction one step at a time via theorem-A4-3 (progress,
+--       unconditional) and compKv's own gc-step field. This needs a
+--       "which K does a stuck/stepping subterm decompose across a
+--       frame boundary into" UNIQUENESS fact for Terminal that does
+--       not exist anywhere in this codebase, and building it looks to
+--       be on the same scale as theorem-A4-2-core's own case analysis
+--       (the small-step determinism proof) -- a separate project, not
+--       a short lemma.
+--   (b) Invoke Lemma A.11 (every closed term is unconditionally
+--       computable) or Theorem A.12/A.13 (built on it) directly on
+--       K-target K 0# (val v). This is circular: lemma-A11-E's own
+--       handleE case goes through lemma-A10, which is exactly what
+--       needs K-settle -- Agda would refuse the resulting definition
+--       order outright.
+--   (c) Exploit thenE's own codomain always being the GROUND type
+--       Loss (so the value/gc-val branch of computability is
+--       trivially ⊤ there). Real, but only trivialises gc-val -- the
+--       gc-stuck and gc-step branches still need exactly the
+--       extraction (a) couldn't supply.
 -- Believed true (ComputableE is closed under the operational
 -- semantics' own rewriting, and K-target is exactly an attempt to
--- describe that rewriting), but not yet proven here: postulated,
--- narrowly, as exactly the fact lemma-A10's f_k/f_l need and nothing
--- more.
+-- describe that rewriting), but not proven here: postulated, narrowly,
+-- as exactly the fact lemma-A10's f_k/f_l need and nothing more.
 postulate
   K-settle : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) (v : Val ∅ α)
            → ComputableE τ ε (plugK K (val v))
