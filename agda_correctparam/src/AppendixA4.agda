@@ -1393,13 +1393,43 @@ value-redex-computable {τ = τ} {ε = ε} {e = e} stpGen comp = gc-step nterm' 
 -- runs into the very same Acc-witness opacity ComputableV-acc-conv
 -- exists to paper over (cg's own domain/codomain obligation, once its
 -- ComputableV-acc unfolding is exposed, carries an opaque nested `rs`
--- witness that Agda's elaborator will not identify with a fresh
--- <M-wellFounded even though they are propositionally the same Acc) --
--- so, mechanically, this is just one more corollary of the same fact
--- ComputableV-acc-conv/-rev already postulate, not a new source of
--- doubt.
-postulate
-  ComputableV-to-LossComputable : ∀ {σ ε} {g : LC ∅ σ ε} → ComputableV (σ ⇒ Loss ! ε) g → LossComputable (ComputableV σ) g
+-- witness) -- now discharged by the same real ComputableV-acc-conv-rev
+-- proof (rather than a bare postulate), landing the codomain check on
+-- the WIDE "every loss-computable g''" family (ComputableV-acc Loss
+-- being unconditionally ⊤, per Loss's own ground clause, regardless of
+-- which Acc witness is threaded through it -- so no separate
+-- conversion is even needed there), which GComputable-antimono then
+-- narrows down to the zeroLC-only instance RComputable asks for,
+-- mirroring RComputable's own local G₀.
+ComputableV-arrow-apply : ∀ {σ τ ε} {e : (∅ , σ) ⊢ τ ! ε} → ComputableV (σ ⇒ τ ! ε) (vabs e)
+                         → ∀ {v : Val ∅ σ} → ComputableV σ v → ComputableE τ ε (e [ v ])
+ComputableV-arrow-apply {σ} {τ} {ε} cg {v} Pv = ComputableE-acc-conv-rev (cg {v} (ComputableV-acc-conv-rev Pv))
+
+-- Full computability at Loss implies R-computability (the
+-- {zeroLC}-restricted clause-3a notion): clause 4 quantifies over
+-- every loss-computable g'', of which zeroLC is one
+-- (zeroLC-lossComputable), so GComputable-antimono narrows a proof
+-- valid for all of them down to the zeroLC-only instance -- exactly
+-- lemma-A8-3's own inner GComputable-antimono call (further above),
+-- just hoisted to its own top-level lemma. Uses Gsingle zeroLC (the
+-- SAME shape as RComputable's own local G₀, just the existing,
+-- already-battle-tested helper) rather than a freshly re-declared G₀:
+-- a locally re-declared G₀ here left the analogous (refl , refl)
+-- hypothesis with an unsolved meta, for reasons not fully pinned down
+-- (Agda apparently type-checks against Gsingle's own reduction more
+-- readily than an equivalent, freshly-written local definition).
+ComputableE-Loss-to-RComputable : ∀ {ε} {e : ∅ ⊢ Loss ! ε} → ComputableE Loss ε e → RComputable e
+ComputableE-Loss-to-RComputable {ε} {e} ce =
+  GComputable-antimono {σ = Loss} {ε = ε}
+    {G = λ _ g0 → LossComputable (ComputableV Loss) g0} {G' = Gsingle zeroLC}
+    (λ { (refl , refl) {v = v1} → zeroLC-lossComputable {v = v1} }) ce
+
+ComputableV-to-LossComputable : ∀ {σ ε} {g : LC ∅ σ ε} → ComputableV (σ ⇒ Loss ! ε) g → LossComputable (ComputableV σ) g
+ComputableV-to-LossComputable {σ} {ε} {g} cg with val-closed-abs g
+... | (e' , refl) = go
+  where
+  go : LossComputable (ComputableV σ) (vabs e')
+  go {v'} Pv' = ComputableE-Loss-to-RComputable (ComputableV-arrow-apply cg Pv')
 
 -- A handler h : par,σ!(ε,ℓ) ⇒ σ'!ε is computable if each of its
 -- operation clauses (extended open in FOUR variables: the handler
