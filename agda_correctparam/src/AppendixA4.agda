@@ -1264,6 +1264,39 @@ plugK-cong (S∘ k (S-glocal s1 s2 g)) r hyp = S3 s1 s2 g (plugK-cong k r hyp {s
 plugK-cong (S∘ k S-reset) r hyp = S4 (plugK-cong k r hyp)
 
 -- ---------------------------------------------------------------------
+-- K-target and plugK agree exactly (same term, not just related by a
+-- step) whenever K contains no S-then layer: every OTHER K-target
+-- clause (F∘/S-handleB/S-glocal/S-reset -- note S-reset itself never
+-- introduces a divergence either, since K-target's own S-reset clause
+-- doesn't consult K-outer-r at all, only wrapping resetE around
+-- whatever the recursive call produces) is syntactically identical to
+-- plugK's own clause, recursively. S-then is the ONLY constructor
+-- whose K-target clause inserts anything K-outer-r-dependent
+-- (the plusE(val(vgnd _))(-) wrapper), so it is the only source of the
+-- gap K-settle exists to bridge -- this lemma isolates exactly that,
+-- needing no computability at all (a purely syntactic fact).
+-- ---------------------------------------------------------------------
+
+data NoSThen : ∀ {α εα τ ε} → ContCxt ∅ α εα τ ε → Set where
+  nst-▫        : ∀ {α εα} → NoSThen {α} {εα} ▫
+  nst-F        : ∀ {α εα β εβ τ ε} {k : ContCxt ∅ α εα β εβ} {f : Frame ∅ β εβ τ ε}
+               → NoSThen k → NoSThen (F∘ k f)
+  nst-handleB  : ∀ {α εα ℓ par σ σ' ε} {k : ContCxt ∅ α εα σ (ε ,ℓ ℓ)} {h : Handler ∅ ℓ par σ σ' ε} {w : Val ∅ (gnd par)}
+               → NoSThen k → NoSThen (S∘ k (S-handleB h w))
+  nst-glocal   : ∀ {α εα σ ε₂ ε₁ ε} {k : ContCxt ∅ α εα σ ε₁} {s1 : ε₂ ⊆ᵉ ε₁} {s2 : ε₁ ⊆ᵉ ε} {g : LC ∅ σ ε₂}
+               → NoSThen k → NoSThen (S∘ k (S-glocal s1 s2 g))
+  nst-reset    : ∀ {α εα σ ε} {k : ContCxt ∅ α εα σ ε}
+               → NoSThen k → NoSThen (S∘ k S-reset)
+
+K-target-plugK-eq : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) → NoSThen K → (r : R) (e' : ∅ ⊢ α ! εα)
+                   → K-target K r e' ≡ plugK K e'
+K-target-plugK-eq ▫ nst-▫ r e' = refl
+K-target-plugK-eq (F∘ k f) (nst-F nst) r e' = cong (plugF f) (K-target-plugK-eq k nst r e')
+K-target-plugK-eq (S∘ k (S-handleB h w)) (nst-handleB nst) r e' = cong (handleE h (val w)) (K-target-plugK-eq k nst r e')
+K-target-plugK-eq (S∘ k (S-glocal s1 s2 g)) (nst-glocal nst) r e' = cong (λ x → glocalE s1 s2 x g) (K-target-plugK-eq k nst r e')
+K-target-plugK-eq (S∘ k S-reset) (nst-reset nst) r e' = cong resetE (K-target-plugK-eq k nst r e')
+
+-- ---------------------------------------------------------------------
 -- The one gap in this development. R5's f_k/f_l apply their own
 -- (single-variable) argument via fst/snd, since the source calculus
 -- only has single-variable binders (there is no primitive pattern-
