@@ -1314,51 +1314,20 @@ plugK-cong (S∘ k (S-glocal s1 s2 g)) r hyp = S3 s1 s2 g (plugK-cong k r hyp {s
 plugK-cong (S∘ k S-reset) r hyp = S4 (plugK-cong k r hyp)
 
 -- ---------------------------------------------------------------------
--- K-target and plugK agree exactly (same term, not just related by a
--- step) whenever K contains no S-then layer: every OTHER K-target
--- clause (F∘/S-handleB/S-glocal/S-reset -- note S-reset itself never
--- introduces a divergence either, since K-target's own S-reset clause
--- doesn't consult K-outer-r at all, only wrapping resetE around
--- whatever the recursive call produces) is syntactically identical to
--- plugK's own clause, recursively. S-then is the ONLY constructor
--- whose K-target clause inserts anything K-outer-r-dependent
--- (the plusE(val(vgnd _))(-) wrapper), so it is the only source of the
--- gap K-settle exists to bridge -- this lemma isolates exactly that,
--- needing no computability at all (a purely syntactic fact).
--- ---------------------------------------------------------------------
-
-data NoSThen : ∀ {α εα τ ε} → ContCxt ∅ α εα τ ε → Set where
-  nst-▫        : ∀ {α εα} → NoSThen {α} {εα} ▫
-  nst-F        : ∀ {α εα β εβ τ ε} {k : ContCxt ∅ α εα β εβ} {f : Frame ∅ β εβ τ ε}
-               → NoSThen k → NoSThen (F∘ k f)
-  nst-handleB  : ∀ {α εα ℓ par σ σ' ε} {k : ContCxt ∅ α εα σ (ε ,ℓ ℓ)} {h : Handler ∅ ℓ par σ σ' ε} {w : Val ∅ (gnd par)}
-               → NoSThen k → NoSThen (S∘ k (S-handleB h w))
-  nst-glocal   : ∀ {α εα σ ε₂ ε₁ ε} {k : ContCxt ∅ α εα σ ε₁} {s1 : ε₂ ⊆ᵉ ε₁} {s2 : ε₁ ⊆ᵉ ε} {g : LC ∅ σ ε₂}
-               → NoSThen k → NoSThen (S∘ k (S-glocal s1 s2 g))
-  nst-reset    : ∀ {α εα σ ε} {k : ContCxt ∅ α εα σ ε}
-               → NoSThen k → NoSThen (S∘ k S-reset)
-
-K-target-plugK-eq : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) → NoSThen K → (r : R) (e' : ∅ ⊢ α ! εα)
-                   → K-target K r e' ≡ plugK K e'
-K-target-plugK-eq ▫ nst-▫ r e' = refl
-K-target-plugK-eq (F∘ k f) (nst-F nst) r e' = cong (plugF f) (K-target-plugK-eq k nst r e')
-K-target-plugK-eq (S∘ k (S-handleB h w)) (nst-handleB nst) r e' = cong (handleE h (val w)) (K-target-plugK-eq k nst r e')
-K-target-plugK-eq (S∘ k (S-glocal s1 s2 g)) (nst-glocal nst) r e' = cong (λ x → glocalE s1 s2 x g) (K-target-plugK-eq k nst r e')
-K-target-plugK-eq (S∘ k S-reset) (nst-reset nst) r e' = cong resetE (K-target-plugK-eq k nst r e')
-
--- ---------------------------------------------------------------------
 -- What was once "the one gap in this development": R5's f_k/f_l apply
 -- their own (single-variable) argument via fst/snd, leaving an
 -- fst/snd reduction that has to be pushed through the captured
 -- continuation K (same as plugK-cong), landing on
--- "K-target K 0# (val v) is computable given plugK K (val v) is" --
--- exactly the gap NoSThen/K-target-plugK-eq above localise to the
--- S-then layer alone. A first attempt tried extracting this from an
--- ALREADY-BUILT ComputableE witness for plugK K (val v) after the
--- fact (as a standalone postulate, K-settle) and hit a real wall: that
--- style of Tait/reducibility proof does not, in general, let you
--- extract a subterm's own computability from the computability of a
--- compound term built around it.
+-- "K-target K 0# (val v) is computable given plugK K (val v) is". Every
+-- K-target clause except S-then is syntactically identical to plugK's
+-- own clause (S-reset included -- its K-target clause never consults
+-- K-outer-r), so S-then (the plusE(val(vgnd _))(-) wrapper it alone
+-- inserts) is the only source of the gap. A first attempt tried
+-- extracting this from an ALREADY-BUILT ComputableE witness for
+-- plugK K (val v) after the fact (as a standalone postulate, K-settle)
+-- and hit a real wall: that style of Tait/reducibility proof does not,
+-- in general, let you extract a subterm's own computability from the
+-- computability of a compound term built around it.
 --
 -- Resolved instead by strengthening GComputable's own gc-stuck
 -- constructor with a second field (ihK-target, above) carrying the
@@ -1369,10 +1338,7 @@ K-target-plugK-eq (S∘ k S-reset) (nst-reset nst) r e' = cong resetE (K-target-
 -- and K-outer-r-zero to account for the extra plusE(val(vgnd 0#))(-)
 -- wrapper K-target's own S-then clause inserts). Lemma A.10's
 -- Fcomp-inner (below) then consumes ihK-target directly -- no separate
--- K-settle lemma needed at all. (NoSThen/K-target-plugK-eq above,
--- and the K-settle-NoSThen fragment that used to sit here, are
--- superseded by this -- the general case now holds outright, so the
--- NoSThen-restricted special case is no longer separately needed.)
+-- K-settle lemma needed at all.
 --
 -- ComputableV-acc's own well-founded recursion (over Ty, via _<M_)
 -- means a computability proof arriving through an outer arrow-case's
