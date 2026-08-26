@@ -1318,7 +1318,10 @@ K-target-plugK-eq (S∘ k S-reset) (nst-reset nst) r e' = cong resetE (K-target-
 -- hoisting) actually fires for K[v] depends on whether the content
 -- strictly inside that S-then layer is itself already a value -- a
 -- fact about K's own internals this development has no decision
--- procedure for.
+-- procedure for. K-settle-NoSThen below discharges the NoSThen
+-- restriction of the postulate trivially (a one-line subst along
+-- K-target-plugK-eq), confirming there is no gap at all on that
+-- fragment; everything below is about the genuine S-then case.
 --
 -- Concretely, proving this needs "X := plugK k (val v) is computable"
 -- (k the continuation below the S-then layer) as a stepping stone
@@ -1332,22 +1335,78 @@ K-target-plugK-eq (S∘ k S-reset) (nst-reset nst) r e' = cong resetE (K-target-
 --       reduction one step at a time via theorem-A4-3 (progress,
 --       unconditional) and compKv's own gc-step field. This needs a
 --       "which K does a stuck/stepping subterm decompose across a
---       frame boundary into" UNIQUENESS fact for Terminal that does
---       not exist anywhere in this codebase, and building it looks to
---       be on the same scale as theorem-A4-2-core's own case analysis
---       (the small-step determinism proof) -- a separate project, not
---       a short lemma.
+--       frame boundary into" UNIQUENESS fact for Terminal.
+--
+--       RE-EXAMINED (see commit adding this note): OpSemProofs.agda
+--       DOES now supply exactly this uniqueness fact for the STUCK
+--       case -- R5-cont-unique (fully proven, not a stub) plus
+--       progress-dichotomy (an unconditional Terminal e ⊎ step
+--       classifier for any closed e, usable directly on
+--       X = plugK k (val v) without needing to extract anything from
+--       a computability witness first). That resolves the "is this
+--       the SAME stuck op-call" half of the problem. But it is not
+--       enough by itself, for a reason more basic than "the
+--       uniqueness fact is missing":
+--
+--       plugK/plugF/plugS NEVER produce a syntactically-`val`-headed
+--       term for a nonempty context (every one of plugF's/plugS's own
+--       clauses heads the result with a non-val constructor --
+--       fun/pair/app/opE/lossE/handleE/plusE/thenE/glocalE/resetE/fst/
+--       snd -- never `val`). So progress-dichotomy(X) can only return
+--       `terminalVal` when k = ▫ (the totally trivial case, where
+--       X ≡ val v ≡ K-target ▫ 0# (val v) already, nothing to prove).
+--       For every NONEMPTY k, X's own Terminal-or-step classification
+--       is therefore *always* terminalOp-stuck or a genuine step, and
+--       critically the resulting K'' (progress-dichotomy's own stuck
+--       witness, or the F-rule/S-rule congruence context a step
+--       propagates through) is in general NOT a structural piece of
+--       k at all -- e.g. k = F∘ ▫ (F-appL e2): X = app (val v) e2;
+--       if e2 is itself stuck at some K3, progress-dichotomy's own
+--       `app` clause returns K'' = F∘ K3 (F-appR v), which reuses v
+--       (rebuilt as an F-appR frame) and K3 (e2's own, k-independent
+--       stuck context) -- syntactically unrelated to k = F∘ ▫
+--       (F-appL e2). This is generic: any two-hole frame whose OTHER
+--       subterm can itself get stuck/step produces a K'' built from
+--       THAT subterm's own decomposition, not from k's syntax. So
+--       even granting R5-cont-unique's uniqueness fact, a recursive
+--       call "one layer into K''" would not be a structurally smaller
+--       instance of the ORIGINAL K-settle problem (no k' with K''
+--       "below" it in K's own syntax to induct on) -- confirming that
+--       what's missing is not just a uniqueness lemma but a full
+--       compositional theorem relating K-target's transform to EVERY
+--       constructor progress-dichotomy/theorem-A4-2-core dispatch on
+--       (not only the S-then layer in isolation), which is genuinely
+--       on the same scale as theorem-A4-2-core's own ~1000-line case
+--       analysis -- a separate project, not a short lemma.
 --   (b) Invoke Lemma A.11 (every closed term is unconditionally
 --       computable) or Theorem A.12/A.13 (built on it) directly on
---       K-target K 0# (val v). This is circular: lemma-A11-E's own
---       handleE case goes through lemma-A10, which is exactly what
---       needs K-settle -- Agda would refuse the resulting definition
---       order outright.
+--       K-target K 0# (val v) (or on X itself). This is circular
+--       both logically AND in Agda's own definition order:
+--       lemma-A11-E's own handleE case goes through lemma-A10, which
+--       is exactly what needs K-settle, and lemma-A10/K-settle are
+--       necessarily defined BEFORE Lemma A.11 in this file -- there
+--       is no forward reference available to exploit even if the
+--       logical circularity were somehow broken.
 --   (c) Exploit thenE's own codomain always being the GROUND type
 --       Loss (so the value/gc-val branch of computability is
 --       trivially ⊤ there). Real, but only trivialises gc-val -- the
 --       gc-stuck and gc-step branches still need exactly the
 --       extraction (a) couldn't supply.
+--
+-- One more angle worth recording: at the ONE call site that actually
+-- uses K-settle (Fcomp-inner, in lemma-A10 below), the OUTER layer
+-- being settled through (S-handleB h q) is FRESH -- added on top of
+-- an ALREADY-CAPTURED K -- and cv's own gc-stuck field (ihK) hands
+-- back BARE (unwrapped) computability of plugK K (val y) directly,
+-- with no extraction needed, precisely because that decomposition
+-- boundary coincides with a real gc-stuck/gc-val/gc-step case split
+-- already present in an EXISTING computability witness one level
+-- further out (compE, in lemma-A10). That trick does not generalise:
+-- it relies on the S-then/S-handleB layer being freshly wrapped
+-- around an already-computable K, not on K-settle's own induction
+-- discovering fresh internal structure the way the S-then case would
+-- need to. So it cannot be used to shrink the general statement.
+--
 -- Believed true (ComputableE is closed under the operational
 -- semantics' own rewriting, and K-target is exactly an attempt to
 -- describe that rewriting), but not proven here: postulated, narrowly,
@@ -1356,6 +1415,18 @@ postulate
   K-settle : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) (v : Val ∅ α)
            → ComputableE τ ε (plugK K (val v))
            → ComputableE τ ε (K-target K 0# (val v))
+
+-- Warm-up / sanity check confirming the "no gap outside S-then" claim
+-- above is not just believed but actually holds: on the NoSThen
+-- fragment, K-target and plugK are the SAME TERM (K-target-plugK-eq),
+-- so K-settle's conclusion is literally cv itself, transported along
+-- that equation. This is a genuine (unpostulated) proof of K-settle
+-- restricted to contexts with no S-then layer anywhere.
+K-settle-NoSThen : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) → NoSThen K → (v : Val ∅ α)
+                  → ComputableE τ ε (plugK K (val v))
+                  → ComputableE τ ε (K-target K 0# (val v))
+K-settle-NoSThen K nst v cv =
+  subst (ComputableE _ _) (sym (K-target-plugK-eq K nst 0# (val v))) cv
 
 -- ComputableV-acc's own well-founded recursion (over Ty, via _<M_)
 -- means a computability proof arriving through an outer arrow-case's
