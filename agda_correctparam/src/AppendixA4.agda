@@ -1991,9 +1991,9 @@ theorem-A12 {σ} {ε} {sub = sub} {g = g} gComp = go
 -- above for uniqueness): every e : σ ! ε and loss-computable
 -- g : σ → loss ! ε' evaluate, in finitely many steps, to SOME terminal
 -- w with SOME total loss r -- i.e. g ⊢ e ⇒[r] w. Exactly
--- theorem-A4-4's own statement (OpSemProofs.agda), postulated there
--- and left undischarged since termination is genuinely the crux of
--- Appendix A.4 -- proved here as a direct corollary of the Fundamental
+-- theorem-A4-4's own statement (originally postulated in
+-- OpSemProofs.agda, since termination is genuinely the crux of
+-- Appendix A.4) -- proved here as a direct corollary of the Fundamental
 -- Lemma (lemma-A11-E-closed) by the same structural recursion
 -- theorem-A12 uses, this time building the big-step derivation itself
 -- (via `done`/`step`) rather than deriving a contradiction: gc-val/
@@ -2016,7 +2016,9 @@ theorem-A13-exists {σ} {ε} {sub = sub} {g = g} gComp e = go (lemma-A11-E-close
   ... | inj₂ (r0 , e0' , stp0) with go (ih {sub = sub} {g = g} gComp stp0)
   ...   | (s , w , d , tw) = r0 + s , w , step stp0 d , tw
 
--- Matches theorem-A4-4's own type exactly.
+-- Matches theorem-A4-4's own type exactly -- Proofs.agda now imports
+-- this directly (renamed back to theorem-A4-4) in place of the
+-- postulate, which has been removed from OpSemProofs.agda entirely.
 theorem-A13-exists-A4-4 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} (e : ∅ ⊢ σ ! ε)
                          → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))
 theorem-A13-exists-A4-4 {g = g} e = theorem-A13-exists (ComputableV-to-LossComputable (lemma-A11-V-closed g)) e

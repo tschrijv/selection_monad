@@ -3680,9 +3680,13 @@ corollary-3-3 d1 d2 with big-step-unique d1 (terminalVal _) d2 (terminalVal _)
 -- theorem-A4-3's own step provides descent along (this is genuinely the
 -- crux of "termination", not just bookkeeping -- the language has no
 -- general recursion/fixpoint construct, but that alone doesn't hand you
--- a ready-made measure). Formulated only, not proved here.
+-- a ready-made measure).
+--
+-- No longer postulated here: proved as theorem-A13-exists-A4-4 in
+-- AppendixA4.agda (same statement, verified there via a comment
+-- pinning the type down exactly), as a direct corollary of the
+-- Fundamental Lemma (Lemma A.11) -- which needs the whole Tait-style
+-- ComputableV/GComputable apparatus that file builds, well beyond what
+-- belongs in this file. Proofs.agda (the only consumer of this fact)
+-- now imports it from there instead.
 -- ---------------------------------------------------------------------
-
-postulate
-  theorem-A4-4 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} (e : ∅ ⊢ σ ! ε)
-                → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))

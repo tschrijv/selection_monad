@@ -21,8 +21,18 @@ open Sig Sg
 open import Syntax Sg
 open import Subst Sg
 open import OpSem Sg
-open import OpSemProofs Sg using (theorem-A4-4; val-closed-gnd)
+open import OpSemProofs Sg using (val-closed-gnd)
 open import Denotational Sg
+-- theorem-A4-4 (termination) is genuinely proven, not postulated --
+-- but its proof (via the Fundamental Lemma, Lemma A.11) lives in
+-- AppendixA4.agda rather than here, since it needs the whole
+-- Tait-style ComputableV/GComputable apparatus built there (there as
+-- theorem-A13-exists-A4-4, since it's also exactly Theorem A.13's
+-- existence half). Aliased back to theorem-A4-4 so every use-site
+-- below is unchanged.
+open import AppendixA4 Sg using (theorem-A13-exists-A4-4)
+
+theorem-A4-4 = theorem-A13-exists-A4-4
 
 open import Data.List using (_∷_; [])
 open import Data.Product using (_×_; _,_; proj₁; proj₂; Σ)
