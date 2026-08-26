@@ -219,11 +219,58 @@ mVal-arrow-decrease-cod σ τ ε = ≤×<⇒<M (b≤a⊔b⊔c (levelTy σ) (leve
 -- so that hypothesis would be vacuous.
 -- ---------------------------------------------------------------------
 
+-- K-outer-r/K-target: hoisted up from their original home (just above
+-- plugK-cong, where the FULL motivating comment for them still lives)
+-- purely so gc-stuck below can reference K-target directly in its own
+-- new ihK-target field -- see that field's own comment for why.
+-- K-outer-r/K-target/plugK-cong only ever depend on OpSem.agda's own
+-- ContCxt/plugF/plugS machinery, never on anything defined later in
+-- THIS file, so moving these two definitions earlier changes nothing
+-- about how they typecheck.
+K-outer-r : ∀ {α εα τ ε} → ContCxt ∅ α εα τ ε → R → R
+K-outer-r ▫ r                       = r
+K-outer-r (F∘ k f) r                = K-outer-r k r
+K-outer-r (S∘ k (S-handleB h v)) r  = K-outer-r k r
+K-outer-r (S∘ k (S-then sub g)) r   = 0#
+K-outer-r (S∘ k (S-glocal s1 s2 g)) r = K-outer-r k r
+K-outer-r (S∘ k S-reset) r          = 0#
+
+K-target : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) (r : R) → ∅ ⊢ α ! εα → ∅ ⊢ τ ! ε
+K-target ▫ r e'                       = e'
+K-target (F∘ k f) r e'                = plugF f (K-target k r e')
+K-target (S∘ k (S-handleB h v)) r e'  = handleE h (val v) (K-target k r e')
+K-target (S∘ k (S-then sub g)) r e'   = plusE (val (vgnd (K-outer-r k r))) (thenE sub (K-target k r e') g)
+K-target (S∘ k (S-glocal s1 s2 g)) r e' = glocalE s1 s2 (K-target k r e') g
+K-target (S∘ k S-reset) r e'          = resetE (K-target k r e')
+
+-- K-outer-r K 0# is ALWAYS 0#, for every K: every non-(S-then/S-reset)
+-- clause just passes r through unchanged (so induction applies with
+-- r=0# fixed throughout), and the S-then/S-reset clauses return 0#
+-- outright regardless of r. Used below (gc-stuck's ihK-target field,
+-- S-then case) to identify K-target's own plusE(val(vgnd(K-outer-r K
+-- 0#)))(-) wrapper with the plain plusE(val(vgnd 0#))(-) that
+-- lemma-A8-1 (further below) produces.
+K-outer-r-zero : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) → K-outer-r K 0# ≡ 0#
+K-outer-r-zero ▫                       = refl
+K-outer-r-zero (F∘ k f)                = K-outer-r-zero k
+K-outer-r-zero (S∘ k (S-handleB h v))  = K-outer-r-zero k
+K-outer-r-zero (S∘ k (S-then sub g))   = refl
+K-outer-r-zero (S∘ k (S-glocal s1 s2 g)) = K-outer-r-zero k
+K-outer-r-zero (S∘ k S-reset)          = refl
+
 data GComputable {σ ε} (P : Val ∅ σ → Set) (G : ∀ {εg} → εg ⊆ᵉ ε → LC ∅ σ εg → Set) : ∅ ⊢ σ ! ε → Set where
   gc-val   : ∀ {v} → P v → GComputable P G (val v)
   gc-stuck : ∀ {ℓ εop} {m : ℓ ∈ εop} {op : Op ℓ} {v : Val ∅ (gnd (out op))}
              {K : ContCxt ∅ (gnd (in′ op)) εop σ ε} (nh : ¬ Handles K ℓ)
            → (∀ {v1 : Val ∅ (gnd (in′ op))} → GComputable P G (plugK K (val v1)))
+           -- The analogous fact for K-target instead of plugK, at the
+           -- one and only r this development ever needs (0#) -- see
+           -- K-settle's own former home (postulate, now deleted) for
+           -- why: this is exactly what lets Lemma A.10's Fcomp-inner
+           -- bridge K[v]'s computability to K-target K 0# (val v)'s,
+           -- built FORWARD at each gc-stuck construction site (below)
+           -- rather than extracted backward from an opaque witness.
+           → (∀ {v1 : Val ∅ (gnd (in′ op))} → GComputable P G (K-target K 0# (val v1)))
            → GComputable P G (plugK K (opE m op (val v)))
   -- Carries ¬ Terminal e explicitly (the source's own "e is not
   -- stuck", read here as "e cannot be Terminal", i.e. is neither a
@@ -348,7 +395,7 @@ lemma-A6 {σ} {ε₁} {ε₂} {ε} sub1 sub2 {g} lossCompG = go
               → GComputable (ComputableV σ) (λ _ g' → LossComputable (ComputableV σ) g') e''
     step-case _ stp with step-det-with (R8 sub1 sub2 v g) stp
     ... | (refl , refl) = gc-val Pv
-  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = S∘ K (S-glocal sub1 sub2 g)} nh (λ {v1} → go (ihK {v1}))
+  go (gc-stuck {K = K} nh ihK ihKt) = gc-stuck {K = S∘ K (S-glocal sub1 sub2 g)} nh (λ {v1} → go (ihK {v1})) (λ {v1} → go (ihKt {v1}))
   go (gc-step {e} nterm ih) = gc-step nterm' step-case
     where
     nterm' : ¬ Terminal (glocalE sub1 sub2 e g)
@@ -404,8 +451,8 @@ lemma-A7-1 {ε₁} {ε} sub2 r = go
               → RComputable {ε} e''
     step-case {subX = subX} _ stp with step-det-with (F-rule subX (F-plusR (vgnd r)) (R8 ⊆ᵉ-refl sub2 v zeroLC)) stp
     ... | (refl , refl) = plusVal-RComputable r v
-  go (gc-stuck {K = K} nh ihK) =
-    gc-stuck {K = F∘ (S∘ K (S-glocal ⊆ᵉ-refl sub2 zeroLC)) (F-plusR (vgnd r))} nh (λ {v1} → go (ihK {v1}))
+  go (gc-stuck {K = K} nh ihK ihKt) =
+    gc-stuck {K = F∘ (S∘ K (S-glocal ⊆ᵉ-refl sub2 zeroLC)) (F-plusR (vgnd r))} nh (λ {v1} → go (ihK {v1})) (λ {v1} → go (ihKt {v1}))
   go (gc-step {e} nterm ih) = gc-step nterm' step-case
     where
     nterm' : ¬ Terminal (plusE (val (vgnd r)) (glocalE ⊆ᵉ-refl sub2 e zeroLC))
@@ -653,7 +700,7 @@ lemma-A8-1 {ε} r = go
               → GComputable (ComputableV Loss) (λ _ g' → LossComputable (ComputableV Loss) g') e''
     step-case _ stp with step-det-with (Rplus r v') stp
     ... | (refl , refl) = gc-val tt
-  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = F∘ K (F-plusR (vgnd r))} nh (λ {v1} → go (ihK {v1}))
+  go (gc-stuck {K = K} nh ihK ihKt) = gc-stuck {K = F∘ K (F-plusR (vgnd r))} nh (λ {v1} → go (ihK {v1})) (λ {v1} → go (ihKt {v1}))
   go (gc-step {e} nterm ih) = gc-step nterm' step-case
     where
     -- F-rule's premise needs a step of e under a BOOSTED ambient (a
@@ -696,7 +743,8 @@ GComputable-antimono : ∀ {σ ε} {P : Val ∅ σ → Set} {G G' : ∀ {εg} �
                       → (∀ {εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} → G' sub g → G sub g)
                       → ∀ {e} → GComputable P G e → GComputable P G' e
 GComputable-antimono G'⊆G (gc-val Pv) = gc-val Pv
-GComputable-antimono G'⊆G (gc-stuck {K = K} nh ihK) = gc-stuck {K = K} nh (λ {v1} → GComputable-antimono G'⊆G (ihK {v1}))
+GComputable-antimono G'⊆G (gc-stuck {K = K} nh ihK ihKt) =
+  gc-stuck {K = K} nh (λ {v1} → GComputable-antimono G'⊆G (ihK {v1})) (λ {v1} → GComputable-antimono G'⊆G (ihKt {v1}))
 GComputable-antimono G'⊆G (gc-step {e = e} nterm ih) =
   gc-step {e = e} nterm (λ {εg} {sub} {g} G'sg {r} {e'} stp → GComputable-antimono G'⊆G (ih {sub = sub} {g = g} (G'⊆G G'sg) stp))
 
@@ -733,7 +781,23 @@ lemma-A8-2 {σ} {ε'} {ε} sub {g} lossCompG = go
               → GComputable (ComputableV Loss) (λ _ g' → LossComputable (ComputableV Loss) g') e''
     step-case _ stp with step-det-with (R7 sub v e0) stp
     ... | (refl , refl) = lemma-A6 {σ = Loss} ⊆ᵉ-refl sub {g = zeroLC} (λ {v = v1} → zeroLC-lossComputable {ε = ε'} {v = v1}) (lossCompG {v} Pv)
-  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = S∘ K (S-then sub g)} nh (λ {v1} → go (ihK {v1}))
+  go (gc-stuck {K = K} nh ihK ihKt) = gc-stuck {K = S∘ K (S-then sub g)} nh (λ {v1} → go (ihK {v1})) ihKt-target
+    where
+    -- The one genuinely new case (see the comment above gc-stuck's own
+    -- ihK-target field): K-target's S-then clause inserts an extra
+    -- plusE(val(vgnd(K-outer-r K 0#)))(-) wrapper around
+    -- thenE sub (K-target K 0# (val v1)) g, unlike plugK's own S-then
+    -- clause (which is bare thenE sub (plugK K (val v1)) g). go itself
+    -- applied to ihKt {v1} builds exactly ComputableE Loss ε of the
+    -- UNwrapped thenE term (go's own conclusion type), so lemma-A8-1
+    -- (0# specifically) supplies the missing plusE wrapper, and
+    -- K-outer-r-zero identifies K-outer-r K 0# with the plain 0#
+    -- lemma-A8-1 itself wraps with.
+    ihKt-target : ∀ {v1} → GComputable (ComputableV Loss) (λ _ g0 → LossComputable (ComputableV Loss) g0)
+                    (K-target (S∘ K (S-then sub g)) 0# (val v1))
+    ihKt-target {v1} = subst (λ r0 → ComputableE Loss ε (plusE (val (vgnd r0)) (thenE sub (K-target K 0# (val v1)) g)))
+                              (sym (K-outer-r-zero K))
+                              (lemma-A8-1 0# (go (ihKt {v1})))
   go (gc-step {e} nterm ih) = gc-step nterm' step-case
     where
     nterm' : ¬ Terminal (thenE sub e g)
@@ -856,7 +920,7 @@ lemma-A9 {α} {τ} {ε} F Fcomp {e} compE = go compE'
              (λ { (refl , ε' , subX , g , lossCompG , refl) → boosted-lossComp lossCompG }) compE
   go : ∀ {e} → GComputable (ComputableV α) GboostedFamily e → ComputableE τ ε (plugF F e)
   go (gc-val {v} Pv) = Fcomp Pv
-  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = F∘ K F} nh (λ {v1} → go (ihK {v1}))
+  go (gc-stuck {K = K} nh ihK ihKt) = gc-stuck {K = F∘ K F} nh (λ {v1} → go (ihK {v1})) (λ {v1} → go (ihKt {v1}))
   go (gc-step {e0} nterm ih) = gc-step nterm' step-case
     where
     nterm' : ¬ Terminal (plugF F e0)
@@ -896,7 +960,7 @@ lemma-reset {σ} {ε} = go
               → ∀ {r e'} → _⊢_-[_]→_ {sub = subX} g₁ (resetE (val v)) r e' → ComputableE σ ε e'
     step-case {subX = subX} {g₁ = g₁} _ stp with step-det-with (R9 {sub = subX} {g = g₁} v) stp
     ... | (refl , refl) = gc-val Pv
-  go (gc-stuck {K = K} nh ihK) = gc-stuck {K = S∘ K S-reset} nh (λ {v1} → go (ihK {v1}))
+  go (gc-stuck {K = K} nh ihK ihKt) = gc-stuck {K = S∘ K S-reset} nh (λ {v1} → go (ihK {v1})) (λ {v1} → go (ihKt {v1}))
   go (gc-step {e0} nterm ih) = gc-step nterm' step-case
     where
     nterm' : ¬ Terminal (resetE e0)
@@ -1232,24 +1296,10 @@ weaken1K-sub1-plugK v (S∘ k s) e = trans (subE-plugS-weaken1S-gen s v (plugK (
 -- whatever r it was given out into a fresh plusE wrapper (and S4
 -- likewise always forces 0#, discarding r entirely) -- so the
 -- resulting index and target expression have to be COMPUTED from K
--- itself (K-outer-r/K-target below), not assumed to stay r/plugK K e'
--- unchanged throughout, the way a naive single-shape statement would.
-K-outer-r : ∀ {α εα τ ε} → ContCxt ∅ α εα τ ε → R → R
-K-outer-r ▫ r                       = r
-K-outer-r (F∘ k f) r                = K-outer-r k r
-K-outer-r (S∘ k (S-handleB h v)) r  = K-outer-r k r
-K-outer-r (S∘ k (S-then sub g)) r   = 0#
-K-outer-r (S∘ k (S-glocal s1 s2 g)) r = K-outer-r k r
-K-outer-r (S∘ k S-reset) r          = 0#
-
-K-target : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) (r : R) → ∅ ⊢ α ! εα → ∅ ⊢ τ ! ε
-K-target ▫ r e'                       = e'
-K-target (F∘ k f) r e'                = plugF f (K-target k r e')
-K-target (S∘ k (S-handleB h v)) r e'  = handleE h (val v) (K-target k r e')
-K-target (S∘ k (S-then sub g)) r e'   = plusE (val (vgnd (K-outer-r k r))) (thenE sub (K-target k r e') g)
-K-target (S∘ k (S-glocal s1 s2 g)) r e' = glocalE s1 s2 (K-target k r e') g
-K-target (S∘ k S-reset) r e'          = resetE (K-target k r e')
-
+-- itself (K-outer-r/K-target, hoisted up above GComputable's own
+-- definition -- gc-stuck's ihK-target field needs to refer to K-target
+-- directly), not assumed to stay r/plugK K e' unchanged throughout, the
+-- way a naive single-shape statement would.
 plugK-cong : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) {e e' : ∅ ⊢ α ! εα} (r : R)
            → (∀ {εg} {sub : εg ⊆ᵉ εα} {g : LC ∅ α εg} → _⊢_-[_]→_ {sub = sub} g e r e')
            → ∀ {εg2} {sub2 : εg2 ⊆ᵉ ε} {g2 : LC ∅ τ εg2} → _⊢_-[_]→_ {sub = sub2} g2 (plugK K e) (K-outer-r K r) (K-target K r e')
@@ -1297,137 +1347,33 @@ K-target-plugK-eq (S∘ k (S-glocal s1 s2 g)) (nst-glocal nst) r e' = cong (λ x
 K-target-plugK-eq (S∘ k S-reset) (nst-reset nst) r e' = cong resetE (K-target-plugK-eq k nst r e')
 
 -- ---------------------------------------------------------------------
--- The one gap in this development. R5's f_k/f_l apply their own
--- (single-variable) argument via fst/snd, since the source calculus
--- only has single-variable binders (there is no primitive pattern-
--- matching lambda the way the paper's own "λ(p,y).e" notation has) --
--- so plugging in a computable pair leaves an fst/snd reduction that
--- has to be pushed through the captured continuation K, same as
--- plugK-cong. But K-target's own shape (built for a step of the HOLE
--- propagating outward) does not, in general, coincide with what a
--- value already sitting in K's hole further reduces to on its own.
+-- What was once "the one gap in this development": R5's f_k/f_l apply
+-- their own (single-variable) argument via fst/snd, leaving an
+-- fst/snd reduction that has to be pushed through the captured
+-- continuation K (same as plugK-cong), landing on
+-- "K-target K 0# (val v) is computable given plugK K (val v) is" --
+-- exactly the gap NoSThen/K-target-plugK-eq above localise to the
+-- S-then layer alone. A first attempt tried extracting this from an
+-- ALREADY-BUILT ComputableE witness for plugK K (val v) after the
+-- fact (as a standalone postulate, K-settle) and hit a real wall: that
+-- style of Tait/reducibility proof does not, in general, let you
+-- extract a subterm's own computability from the computability of a
+-- compound term built around it.
 --
--- NoSThen/K-target-plugK-eq above pin this down exactly: K-target and
--- plugK are the SAME TERM, syntactically, on every layer except
--- S-then (F-frames, S-handleB, S-glocal, and even S-reset all check
--- out -- S-reset's own K-target clause doesn't consult K-outer-r at
--- all). S-then is the only place K-target inserts its
--- plusE(val(vgnd _))(-) wrapper (mirroring what rule S2 -- hoist the
--- inner step's own loss out front -- would produce for a GENUINE step
--- of the hole), but whether S2 or R7 (hole already a value, no
--- hoisting) actually fires for K[v] depends on whether the content
--- strictly inside that S-then layer is itself already a value -- a
--- fact about K's own internals this development has no decision
--- procedure for. K-settle-NoSThen below discharges the NoSThen
--- restriction of the postulate trivially (a one-line subst along
--- K-target-plugK-eq), confirming there is no gap at all on that
--- fragment; everything below is about the genuine S-then case.
+-- Resolved instead by strengthening GComputable's own gc-stuck
+-- constructor with a second field (ihK-target, above) carrying the
+-- K-target-shaped fact ALONGSIDE the plugK-shaped one, built FORWARD
+-- at each of the (few) places in this file that construct a gc-stuck
+-- value, using exactly the local facts already in hand there (in
+-- particular, the S-then case -- lemma-A8-2 above -- uses lemma-A8-1
+-- and K-outer-r-zero to account for the extra plusE(val(vgnd 0#))(-)
+-- wrapper K-target's own S-then clause inserts). Lemma A.10's
+-- Fcomp-inner (below) then consumes ihK-target directly -- no separate
+-- K-settle lemma needed at all. (NoSThen/K-target-plugK-eq above,
+-- and the K-settle-NoSThen fragment that used to sit here, are
+-- superseded by this -- the general case now holds outright, so the
+-- NoSThen-restricted special case is no longer separately needed.)
 --
--- Concretely, proving this needs "X := plugK k (val v) is computable"
--- (k the continuation below the S-then layer) as a stepping stone
--- towards K[v]'s target, but the only fact in hand is computability of
--- the WHOLE thenE-wrapped term -- and this style of Tait/reducibility
--- proof does not, in general, let you extract a subterm's own
--- computability from the computability of a compound term built
--- around it (only the reverse: lemma-A9/A10-style congruence). Three
--- routes were tried and each hits a real wall, not a superficial one:
---   (a) Rebuild X's computability co-recursively, driving its
---       reduction one step at a time via theorem-A4-3 (progress,
---       unconditional) and compKv's own gc-step field. This needs a
---       "which K does a stuck/stepping subterm decompose across a
---       frame boundary into" UNIQUENESS fact for Terminal.
---
---       RE-EXAMINED (see commit adding this note): OpSemProofs.agda
---       DOES now supply exactly this uniqueness fact for the STUCK
---       case -- R5-cont-unique (fully proven, not a stub) plus
---       progress-dichotomy (an unconditional Terminal e ⊎ step
---       classifier for any closed e, usable directly on
---       X = plugK k (val v) without needing to extract anything from
---       a computability witness first). That resolves the "is this
---       the SAME stuck op-call" half of the problem. But it is not
---       enough by itself, for a reason more basic than "the
---       uniqueness fact is missing":
---
---       plugK/plugF/plugS NEVER produce a syntactically-`val`-headed
---       term for a nonempty context (every one of plugF's/plugS's own
---       clauses heads the result with a non-val constructor --
---       fun/pair/app/opE/lossE/handleE/plusE/thenE/glocalE/resetE/fst/
---       snd -- never `val`). So progress-dichotomy(X) can only return
---       `terminalVal` when k = ▫ (the totally trivial case, where
---       X ≡ val v ≡ K-target ▫ 0# (val v) already, nothing to prove).
---       For every NONEMPTY k, X's own Terminal-or-step classification
---       is therefore *always* terminalOp-stuck or a genuine step, and
---       critically the resulting K'' (progress-dichotomy's own stuck
---       witness, or the F-rule/S-rule congruence context a step
---       propagates through) is in general NOT a structural piece of
---       k at all -- e.g. k = F∘ ▫ (F-appL e2): X = app (val v) e2;
---       if e2 is itself stuck at some K3, progress-dichotomy's own
---       `app` clause returns K'' = F∘ K3 (F-appR v), which reuses v
---       (rebuilt as an F-appR frame) and K3 (e2's own, k-independent
---       stuck context) -- syntactically unrelated to k = F∘ ▫
---       (F-appL e2). This is generic: any two-hole frame whose OTHER
---       subterm can itself get stuck/step produces a K'' built from
---       THAT subterm's own decomposition, not from k's syntax. So
---       even granting R5-cont-unique's uniqueness fact, a recursive
---       call "one layer into K''" would not be a structurally smaller
---       instance of the ORIGINAL K-settle problem (no k' with K''
---       "below" it in K's own syntax to induct on) -- confirming that
---       what's missing is not just a uniqueness lemma but a full
---       compositional theorem relating K-target's transform to EVERY
---       constructor progress-dichotomy/theorem-A4-2-core dispatch on
---       (not only the S-then layer in isolation), which is genuinely
---       on the same scale as theorem-A4-2-core's own ~1000-line case
---       analysis -- a separate project, not a short lemma.
---   (b) Invoke Lemma A.11 (every closed term is unconditionally
---       computable) or Theorem A.12/A.13 (built on it) directly on
---       K-target K 0# (val v) (or on X itself). This is circular
---       both logically AND in Agda's own definition order:
---       lemma-A11-E's own handleE case goes through lemma-A10, which
---       is exactly what needs K-settle, and lemma-A10/K-settle are
---       necessarily defined BEFORE Lemma A.11 in this file -- there
---       is no forward reference available to exploit even if the
---       logical circularity were somehow broken.
---   (c) Exploit thenE's own codomain always being the GROUND type
---       Loss (so the value/gc-val branch of computability is
---       trivially ⊤ there). Real, but only trivialises gc-val -- the
---       gc-stuck and gc-step branches still need exactly the
---       extraction (a) couldn't supply.
---
--- One more angle worth recording: at the ONE call site that actually
--- uses K-settle (Fcomp-inner, in lemma-A10 below), the OUTER layer
--- being settled through (S-handleB h q) is FRESH -- added on top of
--- an ALREADY-CAPTURED K -- and cv's own gc-stuck field (ihK) hands
--- back BARE (unwrapped) computability of plugK K (val y) directly,
--- with no extraction needed, precisely because that decomposition
--- boundary coincides with a real gc-stuck/gc-val/gc-step case split
--- already present in an EXISTING computability witness one level
--- further out (compE, in lemma-A10). That trick does not generalise:
--- it relies on the S-then/S-handleB layer being freshly wrapped
--- around an already-computable K, not on K-settle's own induction
--- discovering fresh internal structure the way the S-then case would
--- need to. So it cannot be used to shrink the general statement.
---
--- Believed true (ComputableE is closed under the operational
--- semantics' own rewriting, and K-target is exactly an attempt to
--- describe that rewriting), but not proven here: postulated, narrowly,
--- as exactly the fact lemma-A10's f_k/f_l need and nothing more.
-postulate
-  K-settle : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) (v : Val ∅ α)
-           → ComputableE τ ε (plugK K (val v))
-           → ComputableE τ ε (K-target K 0# (val v))
-
--- Warm-up / sanity check confirming the "no gap outside S-then" claim
--- above is not just believed but actually holds: on the NoSThen
--- fragment, K-target and plugK are the SAME TERM (K-target-plugK-eq),
--- so K-settle's conclusion is literally cv itself, transported along
--- that equation. This is a genuine (unpostulated) proof of K-settle
--- restricted to contexts with no S-then layer anywhere.
-K-settle-NoSThen : ∀ {α εα τ ε} (K : ContCxt ∅ α εα τ ε) → NoSThen K → (v : Val ∅ α)
-                  → ComputableE τ ε (plugK K (val v))
-                  → ComputableE τ ε (K-target K 0# (val v))
-K-settle-NoSThen K nst v cv =
-  subst (ComputableE _ _) (sym (K-target-plugK-eq K nst 0# (val v))) cv
-
 -- ComputableV-acc's own well-founded recursion (over Ty, via _<M_)
 -- means a computability proof arriving through an outer arrow-case's
 -- own Acc field (e.g. the domain-computability hypothesis ComputableV's
@@ -1671,9 +1617,9 @@ lemma-A10 {ℓ} {par} {σ} {σ'} {ε} h (hClause , hRet) {e} compE {v0} v0Comp =
               → GComputable (ComputableV σ') (λ _ g0 → LossComputable (ComputableV σ') g0) e''
     step-case _ stp with step-det-with (R6 h v w) stp
     ... | (refl , refl) = hRet vComp wComp
-  go (gc-stuck {ℓ = ℓop} {m = m} {op = op} {v = w} {K = K} nh ihK) {v} vComp with ℓ ≟ᵉ ℓop
+  go (gc-stuck {ℓ = ℓop} {m = m} {op = op} {v = w} {K = K} nh ihK ihKt) {v} vComp with ℓ ≟ᵉ ℓop
   ... | no neq = gc-stuck {K = S∘ K (S-handleB h v)} (λ { (inj₁ eq2) → neq (sym eq2) ; (inj₂ hk) → nh hk })
-                          (λ {w1} → go (ihK {w1}) vComp)
+                          (λ {w1} → go (ihK {w1}) vComp) (λ {w1} → go (ihKt {w1}) vComp)
   ... | yes eq with eq
   ...   | refl = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC} (R5 ⊆ᵉ-refl h v m op w K nh)) step-case
     where
@@ -1694,10 +1640,16 @@ lemma-A10 {ℓ} {par} {σ} {σ'} {ε} h (hClause , hRet) {e} compE {v0} v0Comp =
 
       -- {g}-computable "with h from q handle K[y]", for an arbitrary
       -- computable q, given y is fixed and already computable: pushes
-      -- snd's own reduction through K (plugK-cong), then bridges
-      -- K-target's shape back to computability via K-settle, using
-      -- go(ihK{y}) (the SAME recursive fact used throughout this
-      -- module) at the arbitrary q.
+      -- snd's own reduction through K (plugK-cong), landing on
+      -- K-target (S∘ K (S-handleB h q)) 0# (val y) -- which is
+      -- DEFINITIONALLY handleE h (val q) (K-target K 0# (val y))
+      -- (K-target's own S-handleB clause), i.e. exactly what
+      -- go (ihKt {y}) qComp produces (go's own conclusion, applied to
+      -- the OUTER gc-stuck's new ihK-target field). No K-settle needed
+      -- (that former postulate's whole reason for existing was to
+      -- bridge exactly this gap after the fact; ihKt supplies it
+      -- directly, having been built forward at each gc-stuck
+      -- construction site instead).
       Fcomp-inner : (p : Val ∅ (gnd par)) (y : Val ∅ (gnd (in′ op))) → ComputableV (gnd (in′ op)) y → ∀ {q : Val ∅ (gnd par)} → ComputableV (gnd par) q
                   → ComputableE σ' ε (handleE h (val q) (plugK K (snd (val (vpair p y)))))
       Fcomp-inner p y yComp {q} qComp = gc-step (¬Terminal-of-step {sub = ⊆ᵉ-refl} {g = zeroLC}
@@ -1709,7 +1661,7 @@ lemma-A10 {ℓ} {par} {σ} {σ'} {ε} h (hClause , hRet) {e} compE {v0} v0Comp =
                    → GComputable (ComputableV σ') (λ _ g0 → LossComputable (ComputableV σ') g0) e'''
         step-case2 {subX2 = subX2} {g₂ = g₂} _ stp2
           with step-det-with (plugK-cong (S∘ K (S-handleB h q)) 0# (λ {sub} {g} → R2-snd p y) {sub2 = subX2} {g2 = g₂}) stp2
-        ... | (refl , refl) = K-settle (S∘ K (S-handleB h q)) y (go (ihK {y}) qComp)
+        ... | (refl , refl) = go (ihKt {y}) qComp
 
       -- Full computability of "with h from (fst (p,y)) handle K[snd
       -- (p,y)]" -- fst's own reduction via F-rule/R2-fst directly
@@ -1910,7 +1862,7 @@ mutual
   lemma-A11-E {Γ} (opE {ℓ} {ε} m op e0) {σs} Cσs = lemma-A9 (F-op m op) Fcomp (lemma-A11-E e0 Cσs)
     where
     Fcomp : ∀ {v : Val ∅ (gnd (out op))} → ComputableV (gnd (out op)) v → ComputableE (gnd (in′ op)) ε (plugF (F-op m op) (val v))
-    Fcomp {v} _ = gc-stuck {K = ▫} (λ ()) (λ {v1} → gc-val tt)
+    Fcomp {v} _ = gc-stuck {K = ▫} (λ ()) (λ {v1} → gc-val tt) (λ {v1} → gc-val tt)
   lemma-A11-E {Γ} (lossE {ε} e0) {σs} Cσs = lemma-A9 F-loss Fcomp (lemma-A11-E e0 Cσs)
     where
     Fcomp : ∀ {v : Val ∅ Loss} → ComputableV Loss v → ComputableE UnitTy ε (plugF F-loss (val v))
@@ -1980,7 +1932,7 @@ theorem-A12 {σ} {ε} {sub = sub} {g = g} gComp = go
         → (e : ∅ ⊢ σ ! ε) → f 0 ≡ e → ComputableE σ ε e → ⊥
     go' f steps e eq (gc-val {v} _) =
       ¬Terminal-of-step (subst (λ x → _⊢_-[_]→_ {sub = sub} g x (proj₁ (steps 0)) (f 1)) eq (proj₂ (steps 0))) (terminalVal v)
-    go' f steps e eq (gc-stuck {m = m} {op = op} {v = v} {K = K} nh _) =
+    go' f steps e eq (gc-stuck {m = m} {op = op} {v = v} {K = K} nh _ _) =
       ¬Terminal-of-step (subst (λ x → _⊢_-[_]→_ {sub = sub} g x (proj₁ (steps 0)) (f 1)) eq (proj₂ (steps 0))) (terminalOp m op v K nh)
     go' f steps e eq (gc-step nterm ih) =
       go' (λ n → f (suc n)) (λ n → steps (suc n)) (f 1) refl
@@ -2009,7 +1961,7 @@ theorem-A13-exists {σ} {ε} {sub = sub} {g = g} gComp e = go (lemma-A11-E-close
   where
   go : ∀ {e} → ComputableE σ ε e → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ w → _⊢_⇒[_]_ {sub = sub} g e r w × Terminal w))
   go (gc-val {v} _)                = 0# , val v , done (val v) , terminalVal v
-  go (gc-stuck {m = m} {op = op} {v = v} {K = K} nh _) =
+  go (gc-stuck {m = m} {op = op} {v = v} {K = K} nh _ _) =
     0# , plugK K (opE m op (val v)) , done (plugK K (opE m op (val v))) , terminalOp m op v K nh
   go (gc-step {e0} nterm ih) with progress-dichotomy {sub = sub} {g = g} e0
   ... | inj₁ term = ⊥-elim (nterm term)
