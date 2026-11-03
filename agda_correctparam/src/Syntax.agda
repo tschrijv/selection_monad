@@ -1,9 +1,10 @@
--- Intrinsically typed & scoped syntax of the core λC fragment: variables,
+-- Intrinsically typed & scoped syntax of the full λC language: variables,
 -- constants, tuples, projection, abstraction, application, operation
--- calls, loss, then (▶), the local construct (⟨e⟩ᵍ), reset, and handling.
--- Following paper.tex §7 (and the original paper's own restriction when
--- porting Appendix B), we omit sum types, nat, and list -- called "routine"
--- extensions there, orthogonal to everything the companion note is about.
+-- calls, loss, then (▶), the local construct (⟨e⟩ᵍ), reset, handling, and
+-- (PHASE 1 EXTENSION) sum types, nat, and list -- cases/injections,
+-- zero/succ/iter, and nil/cons/fold, following
+-- jfp/sections/core_language.tex's Fig. "Syntax of expressions and
+-- handlers" and the fuller grammar in jfp/appendix/appendixv3.tex.
 --
 -- Using de Bruijn indices means every expression constructed below is, by
 -- construction, well-typed (Fig. 4 / Appendix A.2) -- there is no separate
@@ -46,6 +47,18 @@ mutual
     vgnd  : ∀ {γ}     → ⟦ γ ⟧ᴳ → Val Γ (gnd γ)                    -- constants c : b, r : loss, ()
     vpair : ∀ {σ τ}   → Val Γ σ → Val Γ τ → Val Γ (σ `× τ)
     vabs  : ∀ {σ τ ε} → (Γ , σ) ⊢ τ ! ε → Val Γ (σ ⇒ τ ! ε)
+    -- PHASE 1 EXTENSION: value forms of the sum/nat/list introduction
+    -- forms, exactly paralleling vpair's relationship to the expression
+    -- former `pair` (and vgnd's to constants). The paper's own value
+    -- grammar (appendixv3.tex) is `v ::= ... | inl_{σ,τ}(v) | inr_{σ,τ}(v)
+    -- | zero | succ(v) | nil_σ | cons(v1,v2) | ...`; these six
+    -- constructors transcribe exactly that, one-for-one.
+    vinl  : ∀ {σ τ}   → Val Γ σ → Val Γ (σ `+ τ)
+    vinr  : ∀ {σ τ}   → Val Γ τ → Val Γ (σ `+ τ)
+    vzero :             Val Γ nat
+    vsucc :             Val Γ nat → Val Γ nat
+    vnil  : ∀ {σ}     → Val Γ (list σ)
+    vcons : ∀ {σ}     → Val Γ σ → Val Γ (list σ) → Val Γ (list σ)
 
   -- A loss continuation g : σ → loss ! ε is *not* a separate syntactic
   -- category: THEN's own typing rule (Fig. 4) types its body as a fully
@@ -85,6 +98,65 @@ mutual
     pair    : ∀ {σ τ ε}     → Γ ⊢ σ ! ε → Γ ⊢ τ ! ε → Γ ⊢ (σ `× τ) ! ε
     fst     : ∀ {σ τ ε}     → Γ ⊢ (σ `× τ) ! ε → Γ ⊢ σ ! ε
     snd     : ∀ {σ τ ε}     → Γ ⊢ (σ `× τ) ! ε → Γ ⊢ τ ! ε
+    -- PHASE 1 EXTENSION: sum types. `inl`/`inr` parallel `pair` (a
+    -- general sub-expression under an introduction form); there is no
+    -- expression-level `vinl`/`vinr` *analogue* needed beyond these, since
+    -- values are already embedded into expressions via `val` (cf. how
+    -- there is no separate expression constructor for constants beyond
+    -- `val (vgnd x)`). Unlike `pair`, the co-domain's OTHER summand (τ for
+    -- inl, σ for inr) is not determined by the sub-expression's own type
+    -- -- exactly as the paper's own annotated `inl_{σ,τ}(e)`/`inr_{σ,τ}(e)`
+    -- make explicit -- so here it is recovered the usual way for this
+    -- intrinsically-typed style: as an implicit argument, solved from the
+    -- expected/ambient type at each use site rather than written out.
+    inl     : ∀ {σ τ ε}     → Γ ⊢ σ ! ε → Γ ⊢ (σ `+ τ) ! ε
+    inr     : ∀ {σ τ ε}     → Γ ⊢ τ ! ε → Γ ⊢ (σ `+ τ) ! ε
+    -- `cases e of x1:σ.e1 | x2:τ.e2` (CASES rule): e is a general
+    -- scrutinee expression; e1/e2 are typed under Γ extended by the
+    -- respective bound variable, exactly like a Handler clause/return
+    -- extends Γ by its own bound parameters (Fig. 4's rule: both branches
+    -- share the scrutinee's own effect ε and the result type ρ).
+    cases   : ∀ {σ τ ρ ε}   → Γ ⊢ (σ `+ τ) ! ε → (Γ , σ) ⊢ ρ ! ε → (Γ , τ) ⊢ ρ ! ε → Γ ⊢ ρ ! ε
+    -- PHASE 1 EXTENSION: nat. `zero` needs no expression-level
+    -- constructor (same reasoning as inl/inr above: `val vzero` already
+    -- covers it). `succ` parallels `fst`/`snd`: one general sub-expression
+    -- under an elimination-free, "wrapping" introduction form.
+    succ    : ∀ {ε}         → Γ ⊢ nat ! ε → Γ ⊢ nat ! ε
+    -- `iter(e1,e2,e3)` (ITER rule): e1 the nat being iterated over, e2 the
+    -- base case (of the result type σ), e3 the step function, of type
+    -- (σ ⇒ σ ! ε) ! ε -- a plain *value-level* function (the current
+    -- grammar, per appendixv3.tex, has no extra variable binder on iter
+    -- itself; an older, commented-out version of the typing rules
+    -- (jfp/rules.tex's e-iter2/e-iter3) *did* write iter's step argument
+    -- with its own explicit binder `(x:σ)e3`, but that shape is
+    -- superseded by the current Fig. "Syntax of expressions and handlers"
+    -- grammar, which has plain `iter(e1,e2,e3)` with e3 an ordinary
+    -- expression of function type -- confirmed against (R13)'s own
+    -- reduction `iter(succ(v1),v2,v3) --0--> v3 iter(v1,v2,v3)`, an
+    -- ordinary *application* of v3, not a substitution into some bound
+    -- body). All three sub-expressions share ambient effect ε, and the
+    -- step function's own result effect is likewise ε (ITER's typing rule
+    -- in rules.tex: e3 : (σ → σ!ε)!ε).
+    iter    : ∀ {σ ε}       → Γ ⊢ nat ! ε → Γ ⊢ σ ! ε → Γ ⊢ (σ ⇒ σ ! ε) ! ε → Γ ⊢ σ ! ε
+    -- PHASE 1 EXTENSION: list. `nil_σ` needs no expression-level
+    -- constructor either (again, `val vnil` suffices). `consE` parallels
+    -- `pair`: two general sub-expressions. (Named `consE`, not plain
+    -- `cons` -- unlike inl/inr/cases/succ/iter/fold, which have no clash
+    -- -- because Subst.agda already defines its OWN top-level `cons`, the
+    -- substitution-extension helper `Val Γ' τ → Sub Γ Γ' → Sub (Γ,τ) Γ'`;
+    -- since Subst.agda opens this module unqualified, the two would
+    -- otherwise clash, exactly the reason opE/lossE are already suffixed
+    -- in this file.)
+    consE   : ∀ {σ ε}       → Γ ⊢ σ ! ε → Γ ⊢ (list σ) ! ε → Γ ⊢ (list σ) ! ε
+    -- `fold(e1,e2,e3)` (FOLD rule): e1 the list, e2 the base case (of
+    -- result type τ), e3 the step function. Unlike iter's step function,
+    -- fold's takes a *pair* -- the list's head (type σ) and the
+    -- accumulated result (type τ) -- reflecting (R15)'s reduction
+    -- `fold(cons(v1,v2),v3,v4) --0--> v4(v1,fold(v2,v3,v4))`, an
+    -- application of v4 to the PAIR (v1, fold(v2,v3,v4)); we realise that
+    -- pairing using the already-existing `_`×_` Ty-former, exactly as the
+    -- paper's own typing rule does: e3 : ((σ,τ) ⇒ τ!ε)!ε.
+    fold    : ∀ {σ τ ε}     → Γ ⊢ (list σ) ! ε → Γ ⊢ τ ! ε → Γ ⊢ ((σ `× τ) ⇒ τ ! ε) ! ε → Γ ⊢ τ ! ε
     app     : ∀ {σ τ ε}     → Γ ⊢ (σ ⇒ τ ! ε) ! ε → Γ ⊢ σ ! ε → Γ ⊢ τ ! ε
     opE     : ∀ {ℓ ε}       → ℓ ∈ ε → (op : Op ℓ) → Γ ⊢ gnd (out op) ! ε → Γ ⊢ gnd (in′ op) ! ε
     lossE   : ∀ {ε}         → Γ ⊢ Loss ! ε → Γ ⊢ UnitTy ! ε

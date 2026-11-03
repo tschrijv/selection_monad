@@ -38,6 +38,8 @@ open import Data.List using (List; []; _∷_; _++_)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.List.Membership.Propositional.Properties using (∈-++⁺ˡ)
 open import Data.Product using (_×_; _,_; proj₁; proj₂)
+open import Data.Sum using (_⊎_)
+open import Data.Nat using (ℕ)
 open import Relation.Binary.PropositionalEquality using (_≡_; cong; trans; sym; refl)
 open import Relation.Nullary using (Dec)
 open import Data.Unit using (⊤; tt)
@@ -90,9 +92,35 @@ module Types (Effect Base : Set) (⟦_⟧ᵇ : Base → Set) (R : Set) where
   ⊆ᵉ-,ℓ : ∀ {ε ℓ} → ε ⊆ᵉ (ε ,ℓ ℓ)
   ⊆ᵉ-,ℓ {ε} m = ∈-++⁺ˡ m
 
+  -- PHASE 1 EXTENSION (sum types, nat, list): the companion paper's type
+  -- grammar (jfp/sections/core_language.tex Fig. "Syntax of types and
+  -- effects", jfp/appendix/appendixv3.tex) puts sum types σ+τ, nat, and
+  -- list(σ) at the SAME grammatical level as products and function types
+  -- -- i.e. in σ,τ itself, not restricted to the ground sublanguage GTy
+  -- above. We follow that placement here, for `_`+_` and `list` in
+  -- particular: a sum's branches or a list's elements can themselves be
+  -- function- or product-typed (e.g. `list(σ ⇒ τ ! ε)`), exactly as `_`×_`
+  -- and `_⇒_!_` already are Ty-level (not GTy-level) constructors for the
+  -- same reason. Putting sums/lists in GTy instead would both contradict
+  -- the paper's grammar and be needlessly restrictive.
+  --
+  -- `nat` has no substructure (no type argument, nothing it could embed),
+  -- so unlike `_`+_`/`list` there is no expressiveness argument either way
+  -- -- it could equally have lived in GTy. We place it in Ty regardless,
+  -- for uniformity with its two partners in the paper's grammar (sums,
+  -- lists, and nat are introduced together there, "for iterations and
+  -- folds"), and so that the three new constructs are extended/discovered
+  -- together by anything that pattern-matches on Ty. GTy, correspondingly,
+  -- is untouched by this phase: it remains exactly the ground/first-order
+  -- sublanguage used for operation and primitive-function argument/return
+  -- types, which this phase does not extend (operations still only take
+  -- and return `base`/`loss`/`unit`/ground-pairs, as before).
   data Ty : Set where
     gnd   : GTy → Ty
     _`×_  : Ty → Ty → Ty
+    _`+_  : Ty → Ty → Ty
+    nat   : Ty
+    list  : Ty → Ty
     _⇒_!_ : Ty → Ty → EffCxt → Ty
 
   Loss : Ty
@@ -236,6 +264,9 @@ module SCorrect (Effect Base : Set) (⟦_⟧ᵇ : Base → Set) (R : Set) (0# : 
   ⟦_⟧ : Ty → Set
   ⟦ gnd γ ⟧      = ⟦ γ ⟧ᴳ
   ⟦ σ `× τ ⟧     = ⟦ σ ⟧ × ⟦ τ ⟧
+  ⟦ σ `+ τ ⟧     = ⟦ σ ⟧ ⊎ ⟦ τ ⟧
+  ⟦ nat ⟧        = ℕ
+  ⟦ list σ ⟧     = List ⟦ σ ⟧
   ⟦ σ ⇒ τ ! ε ⟧  = ⟦ σ ⟧ → Ŝ ε ⟦ τ ⟧
 
 -- ---------------------------------------------------------------------

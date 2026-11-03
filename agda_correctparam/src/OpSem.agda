@@ -42,6 +42,33 @@ data Frame (Γ : Cxt) : Ty → EffCxt → Ty → EffCxt → Set where
   F-handleP : ∀ {ℓ par σ σ' ε}  → Handler Γ ℓ par σ σ' ε → Γ ⊢ σ ! (ε ,ℓ ℓ) → Frame Γ (gnd par) ε σ' ε
   F-plusL   : ∀ {ε}             → Γ ⊢ Loss ! ε → Frame Γ Loss ε Loss ε
   F-plusR   : ∀ {ε}             → Val Γ Loss → Frame Γ Loss ε Loss ε
+  -- PHASE 1 EXTENSION: regular frames for sums/nat/list, transcribing
+  -- jfp/sections/core_language.tex & jfp/appendix/appendixv3.tex's
+  -- regular-frame grammar `inl(□) | inr(□) | cases(□)... | succ(□) |
+  -- cons(□,e2) | cons(v1,□) | iter(□,e2,e3) | iter(v1,□,e3) |
+  -- iter(v1,v2,□) | fold(□,e2,e3) | fold(v1,□,e3) | fold(v1,v2,□)`. No new
+  -- *special* frames arise (none of these constructs capture/replay a
+  -- loss continuation the way handling/then/glocal/reset do), exactly as
+  -- the brief for this phase anticipates. `F-cases` has only the
+  -- scrutinee position as a hole -- the two branches e1/e2 are not
+  -- evaluated (they are the un-invoked arms of the case split), so,
+  -- unlike F-pairL/F-pairR's L/R split for a 2-hole-candidate former, a
+  -- single constructor carrying both (fixed, non-hole) branches suffices.
+  -- F-iter*/F-fold* are numbered 1/2/3 by argument position (rather than
+  -- reusing an L/R convention, which only reads naturally for exactly two
+  -- arguments) since both `iter`/`fold` take three.
+  F-inl     : ∀ {σ τ ε}         → Frame Γ σ ε (σ `+ τ) ε
+  F-inr     : ∀ {σ τ ε}         → Frame Γ τ ε (σ `+ τ) ε
+  F-cases   : ∀ {σ τ ρ ε}       → (Γ , σ) ⊢ ρ ! ε → (Γ , τ) ⊢ ρ ! ε → Frame Γ (σ `+ τ) ε ρ ε
+  F-succ    : ∀ {ε}             → Frame Γ nat ε nat ε
+  F-consL   : ∀ {σ ε}           → Γ ⊢ (list σ) ! ε → Frame Γ σ ε (list σ) ε
+  F-consR   : ∀ {σ ε}           → Val Γ σ → Frame Γ (list σ) ε (list σ) ε
+  F-iter1   : ∀ {σ ε}           → Γ ⊢ σ ! ε → Γ ⊢ (σ ⇒ σ ! ε) ! ε → Frame Γ nat ε σ ε
+  F-iter2   : ∀ {σ ε}           → Val Γ nat → Γ ⊢ (σ ⇒ σ ! ε) ! ε → Frame Γ σ ε σ ε
+  F-iter3   : ∀ {σ ε}           → Val Γ nat → Val Γ σ → Frame Γ (σ ⇒ σ ! ε) ε σ ε
+  F-fold1   : ∀ {σ τ ε}         → Γ ⊢ τ ! ε → Γ ⊢ ((σ `× τ) ⇒ τ ! ε) ! ε → Frame Γ (list σ) ε τ ε
+  F-fold2   : ∀ {σ τ ε}         → Val Γ (list σ) → Γ ⊢ ((σ `× τ) ⇒ τ ! ε) ! ε → Frame Γ τ ε τ ε
+  F-fold3   : ∀ {σ τ ε}         → Val Γ (list σ) → Val Γ τ → Frame Γ ((σ `× τ) ⇒ τ ! ε) ε τ ε
 
 data SFrame (Γ : Cxt) : Ty → EffCxt → Ty → EffCxt → Set where
   S-handleB : ∀ {ℓ par σ σ' ε} → Handler Γ ℓ par σ σ' ε → Val Γ (gnd par) → SFrame Γ σ (ε ,ℓ ℓ) σ' ε
@@ -68,6 +95,18 @@ plugF F-loss          e = lossE e
 plugF (F-handleP h b) e = handleE h e b
 plugF (F-plusL e₂)    e = plusE e e₂
 plugF (F-plusR v)     e = plusE (val v) e
+plugF F-inl           e = inl e
+plugF F-inr           e = inr e
+plugF (F-cases e₁ e₂) e = cases e e₁ e₂
+plugF F-succ          e = succ e
+plugF (F-consL e₂)    e = consE e e₂
+plugF (F-consR v)     e = consE (val v) e
+plugF (F-iter1 e₂ e₃) e = iter e e₂ e₃
+plugF (F-iter2 v₁ e₃) e = iter (val v₁) e e₃
+plugF (F-iter3 v₁ v₂) e = iter (val v₁) (val v₂) e
+plugF (F-fold1 e₂ e₃) e = fold e e₂ e₃
+plugF (F-fold2 v₁ e₃) e = fold (val v₁) e e₃
+plugF (F-fold3 v₁ v₂) e = fold (val v₁) (val v₂) e
 
 plugS : ∀ {Γ σ ε τ ε'} → SFrame Γ σ ε τ ε' → Γ ⊢ σ ! ε → Γ ⊢ τ ! ε'
 plugS (S-handleB h v) e     = handleE h (val v) e
@@ -95,6 +134,18 @@ renF ρ F-loss          = F-loss
 renF ρ (F-handleP h b) = F-handleP (renH ρ h) (renE ρ b)
 renF ρ (F-plusL e)     = F-plusL (renE ρ e)
 renF ρ (F-plusR v)     = F-plusR (renV ρ v)
+renF ρ F-inl           = F-inl
+renF ρ F-inr           = F-inr
+renF ρ (F-cases e₁ e₂) = F-cases (renE (extR ρ) e₁) (renE (extR ρ) e₂)
+renF ρ F-succ          = F-succ
+renF ρ (F-consL e)     = F-consL (renE ρ e)
+renF ρ (F-consR v)     = F-consR (renV ρ v)
+renF ρ (F-iter1 e₂ e₃) = F-iter1 (renE ρ e₂) (renE ρ e₃)
+renF ρ (F-iter2 v₁ e₃) = F-iter2 (renV ρ v₁) (renE ρ e₃)
+renF ρ (F-iter3 v₁ v₂) = F-iter3 (renV ρ v₁) (renV ρ v₂)
+renF ρ (F-fold1 e₂ e₃) = F-fold1 (renE ρ e₂) (renE ρ e₃)
+renF ρ (F-fold2 v₁ e₃) = F-fold2 (renV ρ v₁) (renE ρ e₃)
+renF ρ (F-fold3 v₁ v₂) = F-fold3 (renV ρ v₁) (renV ρ v₂)
 
 renS : ∀ {Γ Γ' σ ε τ ε'} → Ren Γ Γ' → SFrame Γ σ ε τ ε' → SFrame Γ' σ ε τ ε'
 renS ρ (S-handleB h v)  = S-handleB (renH ρ h) (renV ρ v)
@@ -220,6 +271,69 @@ data _⊢_-[_]→_ {Γ} : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} → LC Γ σ εg
   -- (R9) g ⊢ reset v --0--> v
   R9 : ∀ {ε εg σ} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} (v : Val Γ σ)
      → _⊢_-[_]→_ {sub = sub} g (resetE {ε = ε} (val v)) 0# (val v)
+
+  -- PHASE 1 EXTENSION: value-coalescing glue rules for the sum/nat/list
+  -- introduction formers inl/inr/succ/consE, exactly parallel to R2-pair
+  -- above (and, like it, needed only because of this split between
+  -- EXPRESSION formers wrapping a general sub-expression and VALUE
+  -- formers wrapping an already-settled value: once that sub-expression
+  -- itself reaches a value, one further step is needed to reach the
+  -- syntactically distinct `val (vinl v)`/etc. On paper, where
+  -- inl(v)/succ(v)/cons(v1,v2) are already literally values with no
+  -- separate expression/value grammars to bridge, no such rule is
+  -- needed; here it is purely an artifact of the intrinsic encoding, so
+  -- (like R2-pair/Rplus) these carry no paper R-number.
+  Rinl : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ (σ `+ τ) εg} (v : Val Γ σ)
+       → _⊢_-[_]→_ {sub = sub} g (inl {τ = τ} {ε = ε} (val v)) 0# (val (vinl v))
+  Rinr : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ (σ `+ τ) εg} (v : Val Γ τ)
+       → _⊢_-[_]→_ {sub = sub} g (inr {σ = σ} {ε = ε} (val v)) 0# (val (vinr v))
+  Rsucc : ∀ {ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ nat εg} (v : Val Γ nat)
+        → _⊢_-[_]→_ {sub = sub} g (succ {ε = ε} (val v)) 0# (val (vsucc v))
+  Rcons : ∀ {ε εg σ} {sub : εg ⊆ᵉ ε} {g : LC Γ (list σ) εg} (v : Val Γ σ) (w : Val Γ (list σ))
+        → _⊢_-[_]→_ {sub = sub} g (consE {ε = ε} (val v) (val w)) 0# (val (vcons v w))
+
+  -- (R10) g ⊢ cases(inl(v)) of x1:σ.e1 | x2:τ.e2 --0--> e1[v/x1]
+  R10 : ∀ {ε εg σ τ ρ} {sub : εg ⊆ᵉ ε} {g : LC Γ ρ εg} (v : Val Γ σ) (e1 : (Γ , σ) ⊢ ρ ! ε) (e2 : (Γ , τ) ⊢ ρ ! ε)
+      → _⊢_-[_]→_ {sub = sub} g (cases {ε = ε} (val (vinl v)) e1 e2) 0# (e1 [ v ])
+
+  -- (R11) g ⊢ cases(inr(v)) of x1:σ.e1 | x2:τ.e2 --0--> e2[v/x2]
+  R11 : ∀ {ε εg σ τ ρ} {sub : εg ⊆ᵉ ε} {g : LC Γ ρ εg} (v : Val Γ τ) (e1 : (Γ , σ) ⊢ ρ ! ε) (e2 : (Γ , τ) ⊢ ρ ! ε)
+      → _⊢_-[_]→_ {sub = sub} g (cases {ε = ε} (val (vinr v)) e1 e2) 0# (e2 [ v ])
+
+  -- (R12) g ⊢ iter(zero,v2,v3) --0--> v2
+  R12 : ∀ {ε εg σ} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} (v2 : Val Γ σ) (v3 : Val Γ (σ ⇒ σ ! ε))
+      → _⊢_-[_]→_ {sub = sub} g (iter {ε = ε} (val vzero) (val v2) (val v3)) 0# (val v2)
+
+  -- (R13) g ⊢ iter(succ(v1),v2,v3) --0--> v3 (iter(v1,v2,v3)) -- v3
+  -- applied to the recursive call as a SINGLE argument, NOT to a pair of
+  -- v1 with the recursive call: confirmed directly against
+  -- jfp/sections/core_language.tex's own (R13)
+  -- (`v_3~\iter{v_1}{v_2}{v_3}`, an ordinary unary application) and
+  -- against jfp/appendix/appendixv3.tex's Fundamental-Lemma proof case
+  -- for `iter` (same shape; it is FOLD's (R15) below, not iter's (R13),
+  -- that pairs the recursive call with the extra value v1 -- easy to
+  -- conflate the two, since both are "step functions applied to the
+  -- recursive result", but they differ in arity).
+  R13 : ∀ {ε εg σ} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} (v1 : Val Γ nat) (v2 : Val Γ σ) (v3 : Val Γ (σ ⇒ σ ! ε))
+      → _⊢_-[_]→_ {sub = sub} g (iter {ε = ε} (val (vsucc v1)) (val v2) (val v3)) 0#
+          (app (val v3) (iter (val v1) (val v2) (val v3)))
+
+  -- (R14) g ⊢ fold(nil,v2,v3) --0--> v2
+  R14 : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ τ εg} (v2 : Val Γ τ) (v3 : Val Γ ((σ `× τ) ⇒ τ ! ε))
+      → _⊢_-[_]→_ {sub = sub} g (fold {σ = σ} {ε = ε} (val vnil) (val v2) (val v3)) 0# (val v2)
+
+  -- (R15) g ⊢ fold(cons(v1,v2),v3,v4) --0--> v4(v1,fold(v2,v3,v4)) -- v4
+  -- applied to the PAIR of the list's head v1 and the recursive fold,
+  -- unlike iter's (R13) unary application above: confirmed directly
+  -- against jfp/sections/core_language.tex's own (R15)
+  -- (`v_4(v_1,\fold{v_2}{v_3}{v_4})`) and appendixv3.tex's Fundamental-
+  -- Lemma proof case for `fold`, both giving this exact pairing. The pair
+  -- is built with the ordinary expression-former `pair` (not `vpair`),
+  -- since its second component `fold(v2,v3,v4)` is not yet itself a
+  -- value -- R2-pair (above) will coalesce the pair once it settles.
+  R15 : ∀ {ε εg σ τ} {sub : εg ⊆ᵉ ε} {g : LC Γ τ εg} (v1 : Val Γ σ) (v2 : Val Γ (list σ)) (v3 : Val Γ τ) (v4 : Val Γ ((σ `× τ) ⇒ τ ! ε))
+      → _⊢_-[_]→_ {sub = sub} g (fold {ε = ε} (val (vcons v1 v2)) (val v3) (val v4)) 0#
+          (app (val v4) (pair (val v1) (fold (val v2) (val v3) (val v4))))
 
   -- (Rplus) g ⊢ v1 + v2 --0--> val(v1+v2). Not itself one of Fig. 6's
   -- numbered rules -- needed only because "r + e" (S2's own admissible

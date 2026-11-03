@@ -31,6 +31,12 @@ mutual
   renV ρ (vgnd x)    = vgnd x
   renV ρ (vpair v w) = vpair (renV ρ v) (renV ρ w)
   renV ρ (vabs e)    = vabs (renE (extR ρ) e)
+  renV ρ (vinl v)    = vinl (renV ρ v)
+  renV ρ (vinr v)    = vinr (renV ρ v)
+  renV ρ vzero       = vzero
+  renV ρ (vsucc v)   = vsucc (renV ρ v)
+  renV ρ vnil        = vnil
+  renV ρ (vcons v w) = vcons (renV ρ v) (renV ρ w)
 
   renH : ∀ {Γ Γ' ℓ par σ σ' ε} → Ren Γ Γ' → Handler Γ ℓ par σ σ' ε → Handler Γ' ℓ par σ σ' ε
   clause (renH ρ h) op = renE (extR (extR (extR (extR ρ)))) (clause h op)
@@ -42,6 +48,13 @@ mutual
   renE ρ (pair e e₁)      = pair (renE ρ e) (renE ρ e₁)
   renE ρ (fst e)          = fst (renE ρ e)
   renE ρ (snd e)          = snd (renE ρ e)
+  renE ρ (inl e)          = inl (renE ρ e)
+  renE ρ (inr e)          = inr (renE ρ e)
+  renE ρ (cases e e₁ e₂)  = cases (renE ρ e) (renE (extR ρ) e₁) (renE (extR ρ) e₂)
+  renE ρ (succ e)         = succ (renE ρ e)
+  renE ρ (iter e₁ e₂ e₃)  = iter (renE ρ e₁) (renE ρ e₂) (renE ρ e₃)
+  renE ρ (consE e₁ e₂)    = consE (renE ρ e₁) (renE ρ e₂)
+  renE ρ (fold e₁ e₂ e₃)  = fold (renE ρ e₁) (renE ρ e₂) (renE ρ e₃)
   renE ρ (app e e₁)       = app (renE ρ e) (renE ρ e₁)
   renE ρ (opE m op e)     = opE m op (renE ρ e)
   renE ρ (lossE e)        = lossE (renE ρ e)
@@ -74,6 +87,12 @@ mutual
   subV σs (vgnd x)    = vgnd x
   subV σs (vpair v w) = vpair (subV σs v) (subV σs w)
   subV σs (vabs e)    = vabs (subE (extS σs) e)
+  subV σs (vinl v)    = vinl (subV σs v)
+  subV σs (vinr v)    = vinr (subV σs v)
+  subV σs vzero       = vzero
+  subV σs (vsucc v)   = vsucc (subV σs v)
+  subV σs vnil        = vnil
+  subV σs (vcons v w) = vcons (subV σs v) (subV σs w)
 
   subH : ∀ {Γ Γ' ℓ par σ σ' ε} → Sub Γ Γ' → Handler Γ ℓ par σ σ' ε → Handler Γ' ℓ par σ σ' ε
   clause (subH σs h) op = subE (extS (extS (extS (extS σs)))) (clause h op)
@@ -85,6 +104,13 @@ mutual
   subE σs (pair e e₁)      = pair (subE σs e) (subE σs e₁)
   subE σs (fst e)          = fst (subE σs e)
   subE σs (snd e)          = snd (subE σs e)
+  subE σs (inl e)          = inl (subE σs e)
+  subE σs (inr e)          = inr (subE σs e)
+  subE σs (cases e e₁ e₂)  = cases (subE σs e) (subE (extS σs) e₁) (subE (extS σs) e₂)
+  subE σs (succ e)         = succ (subE σs e)
+  subE σs (iter e₁ e₂ e₃)  = iter (subE σs e₁) (subE σs e₂) (subE σs e₃)
+  subE σs (consE e₁ e₂)    = consE (subE σs e₁) (subE σs e₂)
+  subE σs (fold e₁ e₂ e₃)  = fold (subE σs e₁) (subE σs e₂) (subE σs e₃)
   subE σs (app e e₁)       = app (subE σs e) (subE σs e₁)
   subE σs (opE m op e)     = opE m op (subE σs e)
   subE σs (lossE e)        = lossE (subE σs e)
