@@ -88,6 +88,72 @@ plusE-inj1 refl = refl
 plusE-inj2 : ∀ {Γ ε} {x1 y1 x2 y2 : Γ ⊢ Loss ! ε} → plusE x1 x2 ≡ plusE y1 y2 → x2 ≡ y2
 plusE-inj2 refl = refl
 
+-- PHASE 2: injectivity lemmas for the sum/nat/list formers, exactly
+-- mirroring pair-inj1/pair-inj2/plusE-inj1/plusE-inj2 above (each proved
+-- by the same one-line `refl` pattern, which unifies every argument of
+-- the shared head constructor at once).
+inl-inj : ∀ {Γ σ τ ε} {x y : Γ ⊢ σ ! ε} → inl {τ = τ} x ≡ inl y → x ≡ y
+inl-inj refl = refl
+
+inr-inj : ∀ {Γ σ τ ε} {x y : Γ ⊢ τ ! ε} → inr {σ = σ} x ≡ inr y → x ≡ y
+inr-inj refl = refl
+
+-- `cases`'s only HOLE position (per F-cases) is its scrutinee -- the
+-- branches are fixed, un-invoked arms -- so only the scrutinee's own
+-- injectivity is ever needed below (mirroring F-handleP's own b, whose
+-- injectivity is likewise never extracted).
+cases-inj1 : ∀ {Γ σ τ ρ ε} {x y : Γ ⊢ (σ `+ τ) ! ε} {e1 e1' : (Γ , σ) ⊢ ρ ! ε} {e2 e2' : (Γ , τ) ⊢ ρ ! ε}
+           → cases x e1 e2 ≡ cases y e1' e2' → x ≡ y
+cases-inj1 refl = refl
+
+-- cases-inj2/cases-inj3: the two BRANCH components -- needed, unlike
+-- cases-inj1 alone, whenever a proof must also show two cases-headed
+-- terms' own (independently-fresh) branches coincide before building a
+-- result that mentions them literally (e.g. the F-cases/F-cases
+-- diagonal of R5-cont-unique's own `go`, or theorem-A4-2-core's own
+-- F-cases self-match) -- mirroring why F-pairL's own diagonal needs
+-- pair-inj2 (the companion) pinned before pair-inj1 (the hole) is used.
+cases-inj2 : ∀ {Γ σ τ ρ ε} {x y : Γ ⊢ (σ `+ τ) ! ε} {e1 e1' : (Γ , σ) ⊢ ρ ! ε} {e2 e2' : (Γ , τ) ⊢ ρ ! ε}
+           → cases x e1 e2 ≡ cases y e1' e2' → e1 ≡ e1'
+cases-inj2 refl = refl
+
+cases-inj3 : ∀ {Γ σ τ ρ ε} {x y : Γ ⊢ (σ `+ τ) ! ε} {e1 e1' : (Γ , σ) ⊢ ρ ! ε} {e2 e2' : (Γ , τ) ⊢ ρ ! ε}
+           → cases x e1 e2 ≡ cases y e1' e2' → e2 ≡ e2'
+cases-inj3 refl = refl
+
+succ-inj : ∀ {Γ ε} {x y : Γ ⊢ nat ! ε} → succ x ≡ succ y → x ≡ y
+succ-inj refl = refl
+
+consE-inj1 : ∀ {Γ σ ε} {x1 y1 : Γ ⊢ σ ! ε} {x2 y2 : Γ ⊢ (list σ) ! ε} → consE x1 x2 ≡ consE y1 y2 → x1 ≡ y1
+consE-inj1 refl = refl
+
+consE-inj2 : ∀ {Γ σ ε} {x1 y1 : Γ ⊢ σ ! ε} {x2 y2 : Γ ⊢ (list σ) ! ε} → consE x1 x2 ≡ consE y1 y2 → x2 ≡ y2
+consE-inj2 refl = refl
+
+iter-inj1 : ∀ {Γ σ ε} {x1 y1 : Γ ⊢ nat ! ε} {x2 y2 : Γ ⊢ σ ! ε} {x3 y3 : Γ ⊢ (σ ⇒ σ ! ε) ! ε}
+          → iter x1 x2 x3 ≡ iter y1 y2 y3 → x1 ≡ y1
+iter-inj1 refl = refl
+
+iter-inj2 : ∀ {Γ σ ε} {x1 y1 : Γ ⊢ nat ! ε} {x2 y2 : Γ ⊢ σ ! ε} {x3 y3 : Γ ⊢ (σ ⇒ σ ! ε) ! ε}
+          → iter x1 x2 x3 ≡ iter y1 y2 y3 → x2 ≡ y2
+iter-inj2 refl = refl
+
+iter-inj3 : ∀ {Γ σ ε} {x1 y1 : Γ ⊢ nat ! ε} {x2 y2 : Γ ⊢ σ ! ε} {x3 y3 : Γ ⊢ (σ ⇒ σ ! ε) ! ε}
+          → iter x1 x2 x3 ≡ iter y1 y2 y3 → x3 ≡ y3
+iter-inj3 refl = refl
+
+fold-inj1 : ∀ {Γ σ τ ε} {x1 y1 : Γ ⊢ (list σ) ! ε} {x2 y2 : Γ ⊢ τ ! ε} {x3 y3 : Γ ⊢ ((σ `× τ) ⇒ τ ! ε) ! ε}
+          → fold x1 x2 x3 ≡ fold y1 y2 y3 → x1 ≡ y1
+fold-inj1 refl = refl
+
+fold-inj2 : ∀ {Γ σ τ ε} {x1 y1 : Γ ⊢ (list σ) ! ε} {x2 y2 : Γ ⊢ τ ! ε} {x3 y3 : Γ ⊢ ((σ `× τ) ⇒ τ ! ε) ! ε}
+          → fold x1 x2 x3 ≡ fold y1 y2 y3 → x2 ≡ y2
+fold-inj2 refl = refl
+
+fold-inj3 : ∀ {Γ σ τ ε} {x1 y1 : Γ ⊢ (list σ) ! ε} {x2 y2 : Γ ⊢ τ ! ε} {x3 y3 : Γ ⊢ ((σ `× τ) ⇒ τ ! ε) ! ε}
+          → fold x1 x2 x3 ≡ fold y1 y2 y3 → x3 ≡ y3
+fold-inj3 refl = refl
+
 plugK-op-not-pairvv : ∀ {Γ εop ℓ τ1 τ2 ε} {m : ℓ ∈ εop} {op : Op ℓ} {v : Val Γ (gnd (out op))}
                        (K : ContCxt Γ (gnd (in′ op)) εop (τ1 `× τ2) ε) (v1 : Val Γ τ1) (v2 : Val Γ τ2)
                      → plugK K (opE m op (val v)) ≡ pair (val v1) (val v2) → ⊥
@@ -235,6 +301,31 @@ unapp-key _                    = nothing
 unhandle-key : ∀ {Γ σ0' ε} → Γ ⊢ σ0' ! ε → Maybe (Σ Effect (λ ℓ → Σ GTy (λ par → Σ Ty (λ σ → Handler Γ ℓ par σ σ0' ε))))
 unhandle-key (handleE {ℓ = ℓ} {par = par} {σ = σ} h p b) = just (ℓ , par , σ , h)
 unhandle-key _                                           = nothing
+
+-- PHASE 2: `cases`'s codomain ρ0 exposes NEITHER of its scrutinee's own
+-- sum components σ,τ (unlike, say, consE/iter, whose domain component
+-- IS literally -- or is literally wrapped one constructor around --
+-- the family's own index, letting ordinary dependent-pattern-matching
+-- unify it for free). Exactly like unfst-arg's hidden τ above (just two
+-- hidden pieces, σ AND τ, instead of fst's one), these must be
+-- recovered via an explicit key BEFORE cases-inj1/vinl/vinr can be
+-- applied meaningfully -- confirmed necessary by direct experiment
+-- (Agda otherwise reports a genuine "σ != σ0" mismatch, since a
+-- pattern-matched rule's own σ,τ are left completely free, unrelated to
+-- the ambient ρ0, until pinned this way).
+uncases-key : ∀ {Γ ρ0 ε} → Γ ⊢ ρ0 ! ε → Maybe (Ty × Ty)
+uncases-key (cases {σ = σ} {τ = τ} _ _ _) = just (σ , τ)
+uncases-key _                             = nothing
+
+-- PHASE 2: `fold`'s codomain τ0 likewise hides its OWN list-element
+-- type σ entirely (τ0 is fold's accumulator/result type; σ -- the type
+-- of the list being folded -- appears only inside fold's domain
+-- `list σ` and its step-function's domain `(σ `× τ0) ⇒ τ0 ! ε`, neither
+-- of which is τ0 itself) -- same fix as uncases-key above, one hidden
+-- piece instead of two.
+unfold-key : ∀ {Γ τ0 ε} → Γ ⊢ τ0 ! ε → Maybe Ty
+unfold-key (fold {σ = σ} _ _ _) = just σ
+unfold-key _                    = nothing
 
 -- thenE's codomain is ALWAYS Loss (no σ dependency at all), so its own
 -- hole type σ and its LC body's own effect context ε₁ are both hidden
@@ -513,7 +604,8 @@ unOpE-success {einner = einner} just-eq stp =
 -- via a full 12-way tag (one per _⊢_!_ constructor) rather than the
 -- Bool isOpE used above.
 data ExprTag : Set where
-  tVal tFun tPair tFst tSnd tApp tOp tLoss tThen tGlocal tReset tHandle tPlus : ExprTag
+  tVal tFun tPair tFst tSnd tApp tOp tLoss tThen tGlocal tReset tHandle tPlus
+    tInl tInr tCases tSucc tIter tCons tFold : ExprTag
 
 exprTag : ∀ {Γ σ ε} → Γ ⊢ σ ! ε → ExprTag
 exprTag (val _)         = tVal
@@ -529,6 +621,15 @@ exprTag (glocalE _ _ _ _) = tGlocal
 exprTag (resetE _)      = tReset
 exprTag (handleE _ _ _) = tHandle
 exprTag (plusE _ _)     = tPlus
+-- PHASE 2: tags for the Phase-1 sum/nat/list expression formers, one
+-- per constructor exactly as the existing tVal..tPlus cases do.
+exprTag (inl _)         = tInl
+exprTag (inr _)         = tInr
+exprTag (cases _ _ _)   = tCases
+exprTag (succ _)        = tSucc
+exprTag (iter _ _ _)    = tIter
+exprTag (consE _ _)     = tCons
+exprTag (fold _ _ _)    = tFold
 
 exprTag-subst : ∀ {Γ ε τ1 τ2} (eq : τ1 ≡ τ2) (e : Γ ⊢ τ2 ! ε) → exprTag (subst (λ τ → Γ ⊢ τ ! ε) (sym eq) e) ≡ exprTag e
 exprTag-subst refl e = refl
@@ -847,6 +948,26 @@ opLabelOf (glocalE sub1 sub2 e g)  = opLabelOf e
 opLabelOf (resetE e)               = opLabelOf e
 opLabelOf (handleE h e1 e2)        = opLabelOf e1 <∣> opLabelOf e2
 opLabelOf (plusE e1 e2)            = opLabelOf e1 <∣> opLabelOf e2
+-- PHASE 2: sum/nat/list formers. inl/inr/succ have a single
+-- sub-expression, exactly like fst/snd above. `cases`'s only HOLE
+-- position (per F-cases) is its scrutinee -- the two branches are
+-- fixed, un-invoked arms, so (unlike F-handleP's clause body, which the
+-- original code folds in via <∣> purely as a don't-care choice) we
+-- simply don't recurse into them, matching the single-hole shape of
+-- fst/snd/F-cases itself. consE/iter/fold combine every sub-expression
+-- via <∣>, in argument order, exactly like pair/app/handleE/plusE
+-- above -- this is what lets opLabelOf-plugK's F-consL/F-iter1/F-fold1
+-- (hole-is-leftmost) cases go through via `cong (_<∣> ...)`, and its
+-- F-consR/F-iter2/F-iter3/F-fold2/F-fold3 (hole-not-leftmost) cases
+-- reduce definitionally once the fixed earlier arguments are `val`s
+-- (opLabelOf (val _) ≡ nothing, and nothing <∣> y ≡ y definitionally).
+opLabelOf (inl e)                  = opLabelOf e
+opLabelOf (inr e)                  = opLabelOf e
+opLabelOf (cases e _ _)            = opLabelOf e
+opLabelOf (succ e)                 = opLabelOf e
+opLabelOf (iter e1 e2 e3)          = opLabelOf e1 <∣> opLabelOf e2 <∣> opLabelOf e3
+opLabelOf (consE e1 e2)            = opLabelOf e1 <∣> opLabelOf e2
+opLabelOf (fold e1 e2 e3)          = opLabelOf e1 <∣> opLabelOf e2 <∣> opLabelOf e3
 
 opLabelOf-plugK : ∀ {Γ εop ℓ ε τ} {m : ℓ ∈ εop} {op : Op ℓ} {v : Val Γ (gnd (out op))}
                   (K : ContCxt Γ (gnd (in′ op)) εop τ ε) → opLabelOf (plugK K (opE m op (val v))) ≡ just ℓ
@@ -863,6 +984,20 @@ opLabelOf-plugK (F∘ k F-loss)            = opLabelOf-plugK k
 opLabelOf-plugK (F∘ k (F-handleP _ b))   = cong (_<∣> opLabelOf b) (opLabelOf-plugK k)
 opLabelOf-plugK (F∘ k (F-plusL e₂))      = cong (_<∣> opLabelOf e₂) (opLabelOf-plugK k)
 opLabelOf-plugK (F∘ k (F-plusR _))       = opLabelOf-plugK k
+-- PHASE 2: sum/nat/list frames, following the scheme explained above
+-- opLabelOf's own new cases.
+opLabelOf-plugK (F∘ k F-inl)             = opLabelOf-plugK k
+opLabelOf-plugK (F∘ k F-inr)             = opLabelOf-plugK k
+opLabelOf-plugK (F∘ k (F-cases _ _))     = opLabelOf-plugK k
+opLabelOf-plugK (F∘ k F-succ)            = opLabelOf-plugK k
+opLabelOf-plugK (F∘ k (F-consL e₂))      = cong (_<∣> opLabelOf e₂) (opLabelOf-plugK k)
+opLabelOf-plugK (F∘ k (F-consR _))       = opLabelOf-plugK k
+opLabelOf-plugK (F∘ k (F-iter1 e₂ e₃))   = cong (_<∣> (opLabelOf e₂ <∣> opLabelOf e₃)) (opLabelOf-plugK k)
+opLabelOf-plugK (F∘ k (F-iter2 _ e₃))    = cong (_<∣> opLabelOf e₃) (opLabelOf-plugK k)
+opLabelOf-plugK (F∘ k (F-iter3 _ _))     = opLabelOf-plugK k
+opLabelOf-plugK (F∘ k (F-fold1 e₂ e₃))   = cong (_<∣> (opLabelOf e₂ <∣> opLabelOf e₃)) (opLabelOf-plugK k)
+opLabelOf-plugK (F∘ k (F-fold2 _ e₃))    = cong (_<∣> opLabelOf e₃) (opLabelOf-plugK k)
+opLabelOf-plugK (F∘ k (F-fold3 _ _))     = opLabelOf-plugK k
 opLabelOf-plugK (S∘ k (S-handleB _ _))   = opLabelOf-plugK k
 opLabelOf-plugK (S∘ k (S-then _ _))      = opLabelOf-plugK k
 opLabelOf-plugK (S∘ k (S-glocal _ _ _))  = opLabelOf-plugK k
@@ -1073,6 +1208,21 @@ theorem-A4-1-op {Γ} m op v ▫ nh stp = helper {m' = m} {op' = op} {τeq' = ref
     helper (S3 sub1 sub2 g1 stp)    eq = opE-absurd _ _ refl eq
     helper (S4 stp)                 eq = opE-absurd _ _ refl eq
     helper (R5 sub h v1 m op v2 k nh) eq = opE-absurd _ _ refl eq
+    -- PHASE 2: the new sum/nat/list RULES (not frames) -- Rinl/Rinr/
+    -- Rsucc/Rcons (value-coalescing glue) and R10-R15 (the real case/
+    -- iter/fold reductions) all have non-opE-headed conclusions too, so
+    -- they go through the exact same opE-absurd treatment as every
+    -- other non-F-op rule above.
+    helper (Rinl v)                 eq = opE-absurd _ _ refl eq
+    helper (Rinr v)                 eq = opE-absurd _ _ refl eq
+    helper (Rsucc v)                eq = opE-absurd _ _ refl eq
+    helper (Rcons v w)              eq = opE-absurd _ _ refl eq
+    helper (R10 v e1 e2)            eq = opE-absurd _ _ refl eq
+    helper (R11 v e1 e2)            eq = opE-absurd _ _ refl eq
+    helper (R12 v2 v3)              eq = opE-absurd _ _ refl eq
+    helper (R13 v1 v2 v3)           eq = opE-absurd _ _ refl eq
+    helper (R14 v2 v3)              eq = opE-absurd _ _ refl eq
+    helper (R15 v1 v2 v3 v4)        eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-fun _)   stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-pairL _) stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-pairR _) stp) eq = opE-absurd _ _ refl eq
@@ -1086,6 +1236,24 @@ theorem-A4-1-op {Γ} m op v ▫ nh stp = helper {m' = m} {op' = op} {τeq' = ref
     helper (F-rule sub (F-handleP h b) stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-plusL _) stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-plusR _) stp) eq = opE-absurd _ _ refl eq
+    -- PHASE 2: sum/nat/list frames -- none of them is F-op, so each
+    -- goes through opE-absurd exactly like every other non-F-op frame
+    -- above (the uniform treatment this helper's own header comment
+    -- describes: isOpE's Bool-valued tag sidesteps the same opaque-
+    -- `in′`/`out` unification-stuck issue that would otherwise block
+    -- even writing these clauses at all).
+    helper (F-rule sub F-inl       stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub F-inr       stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-cases _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub F-succ      stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-consL _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-consR _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-iter1 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-iter2 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-iter3 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-fold1 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-fold2 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-fold3 _ _) stp) eq = opE-absurd _ _ refl eq
 
 -- K = F∘ k (F-fun pf). Outer wrapper is `fun`, whose type doesn't depend
 -- on any opaque `in′`/`out` computation, so m,op,v,k are simply closed
@@ -1338,6 +1506,16 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-op m'' op'')) nh stp = helper {
     helper (S3 sub1 sub2 g1 stp)    eq = opE-absurd _ _ refl eq
     helper (S4 stp)                 eq = opE-absurd _ _ refl eq
     helper (R5 sub h v1 m op v2 k nh) eq = opE-absurd _ _ refl eq
+    helper (Rinl v)                 eq = opE-absurd _ _ refl eq
+    helper (Rinr v)                 eq = opE-absurd _ _ refl eq
+    helper (Rsucc v)                eq = opE-absurd _ _ refl eq
+    helper (Rcons v w)              eq = opE-absurd _ _ refl eq
+    helper (R10 v e1 e2)            eq = opE-absurd _ _ refl eq
+    helper (R11 v e1 e2)            eq = opE-absurd _ _ refl eq
+    helper (R12 v2 v3)              eq = opE-absurd _ _ refl eq
+    helper (R13 v1 v2 v3)           eq = opE-absurd _ _ refl eq
+    helper (R14 v2 v3)              eq = opE-absurd _ _ refl eq
+    helper (R15 v1 v2 v3 v4)        eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-fun _)   stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-pairL _) stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-pairR _) stp) eq = opE-absurd _ _ refl eq
@@ -1352,6 +1530,18 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-op m'' op'')) nh stp = helper {
     helper (F-rule sub (F-handleP h b) stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-plusL _) stp) eq = opE-absurd _ _ refl eq
     helper (F-rule sub (F-plusR _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub F-inl       stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub F-inr       stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-cases _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub F-succ      stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-consL _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-consR _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-iter1 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-iter2 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-iter3 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-fold1 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-fold2 _ _) stp) eq = opE-absurd _ _ refl eq
+    helper (F-rule sub (F-fold3 _ _) stp) eq = opE-absurd _ _ refl eq
 
 -- K = F∘ k F-loss. Same treatment as the F-op case above and for the
 -- same reason: F-loss's OWN K-shape isn't the problem (its codomain,
@@ -1391,6 +1581,20 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k F-loss) nh stp = helper {τeq2 = r
     helper {τeq2 = τeq2} (S3 sub1 sub2 g1 stp)    eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S4 stp)                 eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (R5 sub h v1 m op v2 k nh) eq = shape-absurd τeq2 (target) eq (λ ())
+    -- PHASE 2: sum/nat/list rules -- same uniform shape-absurd treatment
+    -- as every other non-matching rule in this block (needed, per this
+    -- block's own header comment, since generic-at's subst-wrapping
+    -- blocks bare () for ALL of them here, not just F-op).
+    helper {τeq2 = τeq2} (Rinl v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rinr v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rsucc v)                eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rcons v w)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R10 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R11 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R12 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R13 v1 v2 v3)           eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R14 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R15 v1 v2 v3 v4)        eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (F-rule sub (F-fun _)   stp) eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (F-rule sub F-fst       stp) eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (F-rule sub F-snd       stp) eq = shape-absurd τeq2 (target) eq (λ ())
@@ -1403,6 +1607,18 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k F-loss) nh stp = helper {τeq2 = r
     helper {τeq2 = τeq2} (F-rule sub (F-handleP h b) stp) eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (F-rule sub (F-plusL _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (F-rule sub (F-plusR _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-inl       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-inr       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-cases _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-succ      stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consL _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consR _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
 
 -- K = F∘ k (F-handleP h b): a brand-new case, absent from agda_noparam
 -- (parameter-free handlers had no parameter-position hole at all).
@@ -1470,6 +1686,16 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-plusL e₂)) nh stp = helper {�
     helper {τeq2 = τeq2} (R9 v)                   eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (Rplus r1 r2)            eq =
       plugK-op-not-val k (vgnd r1) (sym (cong proj₁ (just-injective (trans (cong unPlusE eq) (unPlusE-subst τeq2 target)))))
+    helper {τeq2 = τeq2} (Rinl v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rinr v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rsucc v)                eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rcons v w)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R10 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R11 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R12 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R13 v1 v2 v3)           eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R14 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R15 v1 v2 v3 v4)        eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S1 sub h v stp)         eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S2 sub' g1 stp)         eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S3 sub1 sub2 g1 stp)    eq = shape-absurd τeq2 (target) eq (λ ())
@@ -1490,6 +1716,18 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-plusL e₂)) nh stp = helper {�
       where packed = just-injective (trans (cong unPlusE eq) (unPlusE-subst τeq2 target))
     helper {τeq2 = τeq2} (F-rule sub (F-plusR v1') stp) eq =
       plugK-op-not-val k v1' (sym (cong proj₁ (just-injective (trans (cong unPlusE eq) (unPlusE-subst τeq2 target)))))
+    helper {τeq2 = τeq2} (F-rule sub F-inl       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-inr       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-cases _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-succ      stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consL _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consR _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
 
 -- K = F∘ k (F-plusR v1): symmetric to F-plusL above, extracting the
 -- SECOND (proj₂) component of unPlusE's pair instead of the first.
@@ -1511,6 +1749,16 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-plusR v1)) nh stp = helper {τe
     helper {τeq2 = τeq2} (R9 v)                   eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (Rplus r1 r2)            eq =
       plugK-op-not-val k (vgnd r2) (sym (cong proj₂ (just-injective (trans (cong unPlusE eq) (unPlusE-subst τeq2 target)))))
+    helper {τeq2 = τeq2} (Rinl v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rinr v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rsucc v)                eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rcons v w)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R10 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R11 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R12 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R13 v1 v2 v3)           eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R14 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R15 v1 v2 v3 v4)        eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S1 sub h v stp)         eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S2 sub' g1 stp)         eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S3 sub1 sub2 g1 stp)    eq = shape-absurd τeq2 (target) eq (λ ())
@@ -1531,6 +1779,217 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-plusR v1)) nh stp = helper {τe
     helper {τeq2 = τeq2} (F-rule sub (F-plusR v1'') stp) eq =
       theorem-A4-1-op m op v k nh (subst-src (cong proj₂ packed) stp)
       where packed = just-injective (trans (cong unPlusE eq) (unPlusE-subst τeq2 target))
+    helper {τeq2 = τeq2} (F-rule sub F-inl       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-inr       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-cases _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-succ      stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consL _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consR _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+
+-- PHASE 2: K = F∘ k F-inl. inl's own codomain (σ0 `+ τ0) is concrete
+-- (not gnd-headed), so -- exactly like F-fst/F-snd's single-hole
+-- treatment above -- no generic-at/shape-absurd machinery is needed:
+-- every non-matching rule is excluded outright by Agda's coverage
+-- checker via ordinary constructor disjointness (no-confusion), since
+-- none of it goes through a subst-wrapped target. Rinl is the one
+-- genuine value-coalescing competitor; F-rule's own F-inl sub-case is
+-- the matching congruence recursion.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-inl {σ = σ0} {τ = τ0})) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ (σ0 `+ τ0) εg'} {e e' : Γ ⊢ (σ0 `+ τ0) ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ inl (plugK k (opE m op (val v))) → ⊥
+    helper (Rinl v')                 eq = plugK-op-not-val k v' (sym (inl-inj eq))
+    helper (F-rule sub F-inl stp)    eq = theorem-A4-1-op m op v k nh (subst-src (inl-inj eq) stp)
+
+-- K = F∘ k F-inr: symmetric to F-inl above.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-inr {σ = σ0} {τ = τ0})) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ (σ0 `+ τ0) εg'} {e e' : Γ ⊢ (σ0 `+ τ0) ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ inr (plugK k (opE m op (val v))) → ⊥
+    helper (Rinr v')                 eq = plugK-op-not-val k v' (sym (inr-inj eq))
+    helper (F-rule sub F-inr stp)    eq = theorem-A4-1-op m op v k nh (subst-src (inr-inj eq) stp)
+
+-- K = F∘ k (F-cases e1 e2): F-cases's own hole is only the scrutinee
+-- (the two branches e1/e2 are fixed, un-invoked arms -- cf. F-handleP's
+-- own body b, which is likewise never inspected below). Its codomain ρ0
+-- is a bare, generic type variable (exactly like F-handleP's σ0'), but
+-- -- since the target here is NOT subst/generic-at-wrapped -- that
+-- genericity doesn't block bare (): any rule whose own conclusion is a
+-- DIFFERENT top-level former than `cases` is excluded by ordinary
+-- no-confusion regardless of what ρ0 happens to be. R10/R11 (the two
+-- rules that ARE cases-headed, once the scrutinee is a value) are the
+-- genuine competitors, ruled out since plugK k (opE ...) can never be a
+-- value (plugK-op-not-val).
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-cases {σ = σ0} {τ = τ0} {ρ = ρ0} e1 e2)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ ρ0 εg'} {e e' : Γ ⊢ ρ0 ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ cases (plugK k (opE m op (val v))) e1 e2 → ⊥
+    -- `cases`'s own σ,τ are hidden from ρ0 (cf. uncases-key's own
+    -- comment) -- R10/R11's own σ,τ (resp. the OTHER F-cases' own) are
+    -- pinned to our σ0,τ0 via uncases-key before cases-inj1/vinl/vinr
+    -- can be applied meaningfully.
+    helper (R10 v' e1' e2') eq
+      with just-injective (cong uncases-key eq)
+    ... | refl = plugK-op-not-val k (vinl v') (sym (cases-inj1 eq))
+    helper (R11 v' e1' e2') eq
+      with just-injective (cong uncases-key eq)
+    ... | refl = plugK-op-not-val k (vinr v') (sym (cases-inj1 eq))
+    helper (F-rule sub (F-cases _ _) stp) eq
+      with just-injective (cong uncases-key eq)
+    ... | refl = theorem-A4-1-op m op v k nh (subst-src (cases-inj1 eq) stp)
+
+-- K = F∘ k F-succ: single-hole, concrete (nat) codomain -- same
+-- treatment as F-inl/F-inr above.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k F-succ) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ nat εg'} {e e' : Γ ⊢ nat ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ succ (plugK k (opE m op (val v))) → ⊥
+    helper (Rsucc v')              eq = plugK-op-not-val k v' (sym (succ-inj eq))
+    helper (F-rule sub F-succ stp) eq = theorem-A4-1-op m op v k nh (subst-src (succ-inj eq) stp)
+
+-- K = F∘ k (F-consL e₂): hole is the head position, mirroring F-pairL's
+-- own L/R split. Rcons is the one genuine competitor.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-consL {σ = σ0} e₂)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ (list σ0) εg'} {e e' : Γ ⊢ (list σ0) ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ consE (plugK k (opE m op (val v))) e₂ → ⊥
+    helper (Rcons v' w)              eq = plugK-op-not-val k v' (sym (consE-inj1 eq))
+    helper (F-rule sub (F-consL _) stp) eq = theorem-A4-1-op m op v k nh (subst-src (consE-inj1 eq) stp)
+    helper (F-rule sub (F-consR v1') stp) eq = plugK-op-not-val k v1' (sym (consE-inj1 eq))
+
+-- K = F∘ k (F-consR v1): hole is the tail position. Besides Rcons, the
+-- cross with F-consL (the OTHER cons-frame, head-position hole, fixed
+-- via our own val v1) is a genuine competitor too -- same "L inside R's
+-- own block" treatment as F-pairR's own F-pairL case.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-consR {σ = σ0} v1)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ (list σ0) εg'} {e e' : Γ ⊢ (list σ0) ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ consE (val v1) (plugK k (opE m op (val v))) → ⊥
+    helper (Rcons v' w)                  eq = plugK-op-not-val k w (sym (consE-inj2 eq))
+    helper (F-rule sub (F-consL _) stp)  eq = theorem-A4-1-val (subst-src (consE-inj1 eq) stp)
+    helper (F-rule sub (F-consR _) stp)  eq = theorem-A4-1-op m op v k nh (subst-src (consE-inj2 eq) stp)
+
+-- K = F∘ k (F-iter1 e2 e3): hole is iter's FIRST (nat) position.
+-- iter's own codomain σ0 is generic (same situation as F-cases's ρ0
+-- above), so comparisons against OTHER top-level formers are still
+-- excluded by plain no-confusion; the genuine competitors are: R12/R13
+-- (the two value-level iter reductions), and F-iter2/F-iter3 (the OTHER
+-- two iter-frames, whose own first component is always a value, hence
+-- a plugK-op-not-val contradiction against our hole).
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-iter1 {σ = σ0} e2 e3)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ σ0 εg'} {e e' : Γ ⊢ σ0 ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ iter (plugK k (opE m op (val v))) e2 e3 → ⊥
+    helper (R12 v2' v3')                    eq = plugK-op-not-val k vzero (sym (iter-inj1 eq))
+    helper (R13 v1' v2' v3')                eq = plugK-op-not-val k (vsucc v1') (sym (iter-inj1 eq))
+    helper (F-rule sub (F-iter1 _ _) stp)   eq = theorem-A4-1-op m op v k nh (subst-src (iter-inj1 eq) stp)
+    helper (F-rule sub (F-iter2 v1'' _) stp) eq = plugK-op-not-val k v1'' (sym (iter-inj1 eq))
+    helper (F-rule sub (F-iter3 v1'' _) stp) eq = plugK-op-not-val k v1'' (sym (iter-inj1 eq))
+
+-- K = F∘ k (F-iter2 v1 e3): hole is iter's SECOND (accumulator)
+-- position. F-iter1 (whose OWN first component, here forced to equal
+-- our fixed val v1, lets us invoke theorem-A4-1-val on its premise) is
+-- a genuine competitor alongside R12/R13/F-iter3 (whose second
+-- component, forced to equal our hole, triggers plugK-op-not-val).
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-iter2 {σ = σ0} v1 e3)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ σ0 εg'} {e e' : Γ ⊢ σ0 ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ iter (val v1) (plugK k (opE m op (val v))) e3 → ⊥
+    helper (R12 v2' v3')                     eq = plugK-op-not-val k v2' (sym (iter-inj2 eq))
+    helper (R13 v1' v2' v3')                 eq = plugK-op-not-val k v2' (sym (iter-inj2 eq))
+    helper (F-rule sub (F-iter1 _ _) stp)    eq = theorem-A4-1-val (subst-src (iter-inj1 eq) stp)
+    helper (F-rule sub (F-iter2 _ _) stp)    eq = theorem-A4-1-op m op v k nh (subst-src (iter-inj2 eq) stp)
+    helper (F-rule sub (F-iter3 _ v2'') stp) eq = plugK-op-not-val k v2'' (sym (iter-inj2 eq))
+
+-- K = F∘ k (F-iter3 v1 v2): hole is iter's THIRD (step-function)
+-- position. F-iter1/F-iter2 (cross-contradicted via theorem-A4-1-val,
+-- same pattern as above) and R12/R13 (whose third component is forced
+-- to equal our hole) are the genuine competitors.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-iter3 {σ = σ0} v1 v2)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ σ0 εg'} {e e' : Γ ⊢ σ0 ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ iter (val v1) (val v2) (plugK k (opE m op (val v))) → ⊥
+    helper (R12 v2' v3')                  eq = plugK-op-not-val k v3' (sym (iter-inj3 eq))
+    helper (R13 v1' v2' v3')              eq = plugK-op-not-val k v3' (sym (iter-inj3 eq))
+    helper (F-rule sub (F-iter1 _ _) stp) eq = theorem-A4-1-val (subst-src (iter-inj1 eq) stp)
+    helper (F-rule sub (F-iter2 _ _) stp) eq = theorem-A4-1-val (subst-src (iter-inj2 eq) stp)
+    helper (F-rule sub (F-iter3 _ _) stp) eq = theorem-A4-1-op m op v k nh (subst-src (iter-inj3 eq) stp)
+
+-- K = F∘ k (F-fold1 e2 e3): the list/nat analogue of F-iter1 above,
+-- with R14/R15 playing R12/R13's role and vnil/vcons playing
+-- vzero/vsucc's.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-fold1 {σ = σ0} {τ = τ0} e2 e3)) nh stp = helper stp refl
+  where
+    -- `fold`'s own σ (its list-element type) is hidden from τ0 (cf.
+    -- unfold-key's own comment) -- every competing rule/frame's own σ
+    -- (R14/R15's, or the OTHER fold-frame's) is pinned to our σ0 via
+    -- unfold-key before fold-inj*/vnil/vcons can be applied
+    -- meaningfully.
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ τ0 εg'} {e e' : Γ ⊢ τ0 ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ fold (plugK k (opE m op (val v))) e2 e3 → ⊥
+    helper (R14 v2' v3') eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k vnil (sym (fold-inj1 eq))
+    helper (R15 v1' v2' v3' v4') eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k (vcons v1' v2') (sym (fold-inj1 eq))
+    helper (F-rule sub (F-fold1 _ _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = theorem-A4-1-op m op v k nh (subst-src (fold-inj1 eq) stp)
+    helper (F-rule sub (F-fold2 v1'' _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k v1'' (sym (fold-inj1 eq))
+    helper (F-rule sub (F-fold3 v1'' _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k v1'' (sym (fold-inj1 eq))
+
+-- K = F∘ k (F-fold2 v1 e3): the fold analogue of F-iter2 above.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-fold2 {σ = σ0} {τ = τ0} v1 e3)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ τ0 εg'} {e e' : Γ ⊢ τ0 ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ fold (val v1) (plugK k (opE m op (val v))) e3 → ⊥
+    helper (R14 v2' v3') eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k v2' (sym (fold-inj2 eq))
+    helper (R15 v1' v2' v3' v4') eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k v3' (sym (fold-inj2 eq))
+    helper (F-rule sub (F-fold1 _ _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = theorem-A4-1-val (subst-src (fold-inj1 eq) stp)
+    helper (F-rule sub (F-fold2 _ _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = theorem-A4-1-op m op v k nh (subst-src (fold-inj2 eq) stp)
+    helper (F-rule sub (F-fold3 _ v2'') stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k v2'' (sym (fold-inj2 eq))
+
+-- K = F∘ k (F-fold3 v1 v2): the fold analogue of F-iter3 above.
+theorem-A4-1-op {Γ} {ε = ε} m op v (F∘ k (F-fold3 {σ = σ0} {τ = τ0} v1 v2)) nh stp = helper stp refl
+  where
+    helper : ∀ {εg'} {sub : εg' ⊆ᵉ ε} {g' : LC Γ τ0 εg'} {e e' : Γ ⊢ τ0 ! ε} {r : R}
+           → _⊢_-[_]→_ {sub = sub} g' e r e' → e ≡ fold (val v1) (val v2) (plugK k (opE m op (val v))) → ⊥
+    helper (R14 v2' v3') eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k v3' (sym (fold-inj3 eq))
+    helper (R15 v1' v2' v3' v4') eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = plugK-op-not-val k v4' (sym (fold-inj3 eq))
+    helper (F-rule sub (F-fold1 _ _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = theorem-A4-1-val (subst-src (fold-inj1 eq) stp)
+    helper (F-rule sub (F-fold2 _ _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = theorem-A4-1-val (subst-src (fold-inj2 eq) stp)
+    helper (F-rule sub (F-fold3 _ _) stp) eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = theorem-A4-1-op m op v k nh (subst-src (fold-inj3 eq) stp)
 
 -- K = S∘ k (S-handleB h vp): delegates wholesale to
 -- theorem-A4-1-op-handleB (see comment above it, and above
@@ -1569,6 +2028,16 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (S∘ k (S-then sub g0)) nh stp = helper {
     helper {τeq2 = τeq2} (R8 sub1 sub2 v g1)      eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (R9 v)                   eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (Rplus r1 r2)                   eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rinl v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rinr v)                 eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rsucc v)                eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (Rcons v w)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R10 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R11 v e1 e2)            eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R12 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R13 v1 v2 v3)           eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R14 v2 v3)              eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (R15 v1 v2 v3 v4)        eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S1 sub h v stp)         eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (S2 sub' g1 stp)  eq
       with just-injective (trans (cong unThenE eq) (unThenE-subst τeq2 (target)))
@@ -1588,6 +2057,18 @@ theorem-A4-1-op {Γ} {ε = ε} m op v (S∘ k (S-then sub g0)) nh stp = helper {
     helper {τeq2 = τeq2} (F-rule sub (F-handleP h b) stp) eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (F-rule sub (F-plusL _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
     helper {τeq2 = τeq2} (F-rule sub (F-plusR _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-inl       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-inr       stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-cases _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub F-succ      stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consL _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-consR _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-iter3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold1 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold2 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
+    helper {τeq2 = τeq2} (F-rule sub (F-fold3 _ _) stp) eq = shape-absurd τeq2 (target) eq (λ ())
 
 theorem-A4-1-op {Γ} {σ = σ'} {ε = ε} m op v (S∘ k (S-glocal sub1 sub2 g0)) nh stp = helper stp refl
   where
@@ -1761,6 +2242,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (▫) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (▫) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (▫) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (▫) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (▫) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (▫) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (▫) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1785,6 +2278,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fun pfA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-fun pfA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-fun pfA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-fun pfA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1807,6 +2312,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairL e2A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairL e2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairL e2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairL e2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1829,6 +2346,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-pairR vA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairR vA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairR vA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-pairR vA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1852,6 +2381,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA F-fst) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-fst) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-fst) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-fst) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-fst) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-fst) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-fst) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1875,6 +2416,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA F-snd) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-snd) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-snd) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-snd) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-snd) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-snd) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-snd) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1905,6 +2458,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appL e2A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appL e2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appL e2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appL e2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1935,6 +2500,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-appR vA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appR vA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appR vA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-appR vA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1963,6 +2540,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-op mA opA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-op mA opA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-op mA opA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-op mA opA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -1983,6 +2572,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (F∘ kA F-loss) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-loss) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-loss) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-loss) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-loss) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-loss) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA F-loss) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -2009,6 +2610,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
       opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-handleP hA bA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
     go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-handleP hA bA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-handleP hA bA)) refl refl (S∘ kB (S-handleB hB vB)) refl refl nh1 nh2 eq
       with just-injective (cong unhandle-key eq)
     ... | refl
@@ -2045,6 +2658,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     ... | (opeq , εopeq , keq , meq , veq) =
       opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-plusL e2A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
     go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-plusR vB)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kA vB (plusE-inj1 eq))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusL e2A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-plusL e2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-plusL e2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-plusL e2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -2068,6 +2693,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
       with go kA refl refl kB refl refl nh1 nh2 (plusE-inj2 eq)
     ... | (opeq , εopeq , keq , meq , veq) =
       opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-plusR vA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-plusR vA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-plusR vA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-plusR vA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (F∘ kA (F-plusR vA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -2089,6 +2726,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     ...   | (_ , pEq , bEq) = ⊥-elim (plugK-op-not-val kB vA (sym pEq))
     go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-handleB hA vA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-handleB hA vA)) refl refl (S∘ kB (S-handleB hB vB)) refl refl nh1 nh2 eq
       with just-injective (cong unhandle-key eq)
     ... | refl
@@ -2115,6 +2764,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-then subA gA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-then subA gA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-then subA gA)) refl refl (S∘ kB (S-then subB gB)) refl refl nh1 nh2 eq
       with just-injective (cong unthen-key eq)
@@ -2137,6 +2798,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA (S-glocal sub1A sub2A gA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) refl refl nh1 nh2 eq
@@ -2159,6 +2832,18 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     go (S∘ kA S-reset) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA S-reset) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA S-reset) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (S∘ kA S-reset) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA S-reset) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA S-reset) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     go (S∘ kA S-reset) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
@@ -2167,6 +2852,432 @@ R5-cont-unique {Γ} {σ} {ε} {ℓ} {εop1} {εop2} {op1} {op2} {m1} {m2} {v2-1}
     ... | (opeq , εopeq , keq , meq , veq) =
       opeq , εopeq , wrapS∘ (cong (λ o → gnd (in′ o)) opeq) εopeq S-reset (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
 
+    go (F∘ kA F-inl) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB F-inl) refl refl nh1 nh2 eq
+      with go kA refl refl kB refl refl nh1 nh2 (inl-inj eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq F-inl (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA F-inl) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inl) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB F-inr) refl refl nh1 nh2 eq
+      with go kA refl refl kB refl refl nh1 nh2 (inr-inj eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq F-inr (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-inr) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-cases e1B e2B)) refl refl nh1 nh2 eq
+      with just-injective (cong uncases-key eq)
+    ... | refl
+      with cases-inj2 eq | cases-inj3 eq
+    ...   | refl | refl
+      with go kA refl refl kB refl refl nh1 nh2 (cases-inj1 eq)
+    ...     | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-cases e1A e2A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-cases e1A e2A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB F-succ) refl refl nh1 nh2 eq
+      with go kA refl refl kB refl refl nh1 nh2 (succ-inj eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq F-succ (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA F-succ) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-consL e2B)) refl refl nh1 nh2 eq
+      with consE-inj2 eq
+    ... | refl
+      with go kA refl refl kB refl refl nh1 nh2 (consE-inj1 eq)
+    ...   | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-consL e2A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-consR vB)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kA vB (consE-inj1 eq))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consL e2A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-consL e2B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kB vA (sym (consE-inj1 eq)))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-consR vB)) refl refl nh1 nh2 eq
+      with val-inj (consE-inj1 eq)
+    ... | refl
+      with go kA refl refl kB refl refl nh1 nh2 (consE-inj2 eq)
+    ... | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-consR vA) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-consR vA)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-iter1 e2B e3B)) refl refl nh1 nh2 eq
+      with iter-inj2 eq | iter-inj3 eq
+    ... | refl | refl
+      with go kA refl refl kB refl refl nh1 nh2 (iter-inj1 eq)
+    ...   | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-iter1 e2A e3A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-iter2 v1B e3B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kA v1B (iter-inj1 eq))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-iter3 v1B v2B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kA v1B (iter-inj1 eq))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter1 e2A e3A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-iter1 e2B e3B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kB v1A (sym (iter-inj1 eq)))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-iter2 v1B e3B)) refl refl nh1 nh2 eq
+      with val-inj (iter-inj1 eq) | iter-inj3 eq
+    ... | refl | refl
+      with go kA refl refl kB refl refl nh1 nh2 (iter-inj2 eq)
+    ...   | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-iter2 v1A e3A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-iter3 v1B v2B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kA v2B (iter-inj2 eq))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter2 v1A e3A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-iter1 e2B e3B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kB v1A (sym (iter-inj1 eq)))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-iter2 v1B e3B)) refl refl nh1 nh2 eq = ⊥-elim (plugK-op-not-val kB v2A (sym (iter-inj2 eq)))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-iter3 v1B v2B)) refl refl nh1 nh2 eq
+      with val-inj (iter-inj1 eq)
+    ... | refl
+      with val-inj (iter-inj2 eq)
+    ...   | refl
+      with go kA refl refl kB refl refl nh1 nh2 (iter-inj3 eq)
+    ...     | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-iter3 v1A v2A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-fold1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-fold2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (F∘ kB (F-fold3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-iter3 v1A v2A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-fold1 e2B e3B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl
+      with fold-inj2 eq | fold-inj3 eq
+    ...   | refl | refl
+      with go kA refl refl kB refl refl nh1 nh2 (fold-inj1 eq)
+    ...     | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-fold1 e2A e3A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-fold2 v1B e3B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = ⊥-elim (plugK-op-not-val kA v1B (fold-inj1 eq))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (F∘ kB (F-fold3 v1B v2B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = ⊥-elim (plugK-op-not-val kA v1B (fold-inj1 eq))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold1 e2A e3A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-fold1 e2B e3B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = ⊥-elim (plugK-op-not-val kB v1A (sym (fold-inj1 eq)))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-fold2 v1B e3B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl
+      with val-inj (fold-inj1 eq) | fold-inj3 eq
+    ...   | refl | refl
+      with go kA refl refl kB refl refl nh1 nh2 (fold-inj2 eq)
+    ...     | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-fold2 v1A e3A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (F∘ kB (F-fold3 v1B v2B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = ⊥-elim (plugK-op-not-val kA v2B (fold-inj2 eq))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold2 v1A e3A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (▫) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-fun pfB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-pairL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-pairR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB F-fst) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB F-snd) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-appL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-appR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-op mB opB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB F-loss) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-handleP hB bB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-plusL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-plusR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB F-inl) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB F-inr) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-cases e1B e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB F-succ) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-consL e2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-consR vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-iter1 e2B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-iter2 v1B e3B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-iter3 v1B v2B)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-fold1 e2B e3B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = ⊥-elim (plugK-op-not-val kB v1A (sym (fold-inj1 eq)))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-fold2 v1B e3B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl = ⊥-elim (plugK-op-not-val kB v2A (sym (fold-inj2 eq)))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (F∘ kB (F-fold3 v1B v2B)) refl refl nh1 nh2 eq
+      with just-injective (cong unfold-key eq)
+    ... | refl
+      with val-inj (fold-inj1 eq)
+    ...   | refl
+      with val-inj (fold-inj2 eq)
+    ...     | refl
+      with go kA refl refl kB refl refl nh1 nh2 (fold-inj3 eq)
+    ...       | (opeq , εopeq , keq , meq , veq) =
+      opeq , εopeq , wrapF∘ (cong (λ o → gnd (in′ o)) opeq) εopeq (F-fold3 v1A v2A) (generic-atK2-refl-refl-inv (cong (λ o → gnd (in′ o)) opeq) εopeq keq) , meq , veq
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (S∘ kB (S-handleB hB vB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (S∘ kB (S-then subB gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (S∘ kB (S-glocal sub1B sub2B gB)) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
+    go (F∘ kA (F-fold3 v1A v2A)) refl refl (S∘ kB S-reset) τeq2 εeq2 nh1 nh2 eq = ⊥-elim (shape-absurdE τeq2 εeq2 _ eq (λ ()))
     final : op1 ≡ op2 × εop1 ≡ εop2 × K1 ≅ K2 × m1 ≅ m2 × v2-1 ≅ v2-2
     final with go K1 refl refl K2 refl refl nh1 nh2 eq
     ... | (opeq , εopeq , Keq , meq , veq) =
@@ -3456,6 +4567,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R4 r) stp2 =
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL _) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusR _) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (Rcons v' w) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R10 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R11 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R13 v1 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (R15 v1 v2 v3 v4) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE (val (vgnd r))) eq (λ ()))
   helper τeq2 (F-rule sub2 F-loss {e = eh2} stp2') eq with τeq2
   ... | refl with lossE-inj eq
   ...   | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
@@ -3502,6 +4635,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (Rplus r w) stp2 =
   helper τeq2 (F-rule sub2' (F-op x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
   helper τeq2 (F-rule sub2' F-loss stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (Rcons v' w') eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (R10 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (R11 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (R13 v1 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (R15 v1 v2 v3 v4) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val (vgnd r)) (val (vgnd w))) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL e2') {e = eh2} stp2') eq with τeq2
   ... | refl with plusE-inj1 eq
   ...   | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
@@ -3979,6 +5134,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R7 sub1 v e) stp2 =
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL _) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusR _) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (Rcons v' w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R10 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R11 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R13 v1 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (R15 v1 v2 v3 v4) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 (val v) (vabs e)) eq (λ ()))
   helper τeq2 (S2 sub2 g1' {e = eh2} stp2') eq with τeq2
   ... | refl with just-injective (cong unthen-key eq)
   ...   | refl with thenE-arg-inj eq
@@ -4019,6 +5196,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (S2 sub1 g1 {e = eh} {e' = 
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL _) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusR _) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (Rcons v' w) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R10 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R11 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R13 v1 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (R15 v1 v2 v3 v4) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (thenE sub1 eh g1) eq (λ ()))
   helper τeq2 (S2 sub2 g1' {e = eh2} stp2') eq with τeq2
   ... | refl with just-injective (cong unthen-key eq)
   ...   | refl with thenE-arg-inj eq
@@ -4169,6 +5368,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-op m op) {e
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL _) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusR _) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (Rcons v' w) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R10 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R11 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R13 v1 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (R15 v1 v2 v3 v4) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (opE m op eh) eq (λ ()))
   helper τeq2 (F-rule sub2 (F-op m' op') {e = eh2} {e' = eh2'} stp2') eq
     with trans (cong unOpEFull eq) (unOpEFull-subst τeq2 (opE m op eh))
   ... | keq with just-injective keq
@@ -4211,6 +5432,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-loss {e = eh
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL _) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusR _) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (Rcons v' w) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R10 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R11 v' e1 e2) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R13 v1 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (R15 v1 v2 v3 v4) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (lossE eh) eq (λ ()))
   helper τeq2 (F-rule sub2 F-loss {e = eh2} {e' = eh2'} stp2') eq with τeq2
   ... | refl with lossE-inj eq
   ...   | eq2 with eq2
@@ -4259,6 +5502,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-plusL e2) {
   helper τeq2 (F-rule sub2' (F-op x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
   helper τeq2 (F-rule sub2' F-loss stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (Rcons v' w) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (R10 v' e1 e1') eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (R11 v' e1 e1') eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (R13 v1 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (R15 v1 v2 v3 v4) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE eh e2) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL e2') stp2') eq with τeq2
   ... | refl with plusE-inj1 eq | plusE-inj2 eq
   ...   | eq2 | eq3 with eq2 | eq3
@@ -4303,6 +5568,28 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-plusR v1) {
   helper τeq2 (F-rule sub2' (F-op x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
   helper τeq2 (F-rule sub2' F-loss stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-handleP h b) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (Rinl v') eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (Rinr v') eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (Rsucc v') eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (Rcons v' w) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (R10 v' e1 e1') eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (R11 v' e1 e1') eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (R12 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (R13 v1'' v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (R14 v2 v3) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (R15 v1'' v2'' v3 v4) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inl stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-inr stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-cases x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' F-succ stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consL x) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-consR x) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-iter3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold1 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold2 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
+  helper τeq2 (F-rule sub2' (F-fold3 x x₁) stp) eq = ⊥-elim (shape-absurd τeq2 (plusE (val v1) eh) eq (λ ()))
   helper τeq2 (F-rule sub2' (F-plusL e2') stp2') eq with τeq2
   ... | refl with plusE-inj1 eq
   ...   | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
@@ -4353,6 +5640,1207 @@ theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-handleP h b
   ... | refl with handleE-inj eq
   ...   | (refl , eq2 , refl) = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1'))
 
+-- PHASE 2: tInl group -- Rinl / F-inl. Single-hole, like tFst/tSnd's
+-- own single-component formers (inl's own σ,τ are both visible
+-- directly in its codomain σ0 `+` τ0, so no "-inj0" extraction step
+-- is needed before inl-inj applies).
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (Rinl v) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ inl {ε = ε} (val v)
+         → pack (Rinl {sub = sub} {g = g} v) ≡ pack s
+  helper (Rinl .v) refl = refl
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinr v') ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' F-inl stp) eq with inl-inj eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tInr group -- Rinr / F-inr: symmetric to tInl above.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (Rinr v) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ inr {ε = ε} (val v)
+         → pack (Rinr {sub = sub} {g = g} v) ≡ pack s
+  helper (Rinr .v) refl = refl
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) eq with inr-inj eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tSucc group -- Rsucc / F-succ: single-hole, concrete (nat)
+-- codomain, no hidden type parameter at all.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (Rsucc v) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ succ {ε = ε} (val v)
+         → pack (Rsucc {sub = sub} {g = g} v) ≡ pack s
+  helper (Rsucc .v) refl = refl
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) eq with succ-inj eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tCons group -- Rcons / F-consL / F-consR: consE's own σ is
+-- visible directly in its codomain (list σ0), mirroring tPair's own
+-- pair-inj1/pair-inj2 treatment (no "-inj0" step needed) -- Rcons
+-- collides with BOTH consE-frames, exactly as R2-pair collides with
+-- both F-pairL/F-pairR.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (Rcons v w) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ consE {ε = ε} (val v) (val w)
+         → pack (Rcons {sub = sub} {g = g} v w) ≡ pack s
+  helper (Rcons .v .w) refl = refl
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' (F-consL x) stp) eq with consE-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-consR x) stp) eq with consE-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tCases group (inl branch) -- R10 / F-cases. cases's own σ,τ are
+-- hidden from its codomain ρ0 (cf. uncases-key's own comment
+-- above), so the colliding F-cases' own σ,τ must be pinned via
+-- uncases-key before cases-inj1 applies.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R10 {ρ = ρ0} v e1 e2) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ cases {ρ = ρ0} {ε = ε} (val (vinl v)) e1 e2
+         → pack (R10 {ρ = ρ0} {sub = sub} {g = g} v e1 e2) ≡ pack s
+  helper (R10 v' e1' e2') eq
+    with just-injective (cong uncases-key eq)
+  ... | refl with eq
+  ...   | refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) eq with just-injective (cong uncases-key eq)
+  ... | refl with cases-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tCases group (inr branch) -- R11 / F-cases.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R11 {ρ = ρ0} v e1 e2) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ cases {ρ = ρ0} {ε = ε} (val (vinr v)) e1 e2
+         → pack (R11 {ρ = ρ0} {sub = sub} {g = g} v e1 e2) ≡ pack s
+  helper (R11 v' e1' e2') eq
+    with just-injective (cong uncases-key eq)
+  ... | refl with eq
+  ...   | refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) eq with just-injective (cong uncases-key eq)
+  ... | refl with cases-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tIter group (base case) -- R12 / F-iter1 / F-iter2 / F-iter3.
+-- iter's own σ is visible directly in its codomain (= ambient σ),
+-- so no hidden-variable key is needed (cf. OpSemProofs.agda's own
+-- note above unfold-key) -- R12 collides with ALL THREE iter-frames
+-- at once, since each one's own OTHER two components are already
+-- values once the hole is pinned.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R12 v2 v3) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ iter {ε = ε} (val vzero) (val v2) (val v3)
+         → pack (R12 {sub = sub} {g = g} v2 v3) ≡ pack s
+  helper (R12 .v2 .v3) refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-iter2 x x₁) stp) eq with iter-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-iter3 x x₁) stp) eq with iter-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tIter group (step case) -- R13 / F-iter1 / F-iter2 / F-iter3.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R13 v1 v2 v3) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ iter {ε = ε} (val (vsucc v1)) (val v2) (val v3)
+         → pack (R13 {sub = sub} {g = g} v1 v2 v3) ≡ pack s
+  helper (R13 .v1 .v2 .v3) refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-iter2 x x₁) stp) eq with iter-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-iter3 x x₁) stp) eq with iter-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tFold group (base case) -- R14 / F-fold1 / F-fold2 / F-fold3.
+-- fold's own σ (its list-element type) is hidden from τ0 (cf.
+-- unfold-key's own comment above), so every colliding fold-frame's
+-- own σ must be pinned via unfold-key before fold-inj* applies.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R14 {σ = σ0} v2 v3) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ fold {σ = σ0} {ε = ε} (val vnil) (val v2) (val v3)
+         → pack (R14 {σ = σ0} {sub = sub} {g = g} v2 v3) ≡ pack s
+  helper (R14 v2' v3') eq
+    with just-injective (cong unfold-key eq)
+  ... | refl with eq
+  ...   | refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-fold2 x x₁) stp) eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-fold3 x x₁) stp) eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+
+-- tFold group (step case) -- R15 / F-fold1 / F-fold2 / F-fold3.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (R15 {σ = σ0} v1 v2 v3 v4) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ fold {ε = ε} (val (vcons v1 v2)) (val v3) (val v4)
+         → pack (R15 {σ = σ0} {sub = sub} {g = g} v1 v2 v3 v4) ≡ pack s
+  helper (R15 v1' v2' v3' v4') eq
+    with just-injective (cong unfold-key eq)
+  ... | refl with eq
+  ...   | refl = refl
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-fold2 x x₁) stp) eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+  helper (F-rule sub2' (F-fold3 x x₁) stp) eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp))
+
+-- PHASE 2: tInl group (congruence) -- F-inl's own recursive
+-- diagonal, same shape as tFun's own (no hidden-type "-inj0" step
+-- needed, since inl's σ,τ are both visible directly).
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-inl {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ inl eh
+         → pack (F-rule sub1 F-inl stp1) ≡ pack s
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') eq with inl-inj eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (Rinr v') ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2 F-inl stp2') eq with inl-inj eq
+  ... | refl with theorem-A4-2-core stp1 stp2'
+  ...   | inner-eq = cong (λ { (e , r , e' , t) → (inl e , r , inl e' , F-rule sub1 F-inl t) }) inner-eq
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tInr group (congruence): symmetric to tInl above.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-inr {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ inr eh
+         → pack (F-rule sub1 F-inr stp1) ≡ pack s
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') eq with inr-inj eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2 F-inr stp2') eq with inr-inj eq
+  ... | refl with theorem-A4-2-core stp1 stp2'
+  ...   | inner-eq = cong (λ { (e , r , e' , t) → (inr e , r , inr e' , F-rule sub1 F-inr t) }) inner-eq
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tSucc group (congruence): single-hole, concrete (nat) codomain.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 F-succ {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ succ eh
+         → pack (F-rule sub1 F-succ stp1) ≡ pack s
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rsucc v') eq with succ-inj eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2 F-succ stp2') eq with succ-inj eq
+  ... | refl with theorem-A4-2-core stp1 stp2'
+  ...   | inner-eq = cong (λ { (e , r , e' , t) → (succ e , r , succ e' , F-rule sub1 F-succ t) }) inner-eq
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tCases group (congruence) -- F-cases's own recursive diagonal.
+-- cases's σ,τ are hidden from ρ0 (cf. uncases-key's own comment
+-- above), so the OTHER side's σ,τ -- whether from R10/R11 or from
+-- another F-cases -- must be pinned via uncases-key before
+-- cases-inj1 applies.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-cases e1 e2) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ cases eh e1 e2
+         → pack (F-rule sub1 (F-cases e1 e2) stp1) ≡ pack s
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rsucc v') ()
+  helper (R10 v' e1' e2') eq with just-injective (cong uncases-key eq)
+  ... | refl with cases-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R11 v' e1' e2') eq with just-injective (cong uncases-key eq)
+  ... | refl with cases-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2 (F-cases e1' e2') stp2') eq with just-injective (cong uncases-key eq)
+  ... | refl with cases-inj2 eq | cases-inj3 eq
+  ...   | refl | refl with cases-inj1 eq
+  ...     | refl with theorem-A4-2-core stp1 stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (cases e e1 e2 , r , cases e' e1 e2 , F-rule sub1 (F-cases e1 e2) t) }) inner-eq
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tCons group (congruence, head position) -- F-consL's own
+-- recursive diagonal; F-consR (hole in the OTHER, tail position) is
+-- a genuine sibling collision, same "L inside its own block" shape
+-- as tPair's own F-pairL/F-pairR cross-refutation.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-consL e₂) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ consE eh e₂
+         → pack (F-rule sub1 (F-consL e₂) stp1) ≡ pack s
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rcons v' w) eq with consE-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2 (F-consL e₂') stp2') eq with consE-inj2 eq
+  ... | refl with consE-inj1 eq
+  ...   | refl with theorem-A4-2-core stp1 stp2'
+  ...     | inner-eq = cong (λ { (e , r , e' , t) → (consE e e₂ , r , consE e' e₂ , F-rule sub1 (F-consL e₂) t) }) inner-eq
+  helper (F-rule sub2 (F-consR v1'') stp2') eq with consE-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tCons group (congruence, tail position): symmetric to F-consL
+-- above.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-consR v1) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ consE (val v1) eh
+         → pack (F-rule sub1 (F-consR v1) stp1) ≡ pack s
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R6 h v1 v2) ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rcons v' w) eq with consE-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2 (F-consL e₂'') stp2') eq with consE-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+  helper (F-rule sub2 (F-consR v1'') stp2') eq with val-inj (consE-inj1 eq)
+  ... | refl with consE-inj2 eq
+  ...   | refl with theorem-A4-2-core stp1 stp2'
+  ...     | inner-eq = cong (λ { (e , r , e' , t) → (consE (val v1) e , r , consE (val v1) e' , F-rule sub1 (F-consR v1) t) }) inner-eq
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tIter group (congruence, nat position) -- F-iter1's own
+-- recursive diagonal; R12/R13 (value rules) and F-iter2/F-iter3
+-- (the other two iter-frames, whose own FIRST component is always
+-- already a value once their own hole is elsewhere) are the
+-- genuine competitors -- iter's own σ needs no hidden-variable key
+-- (cf. unfold-key's own comment: unlike fold, iter's σ is visible
+-- directly in its codomain).
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-iter1 e2 e3) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ iter eh e2 e3
+         → pack (F-rule sub1 (F-iter1 e2 e3) stp1) ≡ pack s
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (S1 sub' h v' stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2' v3') eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R13 v1' v2' v3') eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2 (F-iter1 e2' e3') stp2') eq with iter-inj2 eq | iter-inj3 eq
+  ... | refl | refl with iter-inj1 eq
+  ...   | refl with theorem-A4-2-core stp1 stp2'
+  ...     | inner-eq = cong (λ { (e , r , e' , t) → (iter e e2 e3 , r , iter e' e2 e3 , F-rule sub1 (F-iter1 e2 e3) t) }) inner-eq
+  helper (F-rule sub2 (F-iter2 v1'' e3'') stp2') eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2 (F-iter3 v1'' v2'') stp2') eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tIter group (congruence, accumulator position) -- F-iter2's own
+-- recursive diagonal; F-iter1 (whose own first component, forced
+-- to equal our fixed val v1, contradicts ITS OWN premise) and
+-- F-iter3 (whose second component is forced to equal our hole) are
+-- genuine competitors alongside R12/R13.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-iter2 v1 e3) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ iter (val v1) eh e3
+         → pack (F-rule sub1 (F-iter2 v1 e3) stp1) ≡ pack s
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2' v3') eq with iter-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R13 v1' v2' v3') eq with iter-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2 (F-iter1 e2'' e3'') stp2') eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+  helper (F-rule sub2 (F-iter2 v1'' e3') stp2') eq with val-inj (iter-inj1 eq) | iter-inj3 eq
+  ... | refl | refl with iter-inj2 eq
+  ...   | refl with theorem-A4-2-core stp1 stp2'
+  ...     | inner-eq = cong (λ { (e , r , e' , t) → (iter (val v1) e e3 , r , iter (val v1) e' e3 , F-rule sub1 (F-iter2 v1 e3) t) }) inner-eq
+  helper (F-rule sub2 (F-iter3 v1'' v2'') stp2') eq with iter-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tIter group (congruence, step-function position) -- F-iter3's
+-- own recursive diagonal; F-iter1/F-iter2 (cross-contradicted via
+-- their own premises, same pattern as above) and R12/R13 (whose
+-- third component is forced to equal our hole) are the genuine
+-- competitors.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-iter3 v1 v2) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ iter (val v1) (val v2) eh
+         → pack (F-rule sub1 (F-iter3 v1 v2) stp1) ≡ pack s
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2' v3') eq with iter-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R13 v1' v2' v3') eq with iter-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R14 v2 v3) ()
+  helper (R15 v1 v2 v3 v4) ()
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2 (F-iter1 e2'' e3'') stp2') eq with iter-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+  helper (F-rule sub2 (F-iter2 v1'' e3'') stp2') eq with iter-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+  helper (F-rule sub2 (F-iter3 v1'' v2'') stp2') eq with val-inj (iter-inj1 eq) | val-inj (iter-inj2 eq)
+  ... | refl | refl with iter-inj3 eq
+  ...   | refl with theorem-A4-2-core stp1 stp2'
+  ...     | inner-eq = cong (λ { (e , r , e' , t) → (iter (val v1) (val v2) e , r , iter (val v1) (val v2) e' , F-rule sub1 (F-iter3 v1 v2) t) }) inner-eq
+  helper (F-rule sub2' (F-fold1 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold2 x x₁) stp) ()
+  helper (F-rule sub2' (F-fold3 x x₁) stp) ()
+
+-- tFold group (congruence, list position) -- F-fold1's own
+-- recursive diagonal. fold's own σ is hidden from τ0 (cf.
+-- unfold-key's own comment above), so EVERY competitor here --
+-- R14/R15, the OTHER fold-frames, or F-fold1 itself -- needs its
+-- own σ pinned via unfold-key before fold-inj*/vnil/vcons apply.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-fold1 e2 e3) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ fold eh e2 e3
+         → pack (F-rule sub1 (F-fold1 e2 e3) stp1) ≡ pack s
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2' v3') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R15 v1' v2' v3' v4') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2 (F-fold1 e2' e3') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj2 eq | fold-inj3 eq
+  ...   | refl | refl with fold-inj1 eq
+  ...     | refl with theorem-A4-2-core stp1 stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (fold e e2 e3 , r , fold e' e2 e3 , F-rule sub1 (F-fold1 e2 e3) t) }) inner-eq
+  helper (F-rule sub2 (F-fold2 v1'' e3'') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2 (F-fold3 v1'' v2'') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+
+-- tFold group (congruence, base-case position) -- F-fold2's own
+-- recursive diagonal.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-fold2 v1 e3) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ fold (val v1) eh e3
+         → pack (F-rule sub1 (F-fold2 v1 e3) stp1) ≡ pack s
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2' v3') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R15 v1' v2' v3' v4') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2 (F-fold1 e2'' e3'') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+  helper (F-rule sub2 (F-fold2 v1'' e3') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with val-inj (fold-inj1 eq) | fold-inj3 eq
+  ...   | refl | refl with fold-inj2 eq
+  ...     | refl with theorem-A4-2-core stp1 stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (fold (val v1) e e3 , r , fold (val v1) e' e3 , F-rule sub1 (F-fold2 v1 e3) t) }) inner-eq
+  helper (F-rule sub2 (F-fold3 v1'' v2'') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+
+-- tFold group (congruence, step-function position) -- F-fold3's
+-- own recursive diagonal.
+theorem-A4-2-core {Γ} {ε = ε} {sub = sub} {g = g} (F-rule sub1 (F-fold3 v1 v2) {e = eh} {e' = eh'} stp1) stp2 = helper stp2 refl
+  where
+  helper : ∀ {e r2 e2'} (s : _⊢_-[_]→_ {sub = sub} g e r2 e2') → e ≡ fold (val v1) (val v2) eh
+         → pack (F-rule sub1 (F-fold3 v1 v2) stp1) ≡ pack s
+  helper (R1 f x) ()
+  helper (R2-pair v' w') ()
+  helper (R2-fst v' w') ()
+  helper (R2-snd v' w') ()
+  helper (R3 e' v') ()
+  helper (R4 r) ()
+  helper (R6 h v1 v2) ()
+  helper (R7 sub' v' e') ()
+  helper (R8 sub1 sub2 v' g1) ()
+  helper (R9 v') ()
+  helper (Rplus r1 r2) ()
+  helper (S1 sub' h v' stp) ()
+  helper (S2 sub' g1 stp) ()
+  helper (S3 sub1 sub2 g1 stp) ()
+  helper (S4 stp) ()
+  helper (R5 sub' h v1 m op v2 k nh) ()
+  helper (Rinl v') ()
+  helper (Rinr v') ()
+  helper (Rsucc v') ()
+  helper (Rcons v' w) ()
+  helper (R10 v' e1 e2) ()
+  helper (R11 v' e1 e2) ()
+  helper (R12 v2 v3) ()
+  helper (R13 v1 v2 v3) ()
+  helper (R14 v2' v3') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (R15 v1' v2' v3' v4') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj3 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) (sym eq2) stp1))
+  helper (F-rule sub2' (F-fun x) stp) ()
+  helper (F-rule sub2' (F-pairL x) stp) ()
+  helper (F-rule sub2' (F-pairR x) stp) ()
+  helper (F-rule sub2' F-fst stp) ()
+  helper (F-rule sub2' F-snd stp) ()
+  helper (F-rule sub2' (F-appL x) stp) ()
+  helper (F-rule sub2' (F-appR x) stp) ()
+  helper (F-rule sub2' (F-op x x₁) stp) ()
+  helper (F-rule sub2' F-loss stp) ()
+  helper (F-rule sub2' (F-handleP h b) stp) ()
+  helper (F-rule sub2' (F-plusL x) stp) ()
+  helper (F-rule sub2' (F-plusR x) stp) ()
+  helper (F-rule sub2' F-inl stp) ()
+  helper (F-rule sub2' F-inr stp) ()
+  helper (F-rule sub2' (F-cases x x₁) stp) ()
+  helper (F-rule sub2' F-succ stp) ()
+  helper (F-rule sub2' (F-consL x) stp) ()
+  helper (F-rule sub2' (F-consR x) stp) ()
+  helper (F-rule sub2' (F-iter1 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter2 x x₁) stp) ()
+  helper (F-rule sub2' (F-iter3 x x₁) stp) ()
+  helper (F-rule sub2 (F-fold1 e2'' e3'') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj1 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+  helper (F-rule sub2 (F-fold2 v1'' e3'') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with fold-inj2 eq
+  ... | eq2 = ⊥-elim (theorem-A4-1-val (subst (λ □ → _⊢_-[_]→_ _ □ _ _) eq2 stp2'))
+  helper (F-rule sub2 (F-fold3 v1'' v2'') stp2') eq with just-injective (cong unfold-key eq)
+  ... | refl with val-inj (fold-inj1 eq) | val-inj (fold-inj2 eq)
+  ...   | refl | refl with fold-inj3 eq
+  ...     | refl with theorem-A4-2-core stp1 stp2'
+  ...       | inner-eq = cong (λ { (e , r , e' , t) → (fold (val v1) (val v2) e , r , fold (val v1) (val v2) e' , F-rule sub1 (F-fold3 v1 v2) t) }) inner-eq
+
+
 theorem-A4-2 : ∀ {Γ σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC Γ σ εg} {e : Γ ⊢ σ ! ε} {r1 r2 : R} {e1' e2' : Γ ⊢ σ ! ε}
                      (stp1 : _⊢_-[_]→_ {sub = sub} g e r1 e1') (stp2 : _⊢_-[_]→_ {sub = sub} g e r2 e2')
                    → stp1 ≅ stp2
@@ -4380,6 +6868,25 @@ val-closed-pair (vpair v1 v2) = v1 , v2 , refl
 val-closed-abs : ∀ {σ τ ε} (v : Val ∅ (σ ⇒ τ ! ε)) → Σ ((∅ , σ) ⊢ τ ! ε) (λ e → v ≡ vabs e)
 val-closed-abs (vvar ())
 val-closed-abs (vabs e) = e , refl
+
+-- PHASE 2: sum/nat/list analogues of val-closed-pair/val-closed-abs
+-- above, needed by progress-dichotomy's own new inl/inr/cases, succ/
+-- iter, and consE/fold cases respectively, to recover which VALUE
+-- constructor a closed value of each new type must be.
+val-closed-sum : ∀ {σ τ} (v : Val ∅ (σ `+ τ)) → (Σ (Val ∅ σ) (λ v1 → v ≡ vinl v1)) ⊎ (Σ (Val ∅ τ) (λ v2 → v ≡ vinr v2))
+val-closed-sum (vvar ())
+val-closed-sum (vinl v1) = inj₁ (v1 , refl)
+val-closed-sum (vinr v2) = inj₂ (v2 , refl)
+
+val-closed-nat : (v : Val ∅ nat) → (v ≡ vzero) ⊎ (Σ (Val ∅ nat) (λ v1 → v ≡ vsucc v1))
+val-closed-nat (vvar ())
+val-closed-nat vzero = inj₁ refl
+val-closed-nat (vsucc v1) = inj₂ (v1 , refl)
+
+val-closed-list : ∀ {σ} (v : Val ∅ (list σ)) → (v ≡ vnil) ⊎ (Σ (Val ∅ σ) (λ v1 → Σ (Val ∅ (list σ)) (λ v2 → v ≡ vcons v1 v2)))
+val-closed-list (vvar ())
+val-closed-list vnil = inj₁ refl
+val-closed-list (vcons v1 v2) = inj₂ (v1 , v2 , refl)
 
 -- ---------------------------------------------------------------------
 -- Theorem A.4.3 (progress, full direction): a non-terminal CLOSED
@@ -4499,6 +7006,79 @@ progress-dichotomy {sub = sub} {g = g} (handleE {ℓ = ℓ} h p b) | inj₁ (ter
 progress-dichotomy (handleE h p b) | inj₁ (terminalVal v1) | inj₁ (terminalOp m op v K nh) | no neq =
   inj₁ (terminalOp m op v (S∘ K (S-handleB h v1)) (λ { (inj₁ eq2) → neq (sym eq2) ; (inj₂ hk) → nh hk }))
 progress-dichotomy (handleE h p b) | inj₁ (terminalVal v1) | inj₂ (r , b' , stpb) = inj₂ (r , handleE h (val v1) b' , S1 _ h v1 stpb)
+
+-- PHASE 2: sum/nat/list cases, following the SAME recipe as fun/fst/
+-- snd/lossE above (single-hole, value-coalescing via a glue rule once
+-- the hole settles) and pair/app/plusE above (two-hole, L-then-R) --
+-- plus the brand-new 3-hole iter/fold shape (L-then-mid-then-R),
+-- modelled directly on handleE's own two-level p-then-b chain.
+progress-dichotomy {sub = sub} {g = g} (inl e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F F-inl) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) = inj₂ (0# , val (vinl v0) , Rinl v0)
+progress-dichotomy (inl e0) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K F-inl) nh)
+progress-dichotomy (inl e0) | inj₂ (r , e0' , stp0) = inj₂ (r , inl e0' , F-rule _ F-inl stp0)
+
+progress-dichotomy {sub = sub} {g = g} (inr e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F F-inr) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) = inj₂ (0# , val (vinr v0) , Rinr v0)
+progress-dichotomy (inr e0) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K F-inr) nh)
+progress-dichotomy (inr e0) | inj₂ (r , e0' , stp0) = inj₂ (r , inr e0' , F-rule _ F-inr stp0)
+
+progress-dichotomy {sub = sub} {g = g} (cases e0 e1 e2)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-cases e1 e2)) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) with val-closed-sum v0
+...   | inj₁ (v1 , refl) = inj₂ (0# , e1 [ v1 ] , R10 v1 e1 e2)
+...   | inj₂ (v2 , refl) = inj₂ (0# , e2 [ v2 ] , R11 v2 e1 e2)
+progress-dichotomy (cases e0 e1 e2) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-cases e1 e2)) nh)
+progress-dichotomy (cases e0 e1 e2) | inj₂ (r , e0' , stp0) = inj₂ (r , cases e0' e1 e2 , F-rule _ (F-cases e1 e2) stp0)
+
+progress-dichotomy {sub = sub} {g = g} (succ e0)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F F-succ) (val (vvar Z))) (weaken1V g))} e0
+... | inj₁ (terminalVal v0) = inj₂ (0# , val (vsucc v0) , Rsucc v0)
+progress-dichotomy (succ e0) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K F-succ) nh)
+progress-dichotomy (succ e0) | inj₂ (r , e0' , stp0) = inj₂ (r , succ e0' , F-rule _ F-succ stp0)
+
+progress-dichotomy {sub = sub} {g = g} (consE e1 e2)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-consL e2)) (val (vvar Z))) (weaken1V g))} e1
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-consL e2)) nh)
+... | inj₂ (r , e1' , stp1) = inj₂ (r , consE e1' e2 , F-rule sub (F-consL e2) stp1)
+progress-dichotomy {sub = sub} {g = g} (consE e1 e2) | inj₁ (terminalVal v1)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-consR v1)) (val (vvar Z))) (weaken1V g))} e2
+... | inj₁ (terminalVal v2) = inj₂ (0# , val (vcons v1 v2) , Rcons v1 v2)
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-consR v1)) nh)
+... | inj₂ (r , e2' , stp2) = inj₂ (r , consE (val v1) e2' , F-rule _ (F-consR v1) stp2)
+
+progress-dichotomy {sub = sub} {g = g} (iter e1 e2 e3)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-iter1 e2 e3)) (val (vvar Z))) (weaken1V g))} e1
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-iter1 e2 e3)) nh)
+... | inj₂ (r , e1' , stp1) = inj₂ (r , iter e1' e2 e3 , F-rule sub (F-iter1 e2 e3) stp1)
+progress-dichotomy {sub = sub} {g = g} (iter e1 e2 e3) | inj₁ (terminalVal v1)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-iter2 v1 e3)) (val (vvar Z))) (weaken1V g))} e2
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-iter2 v1 e3)) nh)
+... | inj₂ (r , e2' , stp2) = inj₂ (r , iter (val v1) e2' e3 , F-rule _ (F-iter2 v1 e3) stp2)
+progress-dichotomy {sub = sub} {g = g} (iter e1 e2 e3) | inj₁ (terminalVal v1) | inj₁ (terminalVal v2)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-iter3 v1 v2)) (val (vvar Z))) (weaken1V g))} e3
+... | inj₁ (terminalVal v3) with val-closed-nat v1
+...   | inj₁ refl = inj₂ (0# , val v2 , R12 v2 v3)
+...   | inj₂ (v1' , refl) = inj₂ (0# , app (val v3) (iter (val v1') (val v2) (val v3)) , R13 v1' v2 v3)
+progress-dichotomy (iter e1 e2 e3) | inj₁ (terminalVal v1) | inj₁ (terminalVal v2) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-iter3 v1 v2)) nh)
+progress-dichotomy (iter e1 e2 e3) | inj₁ (terminalVal v1) | inj₁ (terminalVal v2) | inj₂ (r , e3' , stp3) = inj₂ (r , iter (val v1) (val v2) e3' , F-rule _ (F-iter3 v1 v2) stp3)
+
+progress-dichotomy {sub = sub} {g = g} (fold e1 e2 e3)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-fold1 e2 e3)) (val (vvar Z))) (weaken1V g))} e1
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-fold1 e2 e3)) nh)
+... | inj₂ (r , e1' , stp1) = inj₂ (r , fold e1' e2 e3 , F-rule sub (F-fold1 e2 e3) stp1)
+progress-dichotomy {sub = sub} {g = g} (fold e1 e2 e3) | inj₁ (terminalVal v1)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-fold2 v1 e3)) (val (vvar Z))) (weaken1V g))} e2
+... | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-fold2 v1 e3)) nh)
+... | inj₂ (r , e2' , stp2) = inj₂ (r , fold (val v1) e2' e3 , F-rule _ (F-fold2 v1 e3) stp2)
+progress-dichotomy {sub = sub} {g = g} (fold e1 e2 e3) | inj₁ (terminalVal v1) | inj₁ (terminalVal v2)
+  with progress-dichotomy {g = vabs (thenE sub (plugF (weaken1F (F-fold3 v1 v2)) (val (vvar Z))) (weaken1V g))} e3
+... | inj₁ (terminalVal v3) with val-closed-list v1
+...   | inj₁ refl = inj₂ (0# , val v2 , R14 v2 v3)
+...   | inj₂ (vh , vt , refl) = inj₂ (0# , app (val v3) (pair (val vh) (fold (val vt) (val v2) (val v3))) , R15 vh vt v2 v3)
+progress-dichotomy (fold e1 e2 e3) | inj₁ (terminalVal v1) | inj₁ (terminalVal v2) | inj₁ (terminalOp m op v K nh) = inj₁ (terminalOp m op v (F∘ K (F-fold3 v1 v2)) nh)
+progress-dichotomy (fold e1 e2 e3) | inj₁ (terminalVal v1) | inj₁ (terminalVal v2) | inj₂ (r , e3' , stp3) = inj₂ (r , fold (val v1) (val v2) e3' , F-rule _ (F-fold3 v1 v2) stp3)
 
 theorem-A4-3 : ∀ {σ ε εg} {sub : εg ⊆ᵉ ε} {g : LC ∅ σ εg} {e : ∅ ⊢ σ ! ε}
              → ¬ Terminal e → Σ R (λ r → Σ (∅ ⊢ σ ! ε) (λ e' → _⊢_-[_]→_ {sub = sub} g e r e'))

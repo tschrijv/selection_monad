@@ -25,12 +25,36 @@ open import Data.List using (List; []; _∷_; _++_)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.List.Membership.Propositional.Properties using (∈-++⁻)
 open import Data.List.Relation.Unary.Any using (here; there)
+open import Data.Nat using (ℕ; zero; suc)
 open import Data.Sum using (inj₁; inj₂)
 open import Data.Product using (_×_; _,_; proj₁; proj₂)
 open import Data.Unit using (⊤; tt)
 open import Data.Empty using (⊥-elim)
 open import Relation.Nullary using (¬_; yes; no)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl)
+
+-- ---------------------------------------------------------------------
+-- PHASE 4: denotational semantics for `iter`/`fold`'s own step-function
+-- application, factored out as plain structural recursion on ℕ/List
+-- (not Val/Expr, so these sit outside the Val/Expr mutual block below).
+-- NOT ported from the paper -- appendixv3.tex's denotational semantics
+-- (unlike its operational semantics and Appendix A.4's termination
+-- argument) is stated only for the core language, so there is no proof
+-- text to port here. These are the only definitions matching the
+-- already-mechanized operational reductions R12/R13 (iter) and R14/R15
+-- (fold): iterSem (suc n) threads the recursive result through φ exactly
+-- as R13 fires `app v3 (iter v1 v2 v3)`, and foldSem (x ∷ xs) pairs x
+-- with its own recursive result before feeding φ, exactly as R15 fires
+-- `app v4 (pair v1 (fold v2 v3 v4))`.
+-- ---------------------------------------------------------------------
+
+iterSem : ∀ {ε} {X : Set} → ℕ → X → (X → Ŝ ε X) → Ŝ ε X
+iterSem zero    b φ = η̂ˢ b
+iterSem (suc n) b φ = bindŜ (iterSem n b φ) φ
+
+foldSem : ∀ {ε} {X Y : Set} → List X → Y → (X × Y → Ŝ ε Y) → Ŝ ε Y
+foldSem []       b φ = η̂ˢ b
+foldSem (x ∷ xs) b φ = bindŜ (foldSem xs b φ) (λ r → φ (x , r))
 
 -- ---------------------------------------------------------------------
 -- Environments. Unchanged.
@@ -54,6 +78,15 @@ mutual
   Vsem (vgnd x)    ρ = x
   Vsem (vpair v w) ρ = Vsem v ρ , Vsem w ρ
   Vsem (vabs e)    ρ = λ a → Esem e (ρ ,, a)
+  -- PHASE 4: sum/nat/list values, directly via ⟦_⟧'s own ⊎/ℕ/List
+  -- interpretation (Domains.agda) -- no choice to make here, unlike
+  -- iter/fold's step-application above.
+  Vsem (vinl v)    ρ = inj₁ (Vsem v ρ)
+  Vsem (vinr v)    ρ = inj₂ (Vsem v ρ)
+  Vsem vzero       ρ = zero
+  Vsem (vsucc v)   ρ = suc (Vsem v ρ)
+  Vsem vnil        ρ = []
+  Vsem (vcons v w) ρ = Vsem v ρ ∷ Vsem w ρ
 
   -- §4's auxiliary loss-function semantics ℒ: the loss g would eventually
   -- report at a, run to completion. g's own body is Loss-typed (σ→Loss),
@@ -85,6 +118,25 @@ mutual
   Esem (app e1 e2) ρ      = bindŜ (Esem e1 ρ) (λ φ → bindŜ (Esem e2 ρ) φ)
   Esem (opE m op e) ρ     = bindŜ (Esem e ρ) (λ a → φ̂ˢ m op a η̂ˢ)
   Esem (lossE e) ρ        = bindŜ (Esem e ρ) (λ r → addLossŜ r (η̂ˢ tt))
+
+  -- PHASE 4: sum/nat/list expressions. inl/inr/succ/consE are plain
+  -- value-coalescing, exactly like pair above. cases destructs its
+  -- scrutinee's ⊎ and recurses into the chosen branch's own denotation
+  -- under the extended environment, exactly like handleE's own case
+  -- split in spirit (though here via Agda's own `with`-free pattern
+  -- lambda, since there is only one ⊎, not a label lookup). iter/fold
+  -- hand off to the standalone iterSem/foldSem helpers above once their
+  -- own subexpressions are all reduced to values.
+  Esem (inl e) ρ           = bindŜ (Esem e ρ) (λ a → η̂ˢ (inj₁ a))
+  Esem (inr e) ρ           = bindŜ (Esem e ρ) (λ a → η̂ˢ (inj₂ a))
+  Esem (cases e e1 e2) ρ   = bindŜ (Esem e ρ) (λ{ (inj₁ a) → Esem e1 (ρ ,, a)
+                                                 ; (inj₂ b) → Esem e2 (ρ ,, b) })
+  Esem (succ e) ρ          = bindŜ (Esem e ρ) (λ n → η̂ˢ (suc n))
+  Esem (iter e1 e2 e3) ρ   = bindŜ (Esem e1 ρ) (λ n → bindŜ (Esem e2 ρ) (λ b →
+                               bindŜ (Esem e3 ρ) (λ φ → iterSem n b φ)))
+  Esem (consE e1 e2) ρ     = bindŜ (Esem e1 ρ) (λ a → bindŜ (Esem e2 ρ) (λ as → η̂ˢ (a ∷ as)))
+  Esem (fold e1 e2 e3) ρ   = bindŜ (Esem e1 ρ) (λ xs → bindŜ (Esem e2 ρ) (λ b →
+                               bindŜ (Esem e3 ρ) (λ φ → foldSem xs b φ)))
 
   -- Ssem(e1 ▶ g)(ρ) : run e1, but collapse the whole thing down to a
   -- plain R̂ ε report using g's own (widened) semantics as the loss

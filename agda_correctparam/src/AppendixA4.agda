@@ -22,7 +22,7 @@ open import OpSemProofs Sg
 open import Data.List using (List; []; _∷_; _++_; length)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.Nat using (ℕ; zero; suc; _⊔_; _<_; _≤_; s≤s; z≤n) renaming (_+_ to _+ℕ_)
-open import Data.Nat.Properties using (m≤m⊔n; m≤n⊔m; m≤m+n; m≤n+m; m≤n⇒m<n∨m≡n; ≤-trans; ⊔-monoˡ-≤)
+open import Data.Nat.Properties using (m≤m⊔n; m≤n⊔m; m≤m+n; m≤n+m; m≤n⇒m<n∨m≡n; ≤-trans; ⊔-monoˡ-≤; ≤-refl)
 open import Data.Nat.Induction using (<-wellFounded)
 open import Data.Product.Relation.Binary.Lex.Strict using (×-Lex; ×-wellFounded)
 open import Induction.WellFounded using (Acc; acc; WfRec; WellFounded)
@@ -77,6 +77,16 @@ Acc-irrelevant (acc rs1) (acc rs2) =
 labelsTy : Ty → EffCxt
 labelsTy (gnd γ)     = []
 labelsTy (σ `× τ)     = labelsTy σ ++ labelsTy τ
+-- PHASE 3 EXTENSION: sum/nat/list. A sum's labels are the union of its
+-- two branches' (exactly e(σ`×τ), no effect context of its own to
+-- contribute -- `_`+_` introduces no ε, same as `_`×_`). `nat` mentions
+-- no type at all, so e(nat)=[] unconditionally (same reasoning gnd γ's
+-- own clause already relies on). `list σ` mentions exactly σ's own
+-- labels, once (a list's elements all share σ, so there is nothing
+-- further to union in beyond e(σ) itself).
+labelsTy (σ `+ τ)     = labelsTy σ ++ labelsTy τ
+labelsTy nat          = []
+labelsTy (list σ)     = labelsTy σ
 labelsTy (σ ⇒ τ ! ε)  = labelsTy σ ++ labelsTy τ ++ ε
 
 postulate
@@ -95,6 +105,13 @@ levelEffCxt (ℓ ∷ εs) = effLevel ℓ ⊔ levelEffCxt εs
 levelTy : Ty → ℕ
 levelTy (gnd γ)     = 0
 levelTy (σ `× τ)     = levelTy σ ⊔ levelTy τ
+-- PHASE 3 EXTENSION: mirrors labelsTy's own extension immediately
+-- above, one clause per new constructor, in exactly the same shape
+-- (l(-) agrees with levelEffCxt∘labelsTy by construction throughout
+-- this file, per this function's own header comment).
+levelTy (σ `+ τ)     = levelTy σ ⊔ levelTy τ
+levelTy nat          = 0
+levelTy (list σ)     = levelTy σ
 levelTy (σ ⇒ τ ! ε)  = levelTy σ ⊔ levelTy τ ⊔ levelEffCxt ε
 
 -- |σ|: the paper's own type SIZE, "|σ→τ!ε| = 1+|σ|+|τ|+|ε|" -- |ε|
@@ -104,6 +121,15 @@ levelTy (σ ⇒ τ ! ε)  = levelTy σ ⊔ levelTy τ ⊔ levelEffCxt ε
 sizeTy : Ty → ℕ
 sizeTy (gnd γ)     = 1
 sizeTy (σ `× τ)     = suc (sizeTy σ +ℕ sizeTy τ)
+-- PHASE 3 EXTENSION: |σ+τ| = 1+|σ|+|τ|, exactly `_`×_`'s own formula
+-- (both are binary type formers with no extra EffCxt component). |nat|
+-- = 1, ground-like (same reasoning as |gnd γ| = 1: nat has no type
+-- argument for a subterm to even measure). |list σ| = 1+|σ|: a single
+-- unary former wrapping one sub-type, the natural analogue of the
+-- binary formers' "1 + (sum of sub-sizes)" shape with just one summand.
+sizeTy (σ `+ τ)     = suc (sizeTy σ +ℕ sizeTy τ)
+sizeTy nat          = 1
+sizeTy (list σ)     = suc (sizeTy σ)
 sizeTy (σ ⇒ τ ! ε)  = suc (sizeTy σ +ℕ sizeTy τ +ℕ length ε)
 
 -- ---------------------------------------------------------------------
@@ -193,6 +219,27 @@ mVal-arrow-decrease-dom σ τ ε = ≤×<⇒<M (a≤a⊔b⊔c (levelTy σ) (leve
 -- (ε,ℓ → ε).
 mVal-arrow-decrease-cod : ∀ σ τ ε → mVal τ <M mVal (σ ⇒ τ ! ε)
 mVal-arrow-decrease-cod σ τ ε = ≤×<⇒<M (b≤a⊔b⊔c (levelTy σ) (levelTy τ) (levelEffCxt ε)) (b<suc[a+b+c] (sizeTy σ) (sizeTy τ) (length ε))
+
+-- PHASE 3 EXTENSION: the analogous decrease facts ComputableV-acc's own
+-- new (σ`+τ)/list σ cases need. mVal-inl-decrease/mVal-inr-decrease
+-- are LITERALLY mVal-pair-decrease1/2 restated at `_`+_` instead of
+-- `_`×_` -- levelTy/sizeTy give `σ`+τ` the exact same two-way-sum
+-- formula as `σ`×τ`, so the very same ≤×<⇒<M/a<suc[a+b]/b<suc[a+b]
+-- bookkeeping applies verbatim. mVal-list-decrease is the one-summand
+-- analogue: `list σ`'s own sizeTy is `suc (sizeTy σ)` (no second
+-- summand to bound), so its size inequality is the ⊤-trivial
+-- `sizeTy σ < suc (sizeTy σ)` directly (Data.Nat.Properties' ≤-refl
+-- under suc, i.e. `s≤s ≤-refl`), and its level inequality is the
+-- EQUALITY `levelTy σ ≤ levelTy σ` (`levelTy (list σ) = levelTy σ`
+-- definitionally) rather than a ⊔-projection.
+mVal-inl-decrease : ∀ σ τ → mVal σ <M mVal (σ `+ τ)
+mVal-inl-decrease σ τ = ≤×<⇒<M (m≤m⊔n (levelTy σ) (levelTy τ)) (a<suc[a+b] (sizeTy σ) (sizeTy τ))
+
+mVal-inr-decrease : ∀ σ τ → mVal τ <M mVal (σ `+ τ)
+mVal-inr-decrease σ τ = ≤×<⇒<M (m≤n⊔m (levelTy σ) (levelTy τ)) (b<suc[a+b] (sizeTy σ) (sizeTy τ))
+
+mVal-list-decrease : ∀ σ → mVal σ <M mVal (list σ)
+mVal-list-decrease σ = ≤×<⇒<M {a1 = levelTy σ} {a2 = levelTy σ} ≤-refl (s≤s ≤-refl)
 
 -- ---------------------------------------------------------------------
 -- Computability (page 32, clauses (1)-(4)).
@@ -318,17 +365,87 @@ ComputableE-at σ ε P = GComputable {σ} {ε} P (λ _ g → LossComputable P g)
 -- justification for defining Computable by recursion on m(-) rather
 -- than on σ's bare syntax.
 ComputableV-acc : (σ : Ty) → Acc _<M_ (mVal σ) → Val ∅ σ → Set
+-- PHASE 3 NOTE (forward declaration): ComputableV's own TYPE signature
+-- is declared here, ahead of ComputableV-acc's own clauses, purely so
+-- those clauses can call ComputableV ITSELF (its "clean", top-level
+-- form, ComputableV σ = ComputableV-acc σ (<M-wellFounded (mVal σ)))
+-- rather than threading a SHARED nested Acc witness (`rs`) through
+-- EVERY recursive call via `rs (mVal-X-decrease ...)`, the way an
+-- earlier version of this file (and the paper's own m(-)-based
+-- justification) suggested. That shared-`rs` style is what the
+-- comment immediately below this one used to defend at length; it had
+-- to be abandoned for a very concrete, empirically-confirmed reason:
+-- once ComputableV-acc has TWO OR MORE clauses that (a) pattern-match
+-- `(acc rs)` AND (b) feed `rs` into a genuine recursive call, Agda's
+-- elaborator -- isolated and reproduced via bisection against a
+-- scratch copy of this file, varying ONE clause at a time -- either
+-- (i) fails to resolve the implicit Acc witnesses needed at every
+-- OTHER, completely unrelated use site of ComputableV-acc throughout
+-- this whole mutual block (an UnsolvedConstraints/
+-- UnsolvedMetaVariables cascade spanning hundreds of lines), or,
+-- once those sites are given their witnesses explicitly, (ii) still
+-- fails with a genuine UnequalTerms error precisely because two
+-- *different*, independently-elaborated `rs`-based Acc proofs for the
+-- same relation/element need not be *syntactically* identical (only
+-- propositionally so, via Acc-irrelevant) -- and once enough such
+-- proofs coexist, Agda's conversion checker stops being able to see
+-- through the mismatch on its own. Routing EVERY recursive call
+-- through the single, uniform `ComputableV`/`ComputableE-at _ _
+-- ComputableV` name instead sidesteps this entirely: there is then
+-- only ONE canonical way any value's computability is stated (always
+-- relative to the SAME `<M-wellFounded (mVal _)`, never a derived,
+-- shared `rs`), so there is nothing left for two independently-built
+-- witnesses to disagree about. The Acc argument of ComputableV-acc
+-- itself is accordingly never pattern-matched below (every clause
+-- takes `_` for it) -- it survives only because ComputableV-acc-conv/
+-- -rev and every downstream lemma built on top of them (ComputableV-
+-- pair-proj/-intro, lemma-A6 onward) still index by it, and reworking
+-- all of those to drop the index is far more invasive than keeping a
+-- harmlessly-unused parameter here.
+ComputableV : (σ : Ty) → Val ∅ σ → Set
 ComputableV-acc (gnd γ)     _       v             = ⊤
 ComputableV-acc (σ `× τ)    _       (vvar ())
-ComputableV-acc (σ `× τ)    (acc rs) (vpair v1 v2) =
-  ComputableV-acc σ (rs (mVal-pair-decrease1 σ τ)) v1 ×
-  ComputableV-acc τ (rs (mVal-pair-decrease2 σ τ)) v2
+ComputableV-acc (σ `× τ)    _       (vpair v1 v2) =
+  ComputableV σ v1 × ComputableV τ v2
+-- PHASE 3 EXTENSION. Per the paper's own Fundamental Lemma case 1(d)
+-- ("If e has one of the forms inl(v), inr(v), succ(v), or cons(v1,v2)
+-- the proof is similar to the previous case [[the tuple case]]"):
+-- inl/inr genuinely recurse into their payload, exactly like vpair
+-- above (via the same `ComputableV` route, per the note above).
+ComputableV-acc (σ `+ τ)    _       (vvar ())
+ComputableV-acc (σ `+ τ)    _       (vinl v)      = ComputableV σ v
+ComputableV-acc (σ `+ τ)    _       (vinr v)      = ComputableV τ v
+-- `nat` is treated exactly like a ground type (gnd γ's own clause
+-- above): unlike σ`+τ/list σ, nat's own grammar (zero/succ(v)) never
+-- embeds a value of any OTHER type -- a nat value is just "more nat",
+-- with nothing of genuinely higher type nested inside it for
+-- computability to even ask about -- so, matching the paper's own
+-- "zero... is a computable value by definition" (case 1(b)) and
+-- "succ(v)... similar" (case 1(d), where "similar" is vacuously true
+-- here precisely because there is no OTHER type's computability to
+-- recurse into), ComputableV-acc is unconditionally ⊤ at nat, with no
+-- pattern-match on the value at all (same shape as the gnd γ clause).
+ComputableV-acc nat         _       v             = ⊤
+-- `list σ`: v1's own computability is ComputableV σ v1, exactly
+-- mirroring vpair's first-component case. v2's -- the list's own
+-- tail, of the SAME type `list σ` -- is ComputableV (list σ) v2: this
+-- is no longer a decrease of ComputableV-acc's own Acc argument (that
+-- argument is never inspected here at all, per the note above) but an
+-- ORDINARY recursive call, structurally decreasing on the VALUE (v2 is
+-- a literal subterm of vcons v1 v2) across the ComputableV-acc/
+-- ComputableV mutual pair -- Agda's termination checker accepts this
+-- directly, the same way it already accepts any other structurally
+-- recursive mutual pair, with no Acc/well-foundedness machinery
+-- needed for this particular decrease at all.
+ComputableV-acc (list σ)    _       (vvar ())
+ComputableV-acc (list σ)    _       vnil          = ⊤
+ComputableV-acc (list σ)    _       (vcons v1 v2) =
+  ComputableV σ v1 × ComputableV (list σ) v2
 ComputableV-acc (σ ⇒ τ ! ε) _       (vvar ())
-ComputableV-acc (σ ⇒ τ ! ε) (acc rs) (vabs e)      =
-  ∀ {v' : Val ∅ σ} → ComputableV-acc σ (rs (mVal-arrow-decrease-dom σ τ ε)) v'
-                    → ComputableE-at τ ε (ComputableV-acc τ (rs (mVal-arrow-decrease-cod σ τ ε))) (e [ v' ])
+ComputableV-acc (σ ⇒ τ ! ε) _       (vabs e)      =
+  ∀ {v' : Val ∅ σ} → ComputableV σ v'
+                    → ComputableE-at τ ε (ComputableV τ) (e [ v' ])
 
-ComputableV : (σ : Ty) → Val ∅ σ → Set
 ComputableV σ = ComputableV-acc σ (<M-wellFounded (mVal σ))
 
 ComputableE : (σ : Ty) (ε : EffCxt) → ∅ ⊢ σ ! ε → Set
@@ -483,6 +600,14 @@ Handler-eq : ∀ {Γ ℓ par σ σ' ε} {h1 h2 : Handler Γ ℓ par σ σ' ε}
            → (∀ op → clause h1 op ≡ clause h2 op) → ret h1 ≡ ret h2 → h1 ≡ h2
 Handler-eq {h1 = h1} {h2 = h2} cEq rEq = cong₂ (λ c r → record { clause = c ; ret = r }) (funext cEq) rEq
 
+-- PHASE 3 EXTENSION: the standard library's own PropositionalEquality
+-- only goes up to cong₂ -- needed here for the new three-subterm
+-- formers `cases`/`iter`/`fold`, exactly the same idea as cong₂, one
+-- argument further.
+cong₃ : ∀ {A B C D : Set} (f : A → B → C → D) {x y : A} {u v : B} {p q : C}
+      → x ≡ y → u ≡ v → p ≡ q → f x u p ≡ f y v q
+cong₃ f refl refl refl = refl
+
 -- Every "substitute, given two POINTWISE-equal substitutions" fact
 -- below is proved by structural induction on the term (never by
 -- packaging the two substitutions into one Sub-level `_≡_` and using
@@ -497,6 +622,15 @@ mutual
   subV-cong eq (vgnd x)    = refl
   subV-cong eq (vpair v w) = cong₂ vpair (subV-cong eq v) (subV-cong eq w)
   subV-cong eq (vabs e)    = cong vabs (subE-cong (extS-cong eq) e)
+  -- PHASE 3 EXTENSION: one case per new Val constructor, each
+  -- following vpair's own template exactly (vzero/vnil need no
+  -- recursive call at all, being nullary -- same shape as vgnd above).
+  subV-cong eq (vinl v)    = cong vinl (subV-cong eq v)
+  subV-cong eq (vinr v)    = cong vinr (subV-cong eq v)
+  subV-cong eq vzero       = refl
+  subV-cong eq (vsucc v)   = cong vsucc (subV-cong eq v)
+  subV-cong eq vnil        = refl
+  subV-cong eq (vcons v w) = cong₂ vcons (subV-cong eq v) (subV-cong eq w)
 
   extS-cong : ∀ {Γ Γ' τ0} {σs σs' : Sub Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → σs x ≡ σs' x) → ∀ {τ} (x : (Γ , τ0) ∋ τ) → extS σs x ≡ extS σs' x
   extS-cong eq Z     = refl
@@ -513,7 +647,23 @@ mutual
   subE-cong eq (pair e e₁)      = cong₂ pair (subE-cong eq e) (subE-cong eq e₁)
   subE-cong eq (fst e)          = cong fst (subE-cong eq e)
   subE-cong eq (snd e)          = cong snd (subE-cong eq e)
+  -- PHASE 3 EXTENSION: inl/inr/succ/consE follow pair/fst's own single-
+  -- or double-subterm template directly. `cases` binds one fresh
+  -- variable in EACH of its two branches (exactly like Handler's own
+  -- clause/ret, just one extS deep instead of several), so both
+  -- branches go through `extS-cong eq`, mirroring how vabs's own case
+  -- above uses it for its single binder. `iter`/`fold` bind no
+  -- variables of their own (per Syntax.agda's own comment on `iter`:
+  -- the current grammar has no extra binder on either), so all three
+  -- sub-expressions recurse at the plain, unextended `eq` directly.
   subE-cong eq (app e e₁)       = cong₂ app (subE-cong eq e) (subE-cong eq e₁)
+  subE-cong eq (inl e)          = cong inl (subE-cong eq e)
+  subE-cong eq (inr e)          = cong inr (subE-cong eq e)
+  subE-cong eq (cases e e₁ e₂)  = cong₃ cases (subE-cong eq e) (subE-cong (extS-cong eq) e₁) (subE-cong (extS-cong eq) e₂)
+  subE-cong eq (succ e)         = cong succ (subE-cong eq e)
+  subE-cong eq (iter e₁ e₂ e₃)  = cong₃ iter (subE-cong eq e₁) (subE-cong eq e₂) (subE-cong eq e₃)
+  subE-cong eq (consE e₁ e₂)    = cong₂ consE (subE-cong eq e₁) (subE-cong eq e₂)
+  subE-cong eq (fold e₁ e₂ e₃)  = cong₃ fold (subE-cong eq e₁) (subE-cong eq e₂) (subE-cong eq e₃)
   subE-cong eq (opE m op e)     = cong (opE m op) (subE-cong eq e)
   subE-cong eq (lossE e)        = cong lossE (subE-cong eq e)
   subE-cong eq (thenE s e g)    = cong₂ (thenE s) (subE-cong eq e) (subV-cong eq g)
@@ -553,6 +703,12 @@ mutual
   subV-renV-fuse σs ρ (vabs e)    =
     cong vabs (trans (subE-renE-fuse (extS σs) (extR ρ) e)
                       (subE-cong (extS-extR-pointwise σs ρ) e))
+  subV-renV-fuse σs ρ (vinl v)    = cong vinl (subV-renV-fuse σs ρ v)
+  subV-renV-fuse σs ρ (vinr v)    = cong vinr (subV-renV-fuse σs ρ v)
+  subV-renV-fuse σs ρ vzero       = refl
+  subV-renV-fuse σs ρ (vsucc v)   = cong vsucc (subV-renV-fuse σs ρ v)
+  subV-renV-fuse σs ρ vnil        = refl
+  subV-renV-fuse σs ρ (vcons v w) = cong₂ vcons (subV-renV-fuse σs ρ v) (subV-renV-fuse σs ρ w)
 
   subH-renH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (σs : Sub Γ' Γ'') (ρ : Ren Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
                   → subH σs (renH ρ h) ≡ subH (λ x → σs (ρ x)) h
@@ -570,6 +726,16 @@ mutual
   subE-renE-fuse σs ρ (fst e)          = cong fst (subE-renE-fuse σs ρ e)
   subE-renE-fuse σs ρ (snd e)          = cong snd (subE-renE-fuse σs ρ e)
   subE-renE-fuse σs ρ (app e e₁)       = cong₂ app (subE-renE-fuse σs ρ e) (subE-renE-fuse σs ρ e₁)
+  subE-renE-fuse σs ρ (inl e)          = cong inl (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (inr e)          = cong inr (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (cases e e₁ e₂)  =
+    cong₃ cases (subE-renE-fuse σs ρ e)
+                (trans (subE-renE-fuse (extS σs) (extR ρ) e₁) (subE-cong (extS-extR-pointwise σs ρ) e₁))
+                (trans (subE-renE-fuse (extS σs) (extR ρ) e₂) (subE-cong (extS-extR-pointwise σs ρ) e₂))
+  subE-renE-fuse σs ρ (succ e)         = cong succ (subE-renE-fuse σs ρ e)
+  subE-renE-fuse σs ρ (iter e₁ e₂ e₃)  = cong₃ iter (subE-renE-fuse σs ρ e₁) (subE-renE-fuse σs ρ e₂) (subE-renE-fuse σs ρ e₃)
+  subE-renE-fuse σs ρ (consE e₁ e₂)    = cong₂ consE (subE-renE-fuse σs ρ e₁) (subE-renE-fuse σs ρ e₂)
+  subE-renE-fuse σs ρ (fold e₁ e₂ e₃)  = cong₃ fold (subE-renE-fuse σs ρ e₁) (subE-renE-fuse σs ρ e₂) (subE-renE-fuse σs ρ e₃)
   subE-renE-fuse σs ρ (opE m op e)     = cong (opE m op) (subE-renE-fuse σs ρ e)
   subE-renE-fuse σs ρ (lossE e)        = cong lossE (subE-renE-fuse σs ρ e)
   subE-renE-fuse σs ρ (thenE s e g)    = cong₂ (thenE s) (subE-renE-fuse σs ρ e) (subV-renV-fuse σs ρ g)
@@ -602,6 +768,12 @@ mutual
   subV-idSub (vgnd x)    = refl
   subV-idSub (vpair v w) = cong₂ vpair (subV-idSub v) (subV-idSub w)
   subV-idSub (vabs e)    = cong vabs (trans (subE-cong extS-idSub-pointwise e) (subE-idSub e))
+  subV-idSub (vinl v)    = cong vinl (subV-idSub v)
+  subV-idSub (vinr v)    = cong vinr (subV-idSub v)
+  subV-idSub vzero       = refl
+  subV-idSub (vsucc v)   = cong vsucc (subV-idSub v)
+  subV-idSub vnil        = refl
+  subV-idSub (vcons v w) = cong₂ vcons (subV-idSub v) (subV-idSub w)
 
   subH-idSub : ∀ {Γ ℓ par σ σ' ε} (h : Handler Γ ℓ par σ σ' ε) → subH idSub h ≡ h
   subH-idSub h = Handler-eq
@@ -615,6 +787,16 @@ mutual
   subE-idSub (fst e)          = cong fst (subE-idSub e)
   subE-idSub (snd e)          = cong snd (subE-idSub e)
   subE-idSub (app e e₁)       = cong₂ app (subE-idSub e) (subE-idSub e₁)
+  subE-idSub (inl e)          = cong inl (subE-idSub e)
+  subE-idSub (inr e)          = cong inr (subE-idSub e)
+  subE-idSub (cases e e₁ e₂)  =
+    cong₃ cases (subE-idSub e)
+                (trans (subE-cong extS-idSub-pointwise e₁) (subE-idSub e₁))
+                (trans (subE-cong extS-idSub-pointwise e₂) (subE-idSub e₂))
+  subE-idSub (succ e)         = cong succ (subE-idSub e)
+  subE-idSub (iter e₁ e₂ e₃)  = cong₃ iter (subE-idSub e₁) (subE-idSub e₂) (subE-idSub e₃)
+  subE-idSub (consE e₁ e₂)    = cong₂ consE (subE-idSub e₁) (subE-idSub e₂)
+  subE-idSub (fold e₁ e₂ e₃)  = cong₃ fold (subE-idSub e₁) (subE-idSub e₂) (subE-idSub e₃)
   subE-idSub (opE m op e)     = cong (opE m op) (subE-idSub e)
   subE-idSub (lossE e)        = cong lossE (subE-idSub e)
   subE-idSub (thenE s e g)    = cong₂ (thenE s) (subE-idSub e) (subV-idSub g)
@@ -848,6 +1030,30 @@ weaken1-sub1-cancelE v e = trans (subE-renE-fuse (cons v idSub) S e) (subE-idSub
 weaken1-sub1-cancelH : ∀ {Γ ℓ par σ σ' ε τ} (v : Val Γ τ) (h : Handler Γ ℓ par σ σ' ε) → subH (cons v idSub) (renH S h) ≡ h
 weaken1-sub1-cancelH v h = trans (subH-renH-fuse (cons v idSub) S h) (subH-idSub h)
 
+-- PHASE 3 EXTENSION: `F-cases`'s own two branches live one binder
+-- DEEPER than the frame's own hole (e1/e2 : (Γ,σ0)⊢ρ!ε for F-cases's
+-- own fresh σ0, unrelated to the hole's own type α) -- weaken1F's own
+-- renF clause for F-cases accordingly weakens them via `extR S`, not
+-- plain `S` (Syntax.agda... err OpSem.agda's renF: `F-cases
+-- (renE (extR ρ) e₁) (renE (extR ρ) e₂)`), so cancelling that
+-- weakening back against `cons v idSub` needs the one-binder-deeper
+-- analogue of weaken1-sub1-cancelE above: substitute with `extS
+-- (cons v idSub)` instead of plain `cons v idSub`, matching extR's own
+-- one-binder-deeper shift. The pointwise fact needed is literally
+-- extS-idSub-pointwise's own shape composed with cons's S-clause, both
+-- unfolding by refl at each variable (Z: both sides are `vvar Z`
+-- directly; S x: both sides reduce to `renV S (idSub x)` i.e.
+-- `vvar (S x)`, definitionally, exactly as the analogous Z/S cases of
+-- extS-idSub-pointwise do).
+weaken1-sub1-cancelE-ext : ∀ {Γ σ0 τ0 τ ε} (v : Val Γ σ0) (e : (Γ , τ0) ⊢ τ ! ε)
+                          → subE (extS (cons v idSub)) (renE (extR S) e) ≡ e
+weaken1-sub1-cancelE-ext v e =
+  trans (subE-renE-fuse (extS (cons v idSub)) (extR S) e) (trans (subE-cong pointwise e) (subE-idSub e))
+  where
+  pointwise : ∀ {τ'} (x : (_ , _) ∋ τ') → extS (cons v idSub) (extR S x) ≡ idSub x
+  pointwise Z     = refl
+  pointwise (S x) = refl
+
 -- The other substitution gap Lemma A.9 needs: plugging a FRESH bound
 -- variable into a (weakened) frame's hole, then substituting that
 -- variable back to v, collapses to plugging v into the frame directly
@@ -868,6 +1074,30 @@ subE-plugF-weaken1F F-loss          v = refl
 subE-plugF-weaken1F (F-handleP h b) v = cong₂ (λ h' b' → handleE h' (val v) b') (weaken1-sub1-cancelH v h) (weaken1-sub1-cancelE v b)
 subE-plugF-weaken1F (F-plusL e)     v = cong (plusE (val v)) (weaken1-sub1-cancelE v e)
 subE-plugF-weaken1F (F-plusR w)     v = cong (λ w' → plusE (val w') (val v)) (weaken1V-sub1-cancel v w)
+-- PHASE 3 EXTENSION: F-inl/F-inr/F-succ carry no subcomponent at all
+-- (same shape as F-fst/F-snd above), so both sides reduce to the same
+-- term definitionally. F-consL/F-consR parallel F-pairL/F-pairR
+-- exactly (one expression / one value field respectively). F-cases
+-- needs weaken1-sub1-cancelE-ext (just above) for EACH of its two
+-- branches, since they sit one binder deeper than the hole. F-iter*/
+-- F-fold* parallel each other exactly (iter/fold share the same
+-- "value args to the left of the hole, expression args to the right"
+-- shape at each of their three argument positions) -- a plain value
+-- field cancels via weaken1V-sub1-cancel, a plain expression field via
+-- weaken1-sub1-cancelE, numbered 1/2/3 by argument position exactly as
+-- Frame's own F-iter1/2/3 constructors are.
+subE-plugF-weaken1F F-inl           v = refl
+subE-plugF-weaken1F F-inr           v = refl
+subE-plugF-weaken1F (F-cases e₁ e₂) v = cong₂ (λ e₁' e₂' → cases (val v) e₁' e₂') (weaken1-sub1-cancelE-ext v e₁) (weaken1-sub1-cancelE-ext v e₂)
+subE-plugF-weaken1F F-succ          v = refl
+subE-plugF-weaken1F (F-consL e)     v = cong (consE (val v)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F (F-consR w)     v = cong (λ w' → consE (val w') (val v)) (weaken1V-sub1-cancel v w)
+subE-plugF-weaken1F (F-iter1 e₂ e₃) v = cong₂ (λ e₂' e₃' → iter (val v) e₂' e₃') (weaken1-sub1-cancelE v e₂) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F (F-iter2 v₁ e₃) v = cong₂ (λ v₁' e₃' → iter (val v₁') (val v) e₃') (weaken1V-sub1-cancel v v₁) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F (F-iter3 v₁ v₂) v = cong₂ (λ v₁' v₂' → iter (val v₁') (val v₂') (val v)) (weaken1V-sub1-cancel v v₁) (weaken1V-sub1-cancel v v₂)
+subE-plugF-weaken1F (F-fold1 e₂ e₃) v = cong₂ (λ e₂' e₃' → fold (val v) e₂' e₃') (weaken1-sub1-cancelE v e₂) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F (F-fold2 v₁ e₃) v = cong₂ (λ v₁' e₃' → fold (val v₁') (val v) e₃') (weaken1V-sub1-cancel v v₁) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F (F-fold3 v₁ v₂) v = cong₂ (λ v₁' v₂' → fold (val v₁') (val v₂') (val v)) (weaken1V-sub1-cancel v v₁) (weaken1V-sub1-cancel v v₂)
 
 -- Lemma A.9: if F is a regular frame such that F[v]:τ!ε is (fully)
 -- computable for every computable v:α, then F[e] is (fully) computable
@@ -992,6 +1222,12 @@ mutual
   renV-cong eq (vgnd x)    = refl
   renV-cong eq (vpair v w) = cong₂ vpair (renV-cong eq v) (renV-cong eq w)
   renV-cong eq (vabs e)    = cong vabs (renE-cong (extR-cong eq) e)
+  renV-cong eq (vinl v)    = cong vinl (renV-cong eq v)
+  renV-cong eq (vinr v)    = cong vinr (renV-cong eq v)
+  renV-cong eq vzero       = refl
+  renV-cong eq (vsucc v)   = cong vsucc (renV-cong eq v)
+  renV-cong eq vnil        = refl
+  renV-cong eq (vcons v w) = cong₂ vcons (renV-cong eq v) (renV-cong eq w)
 
   extR-cong : ∀ {Γ Γ' τ0} {ρ ρ' : Ren Γ Γ'} → (∀ {τ} (x : Γ ∋ τ) → ρ x ≡ ρ' x) → ∀ {τ} (x : (Γ , τ0) ∋ τ) → extR ρ x ≡ extR ρ' x
   extR-cong eq Z     = refl
@@ -1009,6 +1245,13 @@ mutual
   renE-cong eq (fst e)          = cong fst (renE-cong eq e)
   renE-cong eq (snd e)          = cong snd (renE-cong eq e)
   renE-cong eq (app e e₁)       = cong₂ app (renE-cong eq e) (renE-cong eq e₁)
+  renE-cong eq (inl e)          = cong inl (renE-cong eq e)
+  renE-cong eq (inr e)          = cong inr (renE-cong eq e)
+  renE-cong eq (cases e e₁ e₂)  = cong₃ cases (renE-cong eq e) (renE-cong (extR-cong eq) e₁) (renE-cong (extR-cong eq) e₂)
+  renE-cong eq (succ e)         = cong succ (renE-cong eq e)
+  renE-cong eq (iter e₁ e₂ e₃)  = cong₃ iter (renE-cong eq e₁) (renE-cong eq e₂) (renE-cong eq e₃)
+  renE-cong eq (consE e₁ e₂)    = cong₂ consE (renE-cong eq e₁) (renE-cong eq e₂)
+  renE-cong eq (fold e₁ e₂ e₃)  = cong₃ fold (renE-cong eq e₁) (renE-cong eq e₂) (renE-cong eq e₃)
   renE-cong eq (opE m op e)     = cong (opE m op) (renE-cong eq e)
   renE-cong eq (lossE e)        = cong lossE (renE-cong eq e)
   renE-cong eq (thenE s e g)    = cong₂ (thenE s) (renE-cong eq e) (renV-cong eq g)
@@ -1048,6 +1291,12 @@ mutual
   renV-renV-fuse ρ2 ρ1 (vabs e)    =
     cong vabs (trans (renE-renE-fuse (extR ρ2) (extR ρ1) e)
                       (renE-cong (extR-extR-pointwise ρ2 ρ1) e))
+  renV-renV-fuse ρ2 ρ1 (vinl v)    = cong vinl (renV-renV-fuse ρ2 ρ1 v)
+  renV-renV-fuse ρ2 ρ1 (vinr v)    = cong vinr (renV-renV-fuse ρ2 ρ1 v)
+  renV-renV-fuse ρ2 ρ1 vzero       = refl
+  renV-renV-fuse ρ2 ρ1 (vsucc v)   = cong vsucc (renV-renV-fuse ρ2 ρ1 v)
+  renV-renV-fuse ρ2 ρ1 vnil        = refl
+  renV-renV-fuse ρ2 ρ1 (vcons v w) = cong₂ vcons (renV-renV-fuse ρ2 ρ1 v) (renV-renV-fuse ρ2 ρ1 w)
 
   renH-renH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (ρ2 : Ren Γ' Γ'') (ρ1 : Ren Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
                   → renH ρ2 (renH ρ1 h) ≡ renH (λ x → ρ2 (ρ1 x)) h
@@ -1065,6 +1314,16 @@ mutual
   renE-renE-fuse ρ2 ρ1 (fst e)          = cong fst (renE-renE-fuse ρ2 ρ1 e)
   renE-renE-fuse ρ2 ρ1 (snd e)          = cong snd (renE-renE-fuse ρ2 ρ1 e)
   renE-renE-fuse ρ2 ρ1 (app e e₁)       = cong₂ app (renE-renE-fuse ρ2 ρ1 e) (renE-renE-fuse ρ2 ρ1 e₁)
+  renE-renE-fuse ρ2 ρ1 (inl e)          = cong inl (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (inr e)          = cong inr (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (cases e e₁ e₂)  =
+    cong₃ cases (renE-renE-fuse ρ2 ρ1 e)
+                (trans (renE-renE-fuse (extR ρ2) (extR ρ1) e₁) (renE-cong (extR-extR-pointwise ρ2 ρ1) e₁))
+                (trans (renE-renE-fuse (extR ρ2) (extR ρ1) e₂) (renE-cong (extR-extR-pointwise ρ2 ρ1) e₂))
+  renE-renE-fuse ρ2 ρ1 (succ e)         = cong succ (renE-renE-fuse ρ2 ρ1 e)
+  renE-renE-fuse ρ2 ρ1 (iter e₁ e₂ e₃)  = cong₃ iter (renE-renE-fuse ρ2 ρ1 e₁) (renE-renE-fuse ρ2 ρ1 e₂) (renE-renE-fuse ρ2 ρ1 e₃)
+  renE-renE-fuse ρ2 ρ1 (consE e₁ e₂)    = cong₂ consE (renE-renE-fuse ρ2 ρ1 e₁) (renE-renE-fuse ρ2 ρ1 e₂)
+  renE-renE-fuse ρ2 ρ1 (fold e₁ e₂ e₃)  = cong₃ fold (renE-renE-fuse ρ2 ρ1 e₁) (renE-renE-fuse ρ2 ρ1 e₂) (renE-renE-fuse ρ2 ρ1 e₃)
   renE-renE-fuse ρ2 ρ1 (opE m op e)     = cong (opE m op) (renE-renE-fuse ρ2 ρ1 e)
   renE-renE-fuse ρ2 ρ1 (lossE e)        = cong lossE (renE-renE-fuse ρ2 ρ1 e)
   renE-renE-fuse ρ2 ρ1 (thenE s e g)    = cong₂ (thenE s) (renE-renE-fuse ρ2 ρ1 e) (renV-renV-fuse ρ2 ρ1 g)
@@ -1111,6 +1370,12 @@ mutual
   renV-subV-fuse ρ σs (vabs e)    =
     cong vabs (trans (renE-subE-fuse (extR ρ) (extS σs) e)
                       (subE-cong (extR-extS-pointwise ρ σs) e))
+  renV-subV-fuse ρ σs (vinl v)    = cong vinl (renV-subV-fuse ρ σs v)
+  renV-subV-fuse ρ σs (vinr v)    = cong vinr (renV-subV-fuse ρ σs v)
+  renV-subV-fuse ρ σs vzero       = refl
+  renV-subV-fuse ρ σs (vsucc v)   = cong vsucc (renV-subV-fuse ρ σs v)
+  renV-subV-fuse ρ σs vnil        = refl
+  renV-subV-fuse ρ σs (vcons v w) = cong₂ vcons (renV-subV-fuse ρ σs v) (renV-subV-fuse ρ σs w)
 
   renH-subH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (ρ : Ren Γ' Γ'') (σs : Sub Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
                   → renH ρ (subH σs h) ≡ subH (λ x → renV ρ (σs x)) h
@@ -1128,6 +1393,16 @@ mutual
   renE-subE-fuse ρ σs (fst e)          = cong fst (renE-subE-fuse ρ σs e)
   renE-subE-fuse ρ σs (snd e)          = cong snd (renE-subE-fuse ρ σs e)
   renE-subE-fuse ρ σs (app e e₁)       = cong₂ app (renE-subE-fuse ρ σs e) (renE-subE-fuse ρ σs e₁)
+  renE-subE-fuse ρ σs (inl e)          = cong inl (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (inr e)          = cong inr (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (cases e e₁ e₂)  =
+    cong₃ cases (renE-subE-fuse ρ σs e)
+                (trans (renE-subE-fuse (extR ρ) (extS σs) e₁) (subE-cong (extR-extS-pointwise ρ σs) e₁))
+                (trans (renE-subE-fuse (extR ρ) (extS σs) e₂) (subE-cong (extR-extS-pointwise ρ σs) e₂))
+  renE-subE-fuse ρ σs (succ e)         = cong succ (renE-subE-fuse ρ σs e)
+  renE-subE-fuse ρ σs (iter e₁ e₂ e₃)  = cong₃ iter (renE-subE-fuse ρ σs e₁) (renE-subE-fuse ρ σs e₂) (renE-subE-fuse ρ σs e₃)
+  renE-subE-fuse ρ σs (consE e₁ e₂)    = cong₂ consE (renE-subE-fuse ρ σs e₁) (renE-subE-fuse ρ σs e₂)
+  renE-subE-fuse ρ σs (fold e₁ e₂ e₃)  = cong₃ fold (renE-subE-fuse ρ σs e₁) (renE-subE-fuse ρ σs e₂) (renE-subE-fuse ρ σs e₃)
   renE-subE-fuse ρ σs (opE m op e)     = cong (opE m op) (renE-subE-fuse ρ σs e)
   renE-subE-fuse ρ σs (lossE e)        = cong lossE (renE-subE-fuse ρ σs e)
   renE-subE-fuse ρ σs (thenE s e g)    = cong₂ (thenE s) (renE-subE-fuse ρ σs e) (renV-subV-fuse ρ σs g)
@@ -1170,6 +1445,12 @@ mutual
   subV-subV-fuse σs2 σs1 (vabs e)    =
     cong vabs (trans (subE-subE-fuse (extS σs2) (extS σs1) e)
                       (subE-cong (extS-extS-pointwise σs2 σs1) e))
+  subV-subV-fuse σs2 σs1 (vinl v)    = cong vinl (subV-subV-fuse σs2 σs1 v)
+  subV-subV-fuse σs2 σs1 (vinr v)    = cong vinr (subV-subV-fuse σs2 σs1 v)
+  subV-subV-fuse σs2 σs1 vzero       = refl
+  subV-subV-fuse σs2 σs1 (vsucc v)   = cong vsucc (subV-subV-fuse σs2 σs1 v)
+  subV-subV-fuse σs2 σs1 vnil        = refl
+  subV-subV-fuse σs2 σs1 (vcons v w) = cong₂ vcons (subV-subV-fuse σs2 σs1 v) (subV-subV-fuse σs2 σs1 w)
 
   subH-subH-fuse : ∀ {Γ Γ' Γ'' ℓ par σ σ' ε} (σs2 : Sub Γ' Γ'') (σs1 : Sub Γ Γ') (h : Handler Γ ℓ par σ σ' ε)
                   → subH σs2 (subH σs1 h) ≡ subH (λ x → subV σs2 (σs1 x)) h
@@ -1187,6 +1468,16 @@ mutual
   subE-subE-fuse σs2 σs1 (fst e)          = cong fst (subE-subE-fuse σs2 σs1 e)
   subE-subE-fuse σs2 σs1 (snd e)          = cong snd (subE-subE-fuse σs2 σs1 e)
   subE-subE-fuse σs2 σs1 (app e e₁)       = cong₂ app (subE-subE-fuse σs2 σs1 e) (subE-subE-fuse σs2 σs1 e₁)
+  subE-subE-fuse σs2 σs1 (inl e)          = cong inl (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (inr e)          = cong inr (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (cases e e₁ e₂)  =
+    cong₃ cases (subE-subE-fuse σs2 σs1 e)
+                (trans (subE-subE-fuse (extS σs2) (extS σs1) e₁) (subE-cong (extS-extS-pointwise σs2 σs1) e₁))
+                (trans (subE-subE-fuse (extS σs2) (extS σs1) e₂) (subE-cong (extS-extS-pointwise σs2 σs1) e₂))
+  subE-subE-fuse σs2 σs1 (succ e)         = cong succ (subE-subE-fuse σs2 σs1 e)
+  subE-subE-fuse σs2 σs1 (iter e₁ e₂ e₃)  = cong₃ iter (subE-subE-fuse σs2 σs1 e₁) (subE-subE-fuse σs2 σs1 e₂) (subE-subE-fuse σs2 σs1 e₃)
+  subE-subE-fuse σs2 σs1 (consE e₁ e₂)    = cong₂ consE (subE-subE-fuse σs2 σs1 e₁) (subE-subE-fuse σs2 σs1 e₂)
+  subE-subE-fuse σs2 σs1 (fold e₁ e₂ e₃)  = cong₃ fold (subE-subE-fuse σs2 σs1 e₁) (subE-subE-fuse σs2 σs1 e₂) (subE-subE-fuse σs2 σs1 e₃)
   subE-subE-fuse σs2 σs1 (opE m op e)     = cong (opE m op) (subE-subE-fuse σs2 σs1 e)
   subE-subE-fuse σs2 σs1 (lossE e)        = cong lossE (subE-subE-fuse σs2 σs1 e)
   subE-subE-fuse σs2 σs1 (thenE s e g)    = cong₂ (thenE s) (subE-subE-fuse σs2 σs1 e) (subV-subV-fuse σs2 σs1 g)
@@ -1237,6 +1528,28 @@ subE-plugF-weaken1F-gen F-loss          v X = refl
 subE-plugF-weaken1F-gen (F-handleP h b) v X = cong₂ (λ h' b' → handleE h' (subE (cons v idSub) X) b') (weaken1-sub1-cancelH v h) (weaken1-sub1-cancelE v b)
 subE-plugF-weaken1F-gen (F-plusL e)     v X = cong (plusE (subE (cons v idSub) X)) (weaken1-sub1-cancelE v e)
 subE-plugF-weaken1F-gen (F-plusR w)     v X = cong (λ w' → plusE (val w') (subE (cons v idSub) X)) (weaken1V-sub1-cancel v w)
+-- PHASE 3 EXTENSION: same 12 new cases as subE-plugF-weaken1F above,
+-- just with the generic sub-expression X (already substituted) in
+-- place of that lemma's own `val v` throughout.
+subE-plugF-weaken1F-gen F-inl           v X = refl
+subE-plugF-weaken1F-gen F-inr           v X = refl
+subE-plugF-weaken1F-gen (F-cases e₁ e₂) v X =
+  cong₂ (λ e₁' e₂' → cases (subE (cons v idSub) X) e₁' e₂') (weaken1-sub1-cancelE-ext v e₁) (weaken1-sub1-cancelE-ext v e₂)
+subE-plugF-weaken1F-gen F-succ          v X = refl
+subE-plugF-weaken1F-gen (F-consL e)     v X = cong (consE (subE (cons v idSub) X)) (weaken1-sub1-cancelE v e)
+subE-plugF-weaken1F-gen (F-consR w)     v X = cong (λ w' → consE (val w') (subE (cons v idSub) X)) (weaken1V-sub1-cancel v w)
+subE-plugF-weaken1F-gen (F-iter1 e₂ e₃) v X =
+  cong₂ (λ e₂' e₃' → iter (subE (cons v idSub) X) e₂' e₃') (weaken1-sub1-cancelE v e₂) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F-gen (F-iter2 v₁ e₃) v X =
+  cong₂ (λ v₁' e₃' → iter (val v₁') (subE (cons v idSub) X) e₃') (weaken1V-sub1-cancel v v₁) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F-gen (F-iter3 v₁ v₂) v X =
+  cong₂ (λ v₁' v₂' → iter (val v₁') (val v₂') (subE (cons v idSub) X)) (weaken1V-sub1-cancel v v₁) (weaken1V-sub1-cancel v v₂)
+subE-plugF-weaken1F-gen (F-fold1 e₂ e₃) v X =
+  cong₂ (λ e₂' e₃' → fold (subE (cons v idSub) X) e₂' e₃') (weaken1-sub1-cancelE v e₂) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F-gen (F-fold2 v₁ e₃) v X =
+  cong₂ (λ v₁' e₃' → fold (val v₁') (subE (cons v idSub) X) e₃') (weaken1V-sub1-cancel v v₁) (weaken1-sub1-cancelE v e₃)
+subE-plugF-weaken1F-gen (F-fold3 v₁ v₂) v X =
+  cong₂ (λ v₁' v₂' → fold (val v₁') (val v₂') (subE (cons v idSub) X)) (weaken1V-sub1-cancel v v₁) (weaken1V-sub1-cancel v v₂)
 
 subE-plugS-weaken1S-gen : ∀ {α τ ε ε' τ0} (s : SFrame ∅ α ε τ ε') (v : Val ∅ τ0) (X : (∅ , τ0) ⊢ α ! ε)
                          → subE (cons v idSub) (plugS (renS S s) X) ≡ plugS s (subE (cons v idSub) X)
@@ -1268,6 +1581,22 @@ Frame-amb-eq F-loss          = refl
 Frame-amb-eq (F-handleP h b) = refl
 Frame-amb-eq (F-plusL e)     = refl
 Frame-amb-eq (F-plusR v)     = refl
+-- PHASE 3 EXTENSION: every new regular frame is likewise ambient-
+-- preserving (none of inl/inr/cases/succ/consE/iter/fold's own regular
+-- frames change the effect context either, exactly like every
+-- existing constructor above).
+Frame-amb-eq F-inl           = refl
+Frame-amb-eq F-inr           = refl
+Frame-amb-eq (F-cases e₁ e₂) = refl
+Frame-amb-eq F-succ          = refl
+Frame-amb-eq (F-consL e)     = refl
+Frame-amb-eq (F-consR v)     = refl
+Frame-amb-eq (F-iter1 e₂ e₃) = refl
+Frame-amb-eq (F-iter2 v₁ e₃) = refl
+Frame-amb-eq (F-iter3 v₁ v₂) = refl
+Frame-amb-eq (F-fold1 e₂ e₃) = refl
+Frame-amb-eq (F-fold2 v₁ e₃) = refl
+Frame-amb-eq (F-fold3 v₁ v₂) = refl
 
 weaken1K-sub1-plugK : ∀ {α εα σ ε τ0} (v : Val ∅ τ0) (k : ContCxt ∅ α εα σ ε) (e : (∅ , τ0) ⊢ α ! εα)
                      → subE (cons v idSub) (plugK (weaken1K k) e) ≡ plugK k (subE (cons v idSub) e)
@@ -1359,13 +1688,54 @@ ComputableV-acc-conv {σ} {accX} = subst (λ a → ComputableV-acc σ a _) (Acc-
 ComputableV-acc-conv-rev : ∀ {σ} {accX : Acc _<M_ (mVal σ)} {v : Val ∅ σ} → ComputableV σ v → ComputableV-acc σ accX v
 ComputableV-acc-conv-rev {σ} {accX} = subst (λ a → ComputableV-acc σ a _) (Acc-irrelevant (<M-wellFounded (mVal σ)) accX)
 
+-- PHASE 3 NOTE: now that ComputableV-acc's own vpair/vinl/vinr/vnil/
+-- vcons clauses are stated directly in terms of the clean
+-- `ComputableV` (see the note at ComputableV-acc's own definition --
+-- its Acc argument is never pattern-matched any more), each of
+-- ComputableV-acc σ accP (vpair v1 v2) etc. is ALREADY, definitionally,
+-- exactly ComputableV σ v1 × ComputableV τ v2 etc. -- no
+-- ComputableV-acc-conv/-rev bridging is needed at all any more (that
+-- bridging was needed only back when these clauses threaded a nested,
+-- shared `rs`-based Acc witness through their own recursive calls);
+-- every proj/intro combinator below is accordingly now a plain
+-- identity on whatever the pattern match already hands it.
 ComputableV-pair-proj : ∀ {σ τ} {accP : Acc _<M_ (mVal (σ `× τ))} (v1 : Val ∅ σ) (v2 : Val ∅ τ)
                        → ComputableV-acc (σ `× τ) accP (vpair v1 v2) → ComputableV σ v1 × ComputableV τ v2
-ComputableV-pair-proj {accP = acc rs} v1 v2 (c1 , c2) = ComputableV-acc-conv c1 , ComputableV-acc-conv c2
+ComputableV-pair-proj v1 v2 (c1 , c2) = c1 , c2
 
 ComputableV-pair-intro : ∀ {σ τ} (v1 : Val ∅ σ) (v2 : Val ∅ τ) → ComputableV σ v1 → ComputableV τ v2 → ComputableV (σ `× τ) (vpair v1 v2)
-ComputableV-pair-intro {σ} {τ} v1 v2 c1 c2 with <M-wellFounded (mVal (σ `× τ))
-... | acc rs = ComputableV-acc-conv-rev c1 , ComputableV-acc-conv-rev c2
+ComputableV-pair-intro v1 v2 c1 c2 = c1 , c2
+
+-- The analogous intro/proj combinators for ComputableV-acc's new
+-- σ`+τ/list σ cases, each likewise a plain identity now.
+-- ComputableV-cons-proj2 deliberately returns the WIDE "clean"
+-- ComputableV (list σ): it feeds straight into a further recursive
+-- call to a {list σ}-structurally-recursive helper (fold-Computable,
+-- below), which itself only ever wants the clean, top-level notion,
+-- exactly like every other computability hypothesis in this file.
+ComputableV-inl-proj : ∀ {σ τ} {accX : Acc _<M_ (mVal (σ `+ τ))} (v : Val ∅ σ) → ComputableV-acc (σ `+ τ) accX (vinl v) → ComputableV σ v
+ComputableV-inl-proj v c = c
+
+ComputableV-inr-proj : ∀ {σ τ} {accX : Acc _<M_ (mVal (σ `+ τ))} (v : Val ∅ τ) → ComputableV-acc (σ `+ τ) accX (vinr v) → ComputableV τ v
+ComputableV-inr-proj v c = c
+
+ComputableV-inl-intro : ∀ {σ τ} (v : Val ∅ σ) → ComputableV σ v → ComputableV (σ `+ τ) (vinl v)
+ComputableV-inl-intro v c = c
+
+ComputableV-inr-intro : ∀ {σ τ} (v : Val ∅ τ) → ComputableV τ v → ComputableV (σ `+ τ) (vinr v)
+ComputableV-inr-intro v c = c
+
+ComputableV-cons-proj1 : ∀ {σ} {accX : Acc _<M_ (mVal (list σ))} (v1 : Val ∅ σ) (v2 : Val ∅ (list σ)) → ComputableV-acc (list σ) accX (vcons v1 v2) → ComputableV σ v1
+ComputableV-cons-proj1 v1 v2 (c1 , c2) = c1
+
+ComputableV-cons-proj2 : ∀ {σ} {accX : Acc _<M_ (mVal (list σ))} (v1 : Val ∅ σ) (v2 : Val ∅ (list σ)) → ComputableV-acc (list σ) accX (vcons v1 v2) → ComputableV (list σ) v2
+ComputableV-cons-proj2 v1 v2 (c1 , c2) = c2
+
+ComputableV-nil-intro : ∀ {σ} → ComputableV (list σ) (vnil {σ = σ})
+ComputableV-nil-intro = tt
+
+ComputableV-cons-intro : ∀ {σ} (v1 : Val ∅ σ) (v2 : Val ∅ (list σ)) → ComputableV σ v1 → ComputableV (list σ) v2 → ComputableV (list σ) (vcons v1 v2)
+ComputableV-cons-intro v1 v2 c1 c2 = c1 , c2
 
 -- The same Acc-irrelevance issue recurs one level up: ComputableV's
 -- own arrow case checks its codomain obligation using ITS OWN nested
@@ -1454,9 +1824,14 @@ value-redex-computable {τ = τ} {ε = ε} {e = e} stpGen comp = gc-step nterm' 
 -- conversion is even needed there), which GComputable-antimono then
 -- narrows down to the zeroLC-only instance RComputable asks for,
 -- mirroring RComputable's own local G₀.
+-- PHASE 3 NOTE: ComputableV-acc's own arrow clause is now stated
+-- directly in terms of ComputableV/ComputableE-at _ _ ComputableV (see
+-- the note at its definition), so cg's own domain/codomain already
+-- ARE the clean ComputableV/ComputableE notions -- no ComputableV-
+-- acc-conv-rev/ComputableE-acc-conv-rev bridging is needed any more.
 ComputableV-arrow-apply : ∀ {σ τ ε} {e : (∅ , σ) ⊢ τ ! ε} → ComputableV (σ ⇒ τ ! ε) (vabs e)
                          → ∀ {v : Val ∅ σ} → ComputableV σ v → ComputableE τ ε (e [ v ])
-ComputableV-arrow-apply {σ} {τ} {ε} cg {v} Pv = ComputableE-acc-conv-rev (cg {v} (ComputableV-acc-conv-rev Pv))
+ComputableV-arrow-apply cg {v} Pv = cg {v} Pv
 
 -- Full computability at Loss implies R-computability (the
 -- {zeroLC}-restricted clause-3a notion): clause 4 quantifies over
@@ -1525,6 +1900,37 @@ weaken2-sub2-cancelE v1 v2 e = trans (subE-renE-fuse (cons v2 (cons v1 idSub)) S
 weaken2-sub2-cancelH : ∀ {Γ ℓ par σ σ' ε τ1 τ2} (v1 : Val Γ τ1) (v2 : Val Γ τ2) (h : Handler Γ ℓ par σ σ' ε) → subH (cons v2 (cons v1 idSub)) (renH S (renH S h)) ≡ h
 weaken2-sub2-cancelH v1 v2 h = trans (subH-renH-fuse (cons v2 (cons v1 idSub)) S (renH S h)) (weaken1-sub1-cancelH v1 h)
 
+-- PHASE 3 EXTENSION: the double-weakening, one-binder-deeper analogue
+-- of weaken1-sub1-cancelE-ext above (needed for F-cases's own double-
+-- weakened branches in subE-plugF-weaken2F-gen below), built the exact
+-- same way weaken2-sub2-cancelE/H chain their own single-weakening
+-- counterpart: peel the OUTERMOST weakening via subE-renE-fuse (whose
+-- resulting substitution collapses to `extS (cons v1 idSub)`
+-- definitionally, by cons's own S-clause, exactly as the plain
+-- (non-ext) weaken2-sub2-cancelE's own composition does), then finish
+-- with the single-weakening ext lemma.
+weaken2-sub2-cancelE-ext : ∀ {Γ σ0 τ0 τ1 τ2 ε} (v1 : Val Γ τ1) (v2 : Val Γ τ2) (e : (Γ , τ0) ⊢ σ0 ! ε)
+                          → subE (extS (cons v2 (cons v1 idSub))) (renE (extR S) (renE (extR S) e)) ≡ e
+weaken2-sub2-cancelE-ext {Γ} {σ0} {τ0} {τ1} {τ2} {ε} v1 v2 e =
+  trans (subE-renE-fuse (extS (cons v2 (cons v1 idSub))) (extR S) e1)
+        (trans (subE-cong pointwise e1) (weaken1-sub1-cancelE-ext v1 e))
+  where
+  -- Named/type-ascribed intermediate term, so Agda resolves the
+  -- inner (vs. outer) occurrence of the generic renaming `S`
+  -- unambiguously. As in weaken1-sub1-cancelE-ext itself, the fuse
+  -- step alone only identifies `subE σs (renE ρ e1)` with
+  -- `subE (λ x → σs (ρ x)) e1` -- NOT, by bare refl, with
+  -- `subE (extS (cons v1 idSub)) e1`, since that further identification
+  -- requires case-splitting the (here still abstract/un-instantiated)
+  -- bound variable `x`, which Agda's conversion checker cannot do on
+  -- its own -- hence the explicit `pointwise` bridge below (Z/S both
+  -- by refl, exactly as weaken1-sub1-cancelE-ext's own pointwise does).
+  e1 : ((Γ , τ1) , τ0) ⊢ σ0 ! ε
+  e1 = renE (extR S) e
+  pointwise : ∀ {τ'} (x : ((Γ , τ1) , τ0) ∋ τ') → extS (cons v2 (cons v1 idSub)) (extR S x) ≡ extS (cons v1 idSub) x
+  pointwise Z     = refl
+  pointwise (S x) = refl
+
 -- Double-weakening analogue of weaken1K-sub1-plugK (itself built from
 -- subE-plugF-weaken1F-gen/subE-plugS-weaken1S-gen), mirroring its
 -- structural recursion on K exactly but cancelling TWO weakening
@@ -1546,6 +1952,30 @@ subE-plugF-weaken2F-gen F-loss          v1 v2 X = refl
 subE-plugF-weaken2F-gen (F-handleP h b) v1 v2 X = cong₂ (λ h' b' → handleE h' (subE (cons v2 (cons v1 idSub)) X) b') (weaken2-sub2-cancelH v1 v2 h) (weaken2-sub2-cancelE v1 v2 b)
 subE-plugF-weaken2F-gen (F-plusL e)     v1 v2 X = cong (plusE (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelE v1 v2 e)
 subE-plugF-weaken2F-gen (F-plusR w)     v1 v2 X = cong (λ w' → plusE (val w') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 w)
+-- PHASE 3 EXTENSION: same 12 new cases as subE-plugF-weaken1F-gen
+-- above, just doubly-weakened throughout (weaken2-sub2-cancelV/E in
+-- place of weaken1V-sub1-cancel/weaken1-sub1-cancelE, and
+-- weaken2-sub2-cancelE-ext in place of weaken1-sub1-cancelE-ext for
+-- F-cases's own one-binder-deeper branches).
+subE-plugF-weaken2F-gen F-inl             v1 v2 X = refl
+subE-plugF-weaken2F-gen F-inr             v1 v2 X = refl
+subE-plugF-weaken2F-gen (F-cases e₁ e₂)   v1 v2 X =
+  cong₂ (λ e₁' e₂' → cases (subE (cons v2 (cons v1 idSub)) X) e₁' e₂') (weaken2-sub2-cancelE-ext v1 v2 e₁) (weaken2-sub2-cancelE-ext v1 v2 e₂)
+subE-plugF-weaken2F-gen F-succ            v1 v2 X = refl
+subE-plugF-weaken2F-gen (F-consL e)       v1 v2 X = cong (consE (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelE v1 v2 e)
+subE-plugF-weaken2F-gen (F-consR w)       v1 v2 X = cong (λ w' → consE (val w') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 w)
+subE-plugF-weaken2F-gen (F-iter1 e₂ e₃)   v1 v2 X =
+  cong₂ (λ e₂' e₃' → iter (subE (cons v2 (cons v1 idSub)) X) e₂' e₃') (weaken2-sub2-cancelE v1 v2 e₂) (weaken2-sub2-cancelE v1 v2 e₃)
+subE-plugF-weaken2F-gen (F-iter2 w1 e₃)   v1 v2 X =
+  cong₂ (λ w1' e₃' → iter (val w1') (subE (cons v2 (cons v1 idSub)) X) e₃') (weaken2-sub2-cancelV v1 v2 w1) (weaken2-sub2-cancelE v1 v2 e₃)
+subE-plugF-weaken2F-gen (F-iter3 w1 w2)   v1 v2 X =
+  cong₂ (λ w1' w2' → iter (val w1') (val w2') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 w1) (weaken2-sub2-cancelV v1 v2 w2)
+subE-plugF-weaken2F-gen (F-fold1 e₂ e₃)   v1 v2 X =
+  cong₂ (λ e₂' e₃' → fold (subE (cons v2 (cons v1 idSub)) X) e₂' e₃') (weaken2-sub2-cancelE v1 v2 e₂) (weaken2-sub2-cancelE v1 v2 e₃)
+subE-plugF-weaken2F-gen (F-fold2 w1 e₃)   v1 v2 X =
+  cong₂ (λ w1' e₃' → fold (val w1') (subE (cons v2 (cons v1 idSub)) X) e₃') (weaken2-sub2-cancelV v1 v2 w1) (weaken2-sub2-cancelE v1 v2 e₃)
+subE-plugF-weaken2F-gen (F-fold3 w1 w2)   v1 v2 X =
+  cong₂ (λ w1' w2' → fold (val w1') (val w2') (subE (cons v2 (cons v1 idSub)) X)) (weaken2-sub2-cancelV v1 v2 w1) (weaken2-sub2-cancelV v1 v2 w2)
 
 subE-plugS-weaken2S-gen : ∀ {α τ ε ε' τ1 τ2} (s : SFrame ∅ α ε τ ε') (v1 : Val ∅ τ1) (v2 : Val ∅ τ2) (X : ((∅ , τ1) , τ2) ⊢ α ! ε)
                          → subE (cons v2 (cons v1 idSub)) (plugS (renS S (renS S s)) X) ≡ plugS s (subE (cons v2 (cons v1 idSub)) X)
@@ -1658,26 +2088,30 @@ lemma-A10 {ℓ} {par} {σ} {σ'} {ε} h (hClause , hRet) {e} compE {v0} v0Comp =
       g'-eq : (p : Val ∅ (gnd par)) (y : Val ∅ (gnd (in′ op))) → subV (cons (vpair p y) idSub) g' ≡ g₁
       g'-eq p y = weaken1V-sub1-cancel (vpair p y) g₁
 
+      -- PHASE 3 NOTE: ComputableV-acc's own arrow clause now states its
+      -- codomain obligation directly via ComputableE-at _ _ ComputableV
+      -- (see the note at its own definition), i.e. exactly the clean
+      -- ComputableE σ' ε/ComputableE Loss ε the inner subst already
+      -- produces -- so neither fkComp nor flComp needs the
+      -- ComputableE-acc-conv bridging this used to require.
       fkComp : ComputableV ((gnd par `× gnd (in′ op)) ⇒ σ' ! ε) fk
       fkComp {pyPair} pyComp with val-closed-pair pyPair
       ... | (p , y , refl) =
-              ComputableE-acc-conv
-                (subst (ComputableE σ' ε) (sym (cong₂ (glocalE subX ⊆ᵉ-refl) (handled-eq p y) (g'-eq p y)))
-                      (lemma-A6 subX ⊆ᵉ-refl Gg₁
-                        (GComputable-antimono {σ = σ'} {ε = ε}
-                          {G = λ _ g0 → LossComputable (ComputableV σ') g0} {G' = Gsingle g₁}
-                          (λ { (refl , refl) → Gg₁ })
-                          (handledComp p y (proj₁ (ComputableV-pair-proj p y pyComp)) (proj₂ (ComputableV-pair-proj p y pyComp))))))
+              subst (ComputableE σ' ε) (sym (cong₂ (glocalE subX ⊆ᵉ-refl) (handled-eq p y) (g'-eq p y)))
+                    (lemma-A6 subX ⊆ᵉ-refl Gg₁
+                      (GComputable-antimono {σ = σ'} {ε = ε}
+                        {G = λ _ g0 → LossComputable (ComputableV σ') g0} {G' = Gsingle g₁}
+                        (λ { (refl , refl) → Gg₁ })
+                        (handledComp p y (proj₁ (ComputableV-pair-proj {accP = <M-wellFounded (mVal (gnd par `× gnd (in′ op)))} p y pyComp)) (proj₂ (ComputableV-pair-proj {accP = <M-wellFounded (mVal (gnd par `× gnd (in′ op)))} p y pyComp)))))
       flComp : ComputableV ((gnd par `× gnd (in′ op)) ⇒ Loss ! ε) fl
       flComp {pyPair} pyComp with val-closed-pair pyPair
       ... | (p , y , refl) =
-              ComputableE-acc-conv {accX = <M-wellFounded (mVal Loss)}
-                (subst (ComputableE Loss ε) (sym (cong₂ (thenE subX) (handled-eq p y) (g'-eq p y)))
-                      (lemma-A8-2 subX Gg₁
-                        (GComputable-antimono {σ = σ'} {ε = ε}
-                          {G = λ _ g0 → LossComputable (ComputableV σ') g0} {G' = Gsingle g₁}
-                          (λ { (refl , refl) → Gg₁ })
-                          (handledComp p y (proj₁ (ComputableV-pair-proj p y pyComp)) (proj₂ (ComputableV-pair-proj p y pyComp))))))
+              subst (ComputableE Loss ε) (sym (cong₂ (thenE subX) (handled-eq p y) (g'-eq p y)))
+                    (lemma-A8-2 subX Gg₁
+                      (GComputable-antimono {σ = σ'} {ε = ε}
+                        {G = λ _ g0 → LossComputable (ComputableV σ') g0} {G' = Gsingle g₁}
+                        (λ { (refl , refl) → Gg₁ })
+                        (handledComp p y (proj₁ (ComputableV-pair-proj {accP = <M-wellFounded (mVal (gnd par `× gnd (in′ op)))} p y pyComp)) (proj₂ (ComputableV-pair-proj {accP = <M-wellFounded (mVal (gnd par `× gnd (in′ op)))} p y pyComp)))))
   go (gc-step {e0} nterm ih) {v} vComp = gc-step nterm' step-case
     where
     nterm' : ¬ Terminal (handleE h (val v) e0)
@@ -1766,14 +2200,122 @@ ComputableSub-cons : ∀ {Γ σ} {σs : Sub Γ ∅} {v : Val ∅ σ} → Computa
 ComputableSub-cons Pv Cσs Z     = Pv
 ComputableSub-cons Pv Cσs (S x) = Cσs x
 
+-- ---------------------------------------------------------------------
+-- PHASE 3 EXTENSION: the `iter`/`fold` cases of Lemma A.11-E below need
+-- their OWN, separate induction -- not on Γ/σ/ε/e the way lemma-A11-E's
+-- surrounding mutual recursion works, but directly on the VALUE being
+-- iterated/folded, exactly mirroring the paper's own proof (Fundamental
+-- Lemma, "iter" case: "We proceed by (natural numbers) induction on
+-- v̄1..."; "fold" case: "We proceed by (structural) induction on v̄1...").
+--
+-- Crucially, this is NOT an instance of ComputableV-acc's own
+-- Ty-measured well-founded recursion: vsucc v1's own v1 is again of
+-- type `nat` (mVal nat never decreases under vsucc -- see
+-- ComputableV-acc's own nat-case comment above), and likewise
+-- vcons v1 v2's SECOND component v2 is again of type `list σ` (mVal
+-- (list σ) likewise never decreases under vcons, by the very same
+-- design). So neither helper could be folded into ComputableV-acc's
+-- own recursion even in principle -- they are ordinary, PLAIN
+-- structural recursions on a `Val ∅ nat`/`Val ∅ (list σ)` argument
+-- instead, which Agda's termination checker accepts directly (v1's
+-- own immediate subterm strictly decreases at each recursive call,
+-- with σ/ε and every other argument held fixed throughout).
+iter-Computable : ∀ {σ ε} (v1 : Val ∅ nat) (v2 : Val ∅ σ) (v3 : Val ∅ (σ ⇒ σ ! ε))
+                 → ComputableV σ v2 → ComputableV (σ ⇒ σ ! ε) v3
+                 → ComputableE σ ε (iter (val v1) (val v2) (val v3))
+iter-Computable {σ} {ε} vzero v2 v3 v2Comp v3Comp = value-redex-computable (R12 v2 v3) (gc-val v2Comp)
+iter-Computable {σ} {ε} (vsucc v1) v2 v3 v2Comp v3Comp = value-redex-computable (R13 v1 v2 v3) appComp
+  where
+  -- (natural-numbers) induction hypothesis, applied to the strictly
+  -- smaller v1 : Val ∅ nat.
+  rec : ComputableE σ ε (iter (val v1) (val v2) (val v3))
+  rec = iter-Computable v1 v2 v3 v2Comp v3Comp
+  -- "As v3 is computable, the frame v̄3□ is computable" -- Lemma A.9
+  -- at the single regular frame F-appR v3, exactly as the `app` case
+  -- of lemma-A11-E below uses it for an arbitrary applied value.
+  Fcomp-app : ∀ {w : Val ∅ σ} → ComputableV σ w → ComputableE σ ε (plugF (F-appR v3) (val w))
+  Fcomp-app {w} Pw with val-closed-abs v3
+  ... | (e' , refl) = value-redex-computable (R3 e' w) (ComputableV-arrow-apply v3Comp Pw)
+  -- "So, by Lemma A.9, v̄3 iter(w,v̄2,v̄3) is computable."
+  appComp : ComputableE σ ε (app (val v3) (iter (val v1) (val v2) (val v3)))
+  appComp = lemma-A9 (F-appR v3) Fcomp-app rec
+
+fold-Computable : ∀ {σ τ ε} (v1 : Val ∅ (list σ)) (v2 : Val ∅ τ) (v3 : Val ∅ ((σ `× τ) ⇒ τ ! ε))
+                 → ComputableV (list σ) v1 → ComputableV τ v2 → ComputableV ((σ `× τ) ⇒ τ ! ε) v3
+                 → ComputableE τ ε (fold (val v1) (val v2) (val v3))
+fold-Computable {σ} {τ} {ε} vnil v2 v3 v1Comp v2Comp v3Comp = value-redex-computable (R14 v2 v3) (gc-val v2Comp)
+fold-Computable {σ} {τ} {ε} (vcons w1 w2) v2 v3 v1Comp v2Comp v3Comp = value-redex-computable (R15 w1 w2 v2 v3) appComp
+  where
+  -- v1 = cons(w1,w2) is itself computable (the hypothesis every
+  -- lemma-A9-chained caller below actually supplies), so BOTH its head
+  -- and tail are individually computable, per ComputableV-acc's own
+  -- list-cons clause -- needed since w1 must be a COMPUTABLE value in
+  -- its own right for the pair (w1, fold(w2,...)) to be a computable
+  -- value (clause 1(c)'s own pairing condition), not merely "whatever
+  -- happens to sit in the hole".
+  w1Comp : ComputableV σ w1
+  w1Comp = ComputableV-cons-proj1 {accX = <M-wellFounded (mVal (list σ))} w1 w2 v1Comp
+  w2Comp : ComputableV (list σ) w2
+  w2Comp = ComputableV-cons-proj2 {accX = <M-wellFounded (mVal (list σ))} w1 w2 v1Comp
+  -- (structural) induction hypothesis, applied to the strictly smaller
+  -- tail w2 : Val ∅ (list σ).
+  rec : ComputableE τ ε (fold (val w2) (val v2) (val v3))
+  rec = fold-Computable w2 v2 v3 w2Comp v2Comp v3Comp
+  -- "The frame (w1,□) is computable... so (w1,fold(w2,v̄2,v̄3)) is
+  -- computable" -- Lemma A.9 at F-pairR w1, mirroring how the `pair`
+  -- case of lemma-A11-E below builds a pair from one already-computable
+  -- value and one still-general computable expression.
+  Fcomp-pair : ∀ {w : Val ∅ τ} → ComputableV τ w → ComputableE (σ `× τ) ε (plugF (F-pairR w1) (val w))
+  Fcomp-pair {w} Pw = value-redex-computable (R2-pair w1 w) (gc-val (ComputableV-pair-intro w1 w w1Comp Pw))
+  pairComp : ComputableE (σ `× τ) ε (pair (val w1) (fold (val w2) (val v2) (val v3)))
+  pairComp = lemma-A9 (F-pairR w1) Fcomp-pair rec
+  -- "as v3 is computable, the frame v̄3□ is computable... so
+  -- v̄3(w1,fold(w2,v̄2,v̄3)) is computable" -- Lemma A.9 at F-appR v3,
+  -- exactly as iter-Computable's own Fcomp-app above.
+  Fcomp-app : ∀ {w : Val ∅ (σ `× τ)} → ComputableV (σ `× τ) w → ComputableE τ ε (plugF (F-appR v3) (val w))
+  Fcomp-app {w} Pw with val-closed-abs v3
+  ... | (e' , refl) = value-redex-computable (R3 e' w) (ComputableV-arrow-apply v3Comp Pw)
+  appComp : ComputableE τ ε (app (val v3) (pair (val w1) (fold (val w2) (val v2) (val v3))))
+  appComp = lemma-A9 (F-appR v3) Fcomp-app pairComp
+
 mutual
   lemma-A11-V : ∀ {Γ σ} (v : Val Γ σ) {σs : Sub Γ ∅} → ComputableSub σs → ComputableV σ (subV σs v)
   lemma-A11-V (vvar x)    Cσs = Cσs x
   lemma-A11-V (vgnd x)    Cσs = tt
-  lemma-A11-V (vpair v w) Cσs = ComputableV-pair-intro _ _ (lemma-A11-V v Cσs) (lemma-A11-V w Cσs)
+  lemma-A11-V (vpair v w) {σs} Cσs = ComputableV-pair-intro (subV σs v) (subV σs w) (lemma-A11-V v Cσs) (lemma-A11-V w Cσs)
+  -- PHASE 3 EXTENSION: "If e has one of the forms inl(v), inr(v),
+  -- succ(v), or cons(v1,v2) the proof is similar to the previous case
+  -- [[the tuple case]]" (paper's Fundamental Lemma, case 1(d)) -- and
+  -- "if e is ... zero, or some nil_σ then it is a computable value by
+  -- definition" (case 1(b)).
+  -- NB the "other summand"/"element type" implicit of vinl/vinr/vnil
+  -- is named EXPLICITLY here (mirroring the vabs case's own {σ=σ}
+  -- style just above) rather than left for Agda to recover purely
+  -- from the return-type goal: ComputableV-inl-intro/-inr-intro/
+  -- -nil-intro's own hidden implicit (τ, σ, σ respectively) is NOT
+  -- determined by either of THEIR explicit arguments alone (unlike
+  -- ComputableV-pair-intro/-cons-intro's implicits, which v1/v2 or
+  -- v/w's own types already pin outright) -- it can only come from
+  -- the goal, and leaving it for goal-directed inference alone left
+  -- it an unsolved meta here (inside this mutual recursion's own
+  -- postponed-constraint machinery), so it is threaded through by
+  -- name instead.
+  lemma-A11-V (vinl {τ = τ} v) {σs} Cσs = ComputableV-inl-intro {τ = τ} (subV σs v) (lemma-A11-V v Cσs)
+  lemma-A11-V (vinr {σ = σ} v) {σs} Cσs = ComputableV-inr-intro {σ = σ} (subV σs v) (lemma-A11-V v Cσs)
+  lemma-A11-V vzero       Cσs = tt
+  lemma-A11-V (vsucc v)   Cσs = tt
+  lemma-A11-V (vnil {σ = σ}) Cσs = ComputableV-nil-intro {σ = σ}
+  lemma-A11-V (vcons v w) {σs} Cσs = ComputableV-cons-intro (subV σs v) (subV σs w) (lemma-A11-V v Cσs) (lemma-A11-V w Cσs)
+  -- PHASE 3 NOTE: ComputableV-acc's own arrow clause is now stated
+  -- directly via the clean ComputableV/ComputableE-at _ _ ComputableV
+  -- (see the note at its own definition), so v'Comp is ALREADY exactly
+  -- the ComputableV σ v' the goal's domain needs, and lemma-A11-E e's
+  -- own result is ALREADY exactly a ComputableE-at τ ε (ComputableV τ)
+  -- -- no ComputableV-acc-conv/ComputableE-acc-conv bridging is needed
+  -- any more (only the administrative subE-ext-cons rewrite remains).
   lemma-A11-V {Γ} (vabs {σ = σ} {τ = τ} {ε = ε} e) {σs} Cσs {v'} v'Comp =
     subst (ComputableE-at τ ε _) (sym (subE-ext-cons σs v' e))
-      (ComputableE-acc-conv (lemma-A11-E e (ComputableSub-cons (ComputableV-acc-conv v'Comp) Cσs)))
+      (lemma-A11-E e (ComputableSub-cons v'Comp Cσs))
 
   lemma-A11-H : ∀ {Γ ℓ par σ σ' ε} (h : Handler Γ ℓ par σ σ' ε) {σs : Sub Γ ∅} → ComputableSub σs → ComputableH (subH σs h)
   lemma-A11-H {Γ} {ℓ} {par} {σ} {σ'} {ε} h {σs} Cσs = clauseComp , retComp
@@ -1823,8 +2365,98 @@ mutual
     Fcomp1 {v} Pv = lemma-A9 (F-appR v) Fcomp2 (lemma-A11-E e2 Cσs)
       where
       Fcomp2 : ∀ {w : Val ∅ σ} → ComputableV σ w → ComputableE τ ε (plugF (F-appR v) (val w))
+      -- PHASE 3 NOTE: now that ComputableV-acc's own arrow clause is
+      -- stated directly in terms of the clean `ComputableV`/
+      -- `ComputableE-at _ _ ComputableV` (see the note at
+      -- ComputableV-acc's own definition), Pv's type, once v is
+      -- refined to vabs e', unfolds DIRECTLY to
+      -- `∀{v'}→ComputableV σ v'→ComputableE-at τ ε (ComputableV τ)
+      -- (e'[v'])` -- i.e. exactly `∀{v'}→ComputableV σ v'→
+      -- ComputableE τ ε (e'[v'])` by ComputableE's own definition --
+      -- so `Pv {w} Pw` needs no ComputableV-acc-conv/-rev bridging at
+      -- all any more (the ORIGINAL such bridging, needed when the
+      -- arrow clause threaded a nested `rs`-based Acc witness through
+      -- its own domain/codomain, is exactly what the note above
+      -- explains is no longer the design here).
       Fcomp2 {w} Pw with val-closed-abs v
-      ... | (e' , refl) = value-redex-computable (R3 e' w) (ComputableE-acc-conv-rev (Pv {w} (ComputableV-acc-conv-rev Pw)))
+      ... | (e' , refl) = value-redex-computable (R3 e' w) (Pv {w} Pw)
+  -- PHASE 3 EXTENSION: inl/inr/succ/consE are regular, one-/two-hole
+  -- frames exactly like inl/pair/fst above -- Rinl/Rinr/Rsucc/Rcons
+  -- (OpSem.agda's own value-coalescing glue rules, R2-pair's own
+  -- analogues for these four new introduction formers) settle them in
+  -- one step, once their subcomponent(s) have reduced to values via
+  -- lemma-A9, exactly mirroring the `pair` case just above.
+  lemma-A11-E {Γ} (inl {σ} {τ} {ε} e0) {σs} Cσs = lemma-A9 F-inl Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ σ} → ComputableV σ v → ComputableE (σ `+ τ) ε (plugF F-inl (val v))
+    Fcomp {v} Pv = value-redex-computable (Rinl v) (gc-val (ComputableV-inl-intro {τ = τ} v Pv))
+  lemma-A11-E {Γ} (inr {σ} {τ} {ε} e0) {σs} Cσs = lemma-A9 F-inr Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ τ} → ComputableV τ v → ComputableE (σ `+ τ) ε (plugF F-inr (val v))
+    Fcomp {v} Pv = value-redex-computable (Rinr v) (gc-val (ComputableV-inr-intro {σ = σ} v Pv))
+  -- `cases`: the scrutinee reduces (via lemma-A9/F-cases) to a value,
+  -- which, by val-closed-sum, is either vinl v1 or vinr v2 -- matching
+  -- the paper's own case split ("¯v must have one of the forms
+  -- inl(v')/inr(v') with v' computable"). Each sub-case fires R10/R11
+  -- once, then needs exactly the substitution-composition fact
+  -- subE-ext-cons supplies (the SAME one the `vabs` case of
+  -- lemma-A11-V above already needs, just for a branch instead of a
+  -- function body) to identify (subE (extS σs) e1)[v1] with
+  -- subE (cons v1 σs) e1, landing on the induction hypothesis for e1
+  -- (resp. e2) at the extended substitution ComputableSub-cons.
+  lemma-A11-E {Γ} (cases {σ} {τ} {ρ} {ε} e0 e1 e2) {σs} Cσs = lemma-A9 (F-cases (subE (extS σs) e1) (subE (extS σs) e2)) Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ (σ `+ τ)} → ComputableV (σ `+ τ) v → ComputableE ρ ε (plugF (F-cases (subE (extS σs) e1) (subE (extS σs) e2)) (val v))
+    Fcomp {v} Pv with val-closed-sum v
+    ... | inj₁ (v1 , refl) =
+      value-redex-computable (R10 v1 (subE (extS σs) e1) (subE (extS σs) e2))
+        (subst (ComputableE ρ ε) (sym (subE-ext-cons σs v1 e1))
+               (lemma-A11-E e1 (ComputableSub-cons (ComputableV-inl-proj {accX = <M-wellFounded (mVal (σ `+ τ))} v1 Pv) Cσs)))
+    ... | inj₂ (v2 , refl) =
+      value-redex-computable (R11 v2 (subE (extS σs) e1) (subE (extS σs) e2))
+        (subst (ComputableE ρ ε) (sym (subE-ext-cons σs v2 e2))
+               (lemma-A11-E e2 (ComputableSub-cons (ComputableV-inr-proj {accX = <M-wellFounded (mVal (σ `+ τ))} v2 Pv) Cσs)))
+  lemma-A11-E {Γ} (succ {ε} e0) {σs} Cσs = lemma-A9 F-succ Fcomp (lemma-A11-E e0 Cσs)
+    where
+    Fcomp : ∀ {v : Val ∅ nat} → ComputableV nat v → ComputableE nat ε (plugF F-succ (val v))
+    Fcomp {v} _ = value-redex-computable (Rsucc v) (gc-val tt)
+  -- `iter(e1,e2,e3)`: reduce all three sub-expressions to values via
+  -- three nested lemma-A9 calls (one per F-iter1/F-iter2/F-iter3), then
+  -- hand off to the standalone iter-Computable helper above, which
+  -- carries out the paper's own "induction on v̄1" argument.
+  lemma-A11-E {Γ} (iter {σ} {ε} e1 e2 e3) {σs} Cσs = lemma-A9 (F-iter1 (subE σs e2) (subE σs e3)) Fcomp1 (lemma-A11-E e1 Cσs)
+    where
+    Fcomp1 : ∀ {v1 : Val ∅ nat} → ComputableV nat v1 → ComputableE σ ε (plugF (F-iter1 (subE σs e2) (subE σs e3)) (val v1))
+    Fcomp1 {v1} _ = lemma-A9 (F-iter2 v1 (subE σs e3)) Fcomp2 (lemma-A11-E e2 Cσs)
+      where
+      Fcomp2 : ∀ {v2 : Val ∅ σ} → ComputableV σ v2 → ComputableE σ ε (plugF (F-iter2 v1 (subE σs e3)) (val v2))
+      Fcomp2 {v2} Pv2 = lemma-A9 (F-iter3 v1 v2) Fcomp3 (lemma-A11-E e3 Cσs)
+        where
+        Fcomp3 : ∀ {v3 : Val ∅ (σ ⇒ σ ! ε)} → ComputableV (σ ⇒ σ ! ε) v3 → ComputableE σ ε (plugF (F-iter3 v1 v2) (val v3))
+        Fcomp3 {v3} Pv3 = iter-Computable v1 v2 v3 Pv2 Pv3
+  lemma-A11-E {Γ} (consE {σ} {ε} e1 e2) {σs} Cσs = lemma-A9 (F-consL (subE σs e2)) Fcomp1 (lemma-A11-E e1 Cσs)
+    where
+    Fcomp1 : ∀ {v : Val ∅ σ} → ComputableV σ v → ComputableE (list σ) ε (plugF (F-consL (subE σs e2)) (val v))
+    Fcomp1 {v} Pv = lemma-A9 (F-consR v) Fcomp2 (lemma-A11-E e2 Cσs)
+      where
+      Fcomp2 : ∀ {w : Val ∅ (list σ)} → ComputableV (list σ) w → ComputableE (list σ) ε (plugF (F-consR v) (val w))
+      Fcomp2 {w} Pw = value-redex-computable (Rcons v w) (gc-val (ComputableV-cons-intro v w Pv Pw))
+  -- `fold(e1,e2,e3)`: same shape as `iter` just above, except Fcomp1's
+  -- own Pv1 (v1's computability) is threaded all the way down to
+  -- fold-Computable too -- unlike nat's own (trivial) computability,
+  -- fold-Computable genuinely needs v1's computability to extract its
+  -- head's own computability at each recursive step (see
+  -- fold-Computable's own w1Comp, above).
+  lemma-A11-E {Γ} (fold {σ} {τ} {ε} e1 e2 e3) {σs} Cσs = lemma-A9 (F-fold1 (subE σs e2) (subE σs e3)) Fcomp1 (lemma-A11-E e1 Cσs)
+    where
+    Fcomp1 : ∀ {v1 : Val ∅ (list σ)} → ComputableV (list σ) v1 → ComputableE τ ε (plugF (F-fold1 (subE σs e2) (subE σs e3)) (val v1))
+    Fcomp1 {v1} Pv1 = lemma-A9 (F-fold2 v1 (subE σs e3)) Fcomp2 (lemma-A11-E e2 Cσs)
+      where
+      Fcomp2 : ∀ {v2 : Val ∅ τ} → ComputableV τ v2 → ComputableE τ ε (plugF (F-fold2 v1 (subE σs e3)) (val v2))
+      Fcomp2 {v2} Pv2 = lemma-A9 (F-fold3 v1 v2) Fcomp3 (lemma-A11-E e3 Cσs)
+        where
+        Fcomp3 : ∀ {v3 : Val ∅ ((σ `× τ) ⇒ τ ! ε)} → ComputableV ((σ `× τ) ⇒ τ ! ε) v3 → ComputableE τ ε (plugF (F-fold3 v1 v2) (val v3))
+        Fcomp3 {v3} Pv3 = fold-Computable v1 v2 v3 Pv1 Pv2 Pv3
   lemma-A11-E {Γ} (opE {ℓ} {ε} m op e0) {σs} Cσs = lemma-A9 (F-op m op) Fcomp (lemma-A11-E e0 Cσs)
     where
     Fcomp : ∀ {v : Val ∅ (gnd (out op))} → ComputableV (gnd (out op)) v → ComputableE (gnd (in′ op)) ε (plugF (F-op m op) (val v))
