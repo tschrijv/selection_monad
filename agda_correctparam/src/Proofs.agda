@@ -35,10 +35,11 @@ open import AppendixA4 Sg using (theorem-A13-exists-A4-4)
 theorem-A4-4 = theorem-A13-exists-A4-4
 
 open import Data.List using (_∷_; [])
+open import Data.Nat using (zero; suc)
 open import Data.Product using (_×_; _,_; proj₁; proj₂; Σ)
 open import Data.Unit using (⊤; tt)
 open import Data.Empty using (⊥; ⊥-elim)
-open import Data.Sum using (inj₁; inj₂)
+open import Data.Sum using (_⊎_; inj₁; inj₂)
 open import Data.List.Membership.Propositional using (_∈_)
 open import Data.List.Membership.Propositional.Properties using (∈-++⁻)
 open import Data.List.Relation.Unary.Any using (here; there)
@@ -51,6 +52,29 @@ open import Axiom.Extensionality.Propositional using (Extensionality)
 -- functions/records equal from their fields' pointwise agreement).
 postulate
   funext : ∀ {a b} → Extensionality a b
+
+-- PHASE 5: ternary congruence, needed by renE-coh/subE-coh's own
+-- `iter`/`fold` cases (three independent subexpressions, no cong₃ in the
+-- standard library) -- same definition AppendixA4.agda's own Phase 3 work
+-- already needed for its subE-cong/renE-cong family, redefined locally
+-- here since that one isn't exported.
+cong₃ : ∀ {A B C D : Set} (f : A → B → C → D) {x y : A} {u v : B} {p q : C}
+      → x ≡ y → u ≡ v → p ≡ q → f x u p ≡ f y v q
+cong₃ f refl refl refl = refl
+
+-- PHASE 5: `cases`'s own continuation, named. Denotational.agda's own
+-- `Esem (cases e e1 e2)` clause is an extended lambda, and two
+-- separately-written copies of an extended lambda are never definitionally
+-- equal in Agda, so any proof that restates that lambda in a type fails.
+-- Naming the continuation as an ordinary function and relating the two
+-- via `cases-eq` (one funext, proved once) avoids restating it anywhere.
+casesK : ∀ {Γ σ τ ρ ε} → (Γ , σ) ⊢ ρ ! ε → (Γ , τ) ⊢ ρ ! ε → Env Γ → ⟦ σ ⟧ ⊎ ⟦ τ ⟧ → Ŝ ε ⟦ ρ ⟧
+casesK e1 e2 env (inj₁ a) = Esem e1 (env ,, a)
+casesK e1 e2 env (inj₂ b) = Esem e2 (env ,, b)
+
+cases-eq : ∀ {Γ σ τ ρ ε} (e : Γ ⊢ (σ `+ τ) ! ε) (e1 : (Γ , σ) ⊢ ρ ! ε) (e2 : (Γ , τ) ⊢ ρ ! ε) (env : Env Γ)
+         → Esem (cases e e1 e2) env ≡ bindŜ (Esem e env) (casesK e1 e2 env)
+cases-eq e e1 e2 env = cong (bindŜ (Esem e env)) (funext (λ{ (inj₁ a) → refl ; (inj₂ b) → refl }))
 
 -- ---------------------------------------------------------------------
 -- Lemma A.1 / B.1 (Substitution). Unchanged from agda_noparam/src/
@@ -185,6 +209,16 @@ mutual
   renV-coh ren ρ ρ' coh (vpair v w) = cong₂ _,_ (renV-coh ren ρ ρ' coh v) (renV-coh ren ρ ρ' coh w)
   renV-coh {σ = σ ⇒ τ ! ε} ren ρ ρ' coh (vabs e) =
     funext (λ a → renE-coh (extR ren) (ρ ,, a) (ρ' ,, a) (extR-coh σ ren ρ ρ' coh a) e)
+  -- PHASE 5: sum/nat/list values -- mechanical cong/cong₂ over ⊎/ℕ/List's
+  -- own constructors, exactly mirroring vpair's cong₂ _,_ above (Vsem's
+  -- own clauses for these, Denotational.agda, are direct inj₁/inj₂/suc/∷
+  -- wrappers with no further structure to reconcile).
+  renV-coh ren ρ ρ' coh (vinl v)    = cong inj₁ (renV-coh ren ρ ρ' coh v)
+  renV-coh ren ρ ρ' coh (vinr v)    = cong inj₂ (renV-coh ren ρ ρ' coh v)
+  renV-coh ren ρ ρ' coh vzero       = refl
+  renV-coh ren ρ ρ' coh (vsucc v)   = cong suc (renV-coh ren ρ ρ' coh v)
+  renV-coh ren ρ ρ' coh vnil        = refl
+  renV-coh ren ρ ρ' coh (vcons v w) = cong₂ _∷_ (renV-coh ren ρ ρ' coh v) (renV-coh ren ρ ρ' coh w)
 
   renLsem-coh : ∀ {Γ Γ' σ ε} (ren : Ren Γ Γ') (ρ : Env Γ) (ρ' : Env Γ') → RenCoh ren ρ ρ' → (g : LC Γ σ ε) (a : ⟦ σ ⟧)
               → Lsem (renV ren g) ρ' a ≡ Lsem g ρ a
@@ -270,6 +304,30 @@ mutual
   renE-coh ren ρ ρ' coh (snd e) = cong (λ w → bindŜ w (λ{ (a , b) → η̂ˢ b })) (renE-coh ren ρ ρ' coh e)
   renE-coh ren ρ ρ' coh (app e1 e2) =
     cong₂ (λ w1 w2 → bindŜ w1 (λ φ → bindŜ w2 φ)) (renE-coh ren ρ ρ' coh e1) (renE-coh ren ρ ρ' coh e2)
+  -- PHASE 5: sum/nat/list expressions. inl/inr/succ are single-hole
+  -- bindŜ-wrappers, exactly like opE above; consE is two-hole, exactly
+  -- like pair; iter/fold are three-hole (no cong₃ in the standard
+  -- library, so via the local cong₃ above), exactly like pair but one
+  -- level wider; cases is the one genuinely new shape -- its continuation
+  -- itself case-splits (mirroring Esem's own clause), so the two branches'
+  -- own renE-coh instances are bridged via extR-coh/extR under a funext
+  -- pattern-lambda, exactly as renH-coh's own clauseEq (further below)
+  -- bridges a handler clause's body the same way, one binder at a time.
+  renE-coh ren ρ ρ' coh (inl e) = cong (λ w → bindŜ w (λ a → η̂ˢ (inj₁ a))) (renE-coh ren ρ ρ' coh e)
+  renE-coh ren ρ ρ' coh (inr e) = cong (λ w → bindŜ w (λ a → η̂ˢ (inj₂ a))) (renE-coh ren ρ ρ' coh e)
+  renE-coh ren ρ ρ' coh (cases {σ = σ} {τ = τ} e e1 e2) =
+    cong₂ bindŜ (renE-coh ren ρ ρ' coh e)
+                (funext (λ{ (inj₁ a) → renE-coh (extR ren) (ρ ,, a) (ρ' ,, a) (extR-coh σ ren ρ ρ' coh a) e1
+                          ; (inj₂ b) → renE-coh (extR ren) (ρ ,, b) (ρ' ,, b) (extR-coh τ ren ρ ρ' coh b) e2 }))
+  renE-coh ren ρ ρ' coh (succ e) = cong (λ w → bindŜ w (λ n → η̂ˢ (suc n))) (renE-coh ren ρ ρ' coh e)
+  renE-coh ren ρ ρ' coh (iter e1 e2 e3) =
+    cong₃ (λ w1 w2 w3 → bindŜ w1 (λ n → bindŜ w2 (λ b → bindŜ w3 (λ φ → iterSem n b φ))))
+          (renE-coh ren ρ ρ' coh e1) (renE-coh ren ρ ρ' coh e2) (renE-coh ren ρ ρ' coh e3)
+  renE-coh ren ρ ρ' coh (consE e1 e2) =
+    cong₂ (λ w1 w2 → bindŜ w1 (λ a → bindŜ w2 (λ as → η̂ˢ (a ∷ as)))) (renE-coh ren ρ ρ' coh e1) (renE-coh ren ρ ρ' coh e2)
+  renE-coh ren ρ ρ' coh (fold e1 e2 e3) =
+    cong₃ (λ w1 w2 w3 → bindŜ w1 (λ xs → bindŜ w2 (λ b → bindŜ w3 (λ φ → foldSem xs b φ))))
+          (renE-coh ren ρ ρ' coh e1) (renE-coh ren ρ ρ' coh e2) (renE-coh ren ρ ρ' coh e3)
   renE-coh ren ρ ρ' coh (opE m op e) = cong (λ w → bindŜ w (λ a → φ̂ˢ m op a η̂ˢ)) (renE-coh ren ρ ρ' coh e)
   renE-coh ren ρ ρ' coh (lossE e) = cong (λ w → bindŜ w (λ r → addLossŜ r (η̂ˢ tt))) (renE-coh ren ρ ρ' coh e)
   renE-coh ren ρ ρ' coh (thenE sub e1 g) =
@@ -331,6 +389,13 @@ mutual
   subV-coh σs ρ' ρ coh (vpair v w) = cong₂ _,_ (subV-coh σs ρ' ρ coh v) (subV-coh σs ρ' ρ coh w)
   subV-coh {σ = σ ⇒ τ ! ε} σs ρ' ρ coh (vabs e) =
     funext (λ a → subE-coh (extS σs) (ρ' ,, a) (ρ ,, a) (extS-coh σ σs ρ' ρ coh a) e)
+  -- PHASE 5: mirrors renV-coh's own new cases exactly.
+  subV-coh σs ρ' ρ coh (vinl v)    = cong inj₁ (subV-coh σs ρ' ρ coh v)
+  subV-coh σs ρ' ρ coh (vinr v)    = cong inj₂ (subV-coh σs ρ' ρ coh v)
+  subV-coh σs ρ' ρ coh vzero       = refl
+  subV-coh σs ρ' ρ coh (vsucc v)   = cong suc (subV-coh σs ρ' ρ coh v)
+  subV-coh σs ρ' ρ coh vnil        = refl
+  subV-coh σs ρ' ρ coh (vcons v w) = cong₂ _∷_ (subV-coh σs ρ' ρ coh v) (subV-coh σs ρ' ρ coh w)
 
   subLsem-coh : ∀ {Γ Γ' σ ε} (σs : Sub Γ Γ') (ρ' : Env Γ') (ρ : Env Γ) → SubCoh σs ρ' ρ → (g : LC Γ σ ε) (a : ⟦ σ ⟧)
               → Lsem (subV σs g) ρ' a ≡ Lsem g ρ a
@@ -402,6 +467,23 @@ mutual
   subE-coh σs ρ' ρ coh (snd e) = cong (λ w → bindŜ w (λ{ (a , b) → η̂ˢ b })) (subE-coh σs ρ' ρ coh e)
   subE-coh σs ρ' ρ coh (app e1 e2) =
     cong₂ (λ w1 w2 → bindŜ w1 (λ φ → bindŜ w2 φ)) (subE-coh σs ρ' ρ coh e1) (subE-coh σs ρ' ρ coh e2)
+  -- PHASE 5: mirrors renE-coh's own new cases exactly, via extS-coh/extS
+  -- in place of extR-coh/extR.
+  subE-coh σs ρ' ρ coh (inl e) = cong (λ w → bindŜ w (λ a → η̂ˢ (inj₁ a))) (subE-coh σs ρ' ρ coh e)
+  subE-coh σs ρ' ρ coh (inr e) = cong (λ w → bindŜ w (λ a → η̂ˢ (inj₂ a))) (subE-coh σs ρ' ρ coh e)
+  subE-coh σs ρ' ρ coh (cases {σ = σ} {τ = τ} e e1 e2) =
+    cong₂ bindŜ (subE-coh σs ρ' ρ coh e)
+                (funext (λ{ (inj₁ a) → subE-coh (extS σs) (ρ' ,, a) (ρ ,, a) (extS-coh σ σs ρ' ρ coh a) e1
+                          ; (inj₂ b) → subE-coh (extS σs) (ρ' ,, b) (ρ ,, b) (extS-coh τ σs ρ' ρ coh b) e2 }))
+  subE-coh σs ρ' ρ coh (succ e) = cong (λ w → bindŜ w (λ n → η̂ˢ (suc n))) (subE-coh σs ρ' ρ coh e)
+  subE-coh σs ρ' ρ coh (iter e1 e2 e3) =
+    cong₃ (λ w1 w2 w3 → bindŜ w1 (λ n → bindŜ w2 (λ b → bindŜ w3 (λ φ → iterSem n b φ))))
+          (subE-coh σs ρ' ρ coh e1) (subE-coh σs ρ' ρ coh e2) (subE-coh σs ρ' ρ coh e3)
+  subE-coh σs ρ' ρ coh (consE e1 e2) =
+    cong₂ (λ w1 w2 → bindŜ w1 (λ a → bindŜ w2 (λ as → η̂ˢ (a ∷ as)))) (subE-coh σs ρ' ρ coh e1) (subE-coh σs ρ' ρ coh e2)
+  subE-coh σs ρ' ρ coh (fold e1 e2 e3) =
+    cong₃ (λ w1 w2 w3 → bindŜ w1 (λ xs → bindŜ w2 (λ b → bindŜ w3 (λ φ → foldSem xs b φ))))
+          (subE-coh σs ρ' ρ coh e1) (subE-coh σs ρ' ρ coh e2) (subE-coh σs ρ' ρ coh e3)
   subE-coh σs ρ' ρ coh (opE m op e) = cong (λ w → bindŜ w (λ a → φ̂ˢ m op a η̂ˢ)) (subE-coh σs ρ' ρ coh e)
   subE-coh σs ρ' ρ coh (lossE e) = cong (λ w → bindŜ w (λ r → addLossŜ r (η̂ˢ tt))) (subE-coh σs ρ' ρ coh e)
   subE-coh σs ρ' ρ coh (thenE sub e1 g) =
@@ -510,6 +592,132 @@ lemma-B6 {α = α} (F-handleP h b) e ρ = cong (bindŜ (Esem e ρ)) (funext (λ 
                   (trans (cong (handlerSem (renH S h) (ρ ,, a) a) (weaken1-coh α b ρ a))
                          (weaken1H-coh α h ρ a a (Esem b ρ)))
 
+-- PHASE 5: the twelve new regular-frame cases (sums/nat/list). F-inl/
+-- F-inr/F-succ are trivial single-hole wrappers, exactly like F-op/F-loss
+-- above. F-cases is the one genuinely new SHAPE here (its non-hole data,
+-- e1/e2, are themselves binder-extended, like F-handleP's own b -- but
+-- TWO of them, one per branch, dispatched by cases on the hole's own
+-- value once it reaches a:σ+τ) -- bridged via renE-coh at the SAME
+-- (extR S) renaming weaken1F-skip's own F-cases case (below) needs, not
+-- weaken1-coh (which only ever bridges a plain, non-binder-extended
+-- weaken1 = renE S). F-consL/F-consR mirror F-pairL/F-pairR exactly
+-- (_,_↦_∷_). F-iter1/F-fold1 mirror F-pairL/F-plusL (single embedded
+-- expression each, but TWO of them -- e2 AND e3 -- so weaken1-coh is
+-- applied twice in sequence). F-iter2/F-fold2 mirror F-appR/F-plusR's
+-- "one embedded value, bridge via weaken1V-coh" shape, but with a SECOND
+-- embedded expression (e3) needing its own weaken1-coh alongside.
+-- F-iter3/F-fold3 are the purely-value-embedding case (both v1 and v2
+-- fixed, no embedded expression at all), mirroring F-plusR/F-pairR's own
+-- shape doubled, via cong₂ on the final iterSem/foldSem application.
+lemma-B6 F-inl e ρ = cong (bindŜ (Esem e ρ)) (funext (λ a →
+  sym (bindŜ-unitˡ (λ a' → η̂ˢ (inj₁ a')) a)))
+
+lemma-B6 F-inr e ρ = cong (bindŜ (Esem e ρ)) (funext (λ a →
+  sym (bindŜ-unitˡ (λ a' → η̂ˢ (inj₂ a')) a)))
+
+-- F-cases: plugF (F-cases e1 e2) e is cases e e1 e2, so cases-eq turns it
+-- into bindŜ (Esem e ρ) (casesK e1 e2 ρ); per-a then matches casesK against
+-- the weakened cases (renE/weaken) on each injection. The unit law plus
+-- renE-coh do the work, exactly as in the other frames.
+lemma-B6 (F-cases e1 e2) e ρ = trans (cases-eq e e1 e2 ρ) (cong (bindŜ (Esem e ρ)) (funext per-a))
+  where
+  per-a : ∀ a → casesK e1 e2 ρ a ≡ Esem (plugF (weaken1F (F-cases e1 e2)) (val (vvar Z))) (ρ ,, a)
+  per-a (inj₁ a0) = trans (sym (trans (bindŜ-unitˡ (casesK (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₁ a0)) (inj₁ a0))
+                                      (renE-coh (extR S) (ρ ,, a0) ((ρ ,, inj₁ a0) ,, a0) (λ{ Z → refl ; (S x) → refl }) e1)))
+                          (sym (cases-eq (val (vvar Z)) (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₁ a0)))
+  per-a (inj₂ b0) = trans (sym (trans (bindŜ-unitˡ (casesK (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₂ b0)) (inj₂ b0))
+                                      (renE-coh (extR S) (ρ ,, b0) ((ρ ,, inj₂ b0) ,, b0) (λ{ Z → refl ; (S x) → refl }) e2)))
+                          (sym (cases-eq (val (vvar Z)) (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₂ b0)))
+
+lemma-B6 F-succ e ρ = cong (bindŜ (Esem e ρ)) (funext (λ a →
+  sym (bindŜ-unitˡ (λ n → η̂ˢ (suc n)) a)))
+
+lemma-B6 {α = α} (F-consL e₂) e ρ = cong (bindŜ (Esem e ρ)) (funext (λ a → sym (trans
+  (bindŜ-unitˡ (λ a' → bindŜ (Esem (weaken1 e₂) (ρ ,, a)) (λ as → η̂ˢ (a' ∷ as))) a)
+  (cong (λ w → bindŜ w (λ as → η̂ˢ (a ∷ as))) (weaken1-coh α e₂ ρ a)))))
+
+lemma-B6 {α = α} (F-consR v) e ρ = trans step1 (cong (bindŜ (Esem e ρ)) (funext per-a))
+  where
+  step1 : Esem (consE (val v) e) ρ ≡ bindŜ (Esem e ρ) (λ as → η̂ˢ (Vsem v ρ ∷ as))
+  step1 = bindŜ-unitˡ (λ a → bindŜ (Esem e ρ) (λ as → η̂ˢ (a ∷ as))) (Vsem v ρ)
+  per-a : (a : ⟦ α ⟧) → η̂ˢ (Vsem v ρ ∷ a) ≡ Esem (consE (val (weaken1V v)) (val (vvar Z))) (ρ ,, a)
+  per-a a = sym step3
+    where
+    step3 : Esem (consE (val (weaken1V v)) (val (vvar Z))) (ρ ,, a) ≡ η̂ˢ (Vsem v ρ ∷ a)
+    step3 = trans (trans (bindŜ-unitˡ (λ a' → bindŜ (η̂ˢ a) (λ as → η̂ˢ (a' ∷ as))) (Vsem (weaken1V v) (ρ ,, a)))
+                         (bindŜ-unitˡ (λ as → η̂ˢ (Vsem (weaken1V v) (ρ ,, a) ∷ as)) a))
+                  (cong (λ w → η̂ˢ (w ∷ a)) (weaken1V-coh α v ρ a))
+
+lemma-B6 (F-iter1 e₂ e₃) e ρ = cong (bindŜ (Esem e ρ)) (funext (λ n → sym (trans
+  (bindŜ-unitˡ (λ n' → bindŜ (Esem (weaken1 e₂) (ρ ,, n)) (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, n)) (λ φ → iterSem n' b φ))) n)
+  (trans (cong (λ w → bindŜ w (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, n)) (λ φ → iterSem n b φ))) (weaken1-coh nat e₂ ρ n))
+         (cong (λ w → bindŜ (Esem e₂ ρ) (λ b → bindŜ w (λ φ → iterSem n b φ))) (weaken1-coh nat e₃ ρ n))))))
+
+lemma-B6 {α = α} (F-iter2 v1 e3) e ρ = trans step1 (cong (bindŜ (Esem e ρ)) (funext per-a))
+  where
+  step1 : Esem (iter (val v1) e e3) ρ ≡ bindŜ (Esem e ρ) (λ b → bindŜ (Esem e3 ρ) (λ φ → iterSem (Vsem v1 ρ) b φ))
+  step1 = bindŜ-unitˡ (λ n → bindŜ (Esem e ρ) (λ b → bindŜ (Esem e3 ρ) (λ φ → iterSem n b φ))) (Vsem v1 ρ)
+  per-a : (a : ⟦ α ⟧) → bindŜ (Esem e3 ρ) (λ φ → iterSem (Vsem v1 ρ) a φ)
+                      ≡ Esem (plugF (weaken1F (F-iter2 v1 e3)) (val (vvar Z))) (ρ ,, a)
+  per-a a = sym step3
+    where
+    step12 : bindŜ (η̂ˢ (Vsem (weaken1V v1) (ρ ,, a))) (λ n → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → iterSem n b φ)))
+           ≡ bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) a φ)
+    step12 = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → iterSem n b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                   (bindŜ-unitˡ (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) a)
+    step3 : Esem (plugF (weaken1F (F-iter2 v1 e3)) (val (vvar Z))) (ρ ,, a) ≡ bindŜ (Esem e3 ρ) (λ φ → iterSem (Vsem v1 ρ) a φ)
+    step3 = trans step12 (trans (cong (λ w → bindŜ w (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) a φ)) (weaken1-coh α e3 ρ a))
+                                 (cong (λ w → bindŜ (Esem e3 ρ) (λ φ → iterSem w a φ)) (weaken1V-coh α v1 ρ a)))
+
+lemma-B6 {α = α} (F-iter3 v1 v2) e ρ = trans step1 (cong (bindŜ (Esem e ρ)) (funext per-a))
+  where
+  step1 : Esem (iter (val v1) (val v2) e) ρ ≡ bindŜ (Esem e ρ) (λ φ → iterSem (Vsem v1 ρ) (Vsem v2 ρ) φ)
+  step1 = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ (Vsem v2 ρ)) (λ b → bindŜ (Esem e ρ) (λ φ → iterSem n b φ))) (Vsem v1 ρ))
+                (bindŜ-unitˡ (λ b → bindŜ (Esem e ρ) (λ φ → iterSem (Vsem v1 ρ) b φ)) (Vsem v2 ρ))
+  per-a : (a : ⟦ α ⟧) → iterSem (Vsem v1 ρ) (Vsem v2 ρ) a ≡ Esem (plugF (weaken1F (F-iter3 v1 v2)) (val (vvar Z))) (ρ ,, a)
+  per-a a = sym step3
+    where
+    step3 : Esem (plugF (weaken1F (F-iter3 v1 v2)) (val (vvar Z))) (ρ ,, a) ≡ iterSem (Vsem v1 ρ) (Vsem v2 ρ) a
+    step3 = trans (trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ (Vsem (weaken1V v2) (ρ ,, a))) (λ b → bindŜ (η̂ˢ a) (λ φ → iterSem n b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                         (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ a) (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) (Vsem (weaken1V v2) (ρ ,, a))))
+                  (trans (bindŜ-unitˡ (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) (Vsem (weaken1V v2) (ρ ,, a)) φ) a)
+                         (cong₂ (λ x y → iterSem x y a) (weaken1V-coh α v1 ρ a) (weaken1V-coh α v2 ρ a)))
+
+lemma-B6 (F-fold1 {σ = σ} e₂ e₃) e ρ = cong (bindŜ (Esem e ρ)) (funext (λ xs → sym (trans
+  (bindŜ-unitˡ (λ xs' → bindŜ (Esem (weaken1 e₂) (ρ ,, xs)) (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, xs)) (λ φ → foldSem xs' b φ))) xs)
+  (trans (cong (λ w → bindŜ w (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, xs)) (λ φ → foldSem xs b φ))) (weaken1-coh (list σ) e₂ ρ xs))
+         (cong (λ w → bindŜ (Esem e₂ ρ) (λ b → bindŜ w (λ φ → foldSem xs b φ))) (weaken1-coh (list σ) e₃ ρ xs))))))
+
+lemma-B6 {α = α} (F-fold2 v1 e3) e ρ = trans step1 (cong (bindŜ (Esem e ρ)) (funext per-a))
+  where
+  step1 : Esem (fold (val v1) e e3) ρ ≡ bindŜ (Esem e ρ) (λ b → bindŜ (Esem e3 ρ) (λ φ → foldSem (Vsem v1 ρ) b φ))
+  step1 = bindŜ-unitˡ (λ xs → bindŜ (Esem e ρ) (λ b → bindŜ (Esem e3 ρ) (λ φ → foldSem xs b φ))) (Vsem v1 ρ)
+  per-a : (a : ⟦ α ⟧) → bindŜ (Esem e3 ρ) (λ φ → foldSem (Vsem v1 ρ) a φ)
+                      ≡ Esem (plugF (weaken1F (F-fold2 v1 e3)) (val (vvar Z))) (ρ ,, a)
+  per-a a = sym step3
+    where
+    step12 : bindŜ (η̂ˢ (Vsem (weaken1V v1) (ρ ,, a))) (λ xs → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → foldSem xs b φ)))
+           ≡ bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) a φ)
+    step12 = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → foldSem xs b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                   (bindŜ-unitˡ (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) a)
+    step3 : Esem (plugF (weaken1F (F-fold2 v1 e3)) (val (vvar Z))) (ρ ,, a) ≡ bindŜ (Esem e3 ρ) (λ φ → foldSem (Vsem v1 ρ) a φ)
+    step3 = trans step12 (trans (cong (λ w → bindŜ w (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) a φ)) (weaken1-coh α e3 ρ a))
+                                 (cong (λ w → bindŜ (Esem e3 ρ) (λ φ → foldSem w a φ)) (weaken1V-coh α v1 ρ a)))
+
+lemma-B6 {α = α} (F-fold3 v1 v2) e ρ = trans step1 (cong (bindŜ (Esem e ρ)) (funext per-a))
+  where
+  step1 : Esem (fold (val v1) (val v2) e) ρ ≡ bindŜ (Esem e ρ) (λ φ → foldSem (Vsem v1 ρ) (Vsem v2 ρ) φ)
+  step1 = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ (Vsem v2 ρ)) (λ b → bindŜ (Esem e ρ) (λ φ → foldSem xs b φ))) (Vsem v1 ρ))
+                (bindŜ-unitˡ (λ b → bindŜ (Esem e ρ) (λ φ → foldSem (Vsem v1 ρ) b φ)) (Vsem v2 ρ))
+  per-a : (a : ⟦ α ⟧) → foldSem (Vsem v1 ρ) (Vsem v2 ρ) a ≡ Esem (plugF (weaken1F (F-fold3 v1 v2)) (val (vvar Z))) (ρ ,, a)
+  per-a a = sym step3
+    where
+    step3 : Esem (plugF (weaken1F (F-fold3 v1 v2)) (val (vvar Z))) (ρ ,, a) ≡ foldSem (Vsem v1 ρ) (Vsem v2 ρ) a
+    step3 = trans (trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ (Vsem (weaken1V v2) (ρ ,, a))) (λ b → bindŜ (η̂ˢ a) (λ φ → foldSem xs b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                         (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ a) (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) (Vsem (weaken1V v2) (ρ ,, a))))
+                  (trans (bindŜ-unitˡ (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) (Vsem (weaken1V v2) (ρ ,, a)) φ) a)
+                         (cong₂ (λ x y → foldSem x y a) (weaken1V-coh α v1 ρ a) (weaken1V-coh α v2 ρ a)))
+
 -- Lemma 7.7 (hat-Lemma B.7): not formalised as its own lemma, matching
 -- agda_noparam -- not consumed by anything else here.
 
@@ -542,6 +750,21 @@ Frame-effect-eq F-loss        = refl
 Frame-effect-eq (F-handleP _ _) = refl
 Frame-effect-eq (F-plusL _)   = refl
 Frame-effect-eq (F-plusR _)   = refl
+-- PHASE 5: the twelve new regular frames preserve ε exactly as all the
+-- others do (OpSem.agda's own Frame constructors for sums/nat/list all
+-- have the SAME ε on both sides, by inspection of their types).
+Frame-effect-eq F-inl         = refl
+Frame-effect-eq F-inr         = refl
+Frame-effect-eq (F-cases _ _) = refl
+Frame-effect-eq F-succ        = refl
+Frame-effect-eq (F-consL _)   = refl
+Frame-effect-eq (F-consR _)   = refl
+Frame-effect-eq (F-iter1 _ _) = refl
+Frame-effect-eq (F-iter2 _ _) = refl
+Frame-effect-eq (F-iter3 _ _) = refl
+Frame-effect-eq (F-fold1 _ _) = refl
+Frame-effect-eq (F-fold2 _ _) = refl
+Frame-effect-eq (F-fold3 _ _) = refl
 
 promote : ∀ {Γ σ εH τ εO ℓ} (k : ContCxt Γ σ εH τ εO) → ¬ Handles k ℓ → ℓ ∈ εH → ℓ ∈ εO
 promote ▫ nh m = m
@@ -647,6 +870,163 @@ weaken1F-skip {α = α} (F-handleP h b) υ ρ c a = trans lhsRed (sym rhsRed)
   rhsRed = trans (bindŜ-unitˡ (λ p → handlerSem (renH S h) (ρ ,, a) p (Esem (weaken1 b) (ρ ,, a))) a)
                  (trans (cong (handlerSem (renH S h) (ρ ,, a) a) (weaken1-coh α b ρ a))
                         (weaken1H-coh α h ρ a a (Esem b ρ)))
+
+-- PHASE 5: the twelve new regular frames' own weaken1F-skip cases.
+-- F-inl/F-inr/F-succ have no embedded data at all (like F-fst/F-snd/
+-- F-op/F-loss above), so both weakenings act as the identity on the
+-- whole frame and `refl` suffices directly. F-cases embeds e1/e2, each
+-- under its OWN extra binder -- double-weakened via (extR S)∘(extR S)
+-- on the lhs, singly via (extR S) on the rhs, bridged by two renE-coh
+-- applications per branch of a (mirroring lemma-B6's own F-cases case
+-- above, with the extra υ-layer threaded through exactly as
+-- F-handleP's lhsRed/rhsRed thread it through weaken1H-coh/weaken1-coh
+-- twice). F-consL/F-consR mirror F-pairL/F-pairR. F-iter1/F-fold1 mirror
+-- F-pairL doubled (two embedded expressions, weaken1-coh applied twice
+-- per side). F-iter2/F-fold2 mirror F-appR/F-plusR (one embedded value
+-- via weaken1V-coh) PLUS one embedded expression (weaken1-coh), both
+-- doubled on the lhs. F-iter3/F-fold3 are two embedded VALUES, no
+-- embedded expression, mirroring F-plusR/F-pairR doubled via cong₂ on
+-- the final iterSem/foldSem application.
+weaken1F-skip F-inl υ ρ c a = refl
+weaken1F-skip F-inr υ ρ c a = refl
+weaken1F-skip F-succ υ ρ c a = refl
+
+-- F-cases: both sides are cases-headed, so cases-eq exposes bindŜ (Esem (val
+-- (vvar Z)) env) (casesK ...) on each side; the scrutinee's own value is the
+-- hole's injection, so bindŜ-unitˡ and renE-coh finish each branch.
+weaken1F-skip (F-cases e1 e2) υ ρ c (inj₁ s) = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (cases (val (vvar Z)) (renE (extR S) (renE (extR S) e1)) (renE (extR S) (renE (extR S) e2))) ((ρ ,, c) ,, inj₁ s) ≡ Esem e1 (ρ ,, s)
+  lhsRed = trans (cases-eq (val (vvar Z)) (renE (extR S) (renE (extR S) e1)) (renE (extR S) (renE (extR S) e2)) ((ρ ,, c) ,, inj₁ s))
+                 (trans (bindŜ-unitˡ (casesK (renE (extR S) (renE (extR S) e1)) (renE (extR S) (renE (extR S) e2)) ((ρ ,, c) ,, inj₁ s)) (inj₁ s))
+                        (trans (renE-coh (extR S) ((ρ ,, c) ,, s) (((ρ ,, c) ,, inj₁ s) ,, s) (λ{ Z → refl ; (S x) → refl }) (renE (extR S) e1))
+                               (renE-coh (extR S) (ρ ,, s) ((ρ ,, c) ,, s) (λ{ Z → refl ; (S x) → refl }) e1)))
+  rhsRed : Esem (cases (val (vvar Z)) (renE (extR S) e1) (renE (extR S) e2)) (ρ ,, inj₁ s) ≡ Esem e1 (ρ ,, s)
+  rhsRed = trans (cases-eq (val (vvar Z)) (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₁ s))
+                 (trans (bindŜ-unitˡ (casesK (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₁ s)) (inj₁ s))
+                        (renE-coh (extR S) (ρ ,, s) ((ρ ,, inj₁ s) ,, s) (λ{ Z → refl ; (S x) → refl }) e1))
+weaken1F-skip (F-cases e1 e2) υ ρ c (inj₂ t) = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (cases (val (vvar Z)) (renE (extR S) (renE (extR S) e1)) (renE (extR S) (renE (extR S) e2))) ((ρ ,, c) ,, inj₂ t) ≡ Esem e2 (ρ ,, t)
+  lhsRed = trans (cases-eq (val (vvar Z)) (renE (extR S) (renE (extR S) e1)) (renE (extR S) (renE (extR S) e2)) ((ρ ,, c) ,, inj₂ t))
+                 (trans (bindŜ-unitˡ (casesK (renE (extR S) (renE (extR S) e1)) (renE (extR S) (renE (extR S) e2)) ((ρ ,, c) ,, inj₂ t)) (inj₂ t))
+                        (trans (renE-coh (extR S) ((ρ ,, c) ,, t) (((ρ ,, c) ,, inj₂ t) ,, t) (λ{ Z → refl ; (S x) → refl }) (renE (extR S) e2))
+                               (renE-coh (extR S) (ρ ,, t) ((ρ ,, c) ,, t) (λ{ Z → refl ; (S x) → refl }) e2)))
+  rhsRed : Esem (cases (val (vvar Z)) (renE (extR S) e1) (renE (extR S) e2)) (ρ ,, inj₂ t) ≡ Esem e2 (ρ ,, t)
+  rhsRed = trans (cases-eq (val (vvar Z)) (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₂ t))
+                 (trans (bindŜ-unitˡ (casesK (renE (extR S) e1) (renE (extR S) e2) (ρ ,, inj₂ t)) (inj₂ t))
+                        (renE-coh (extR S) (ρ ,, t) ((ρ ,, inj₂ t) ,, t) (λ{ Z → refl ; (S x) → refl }) e2))
+
+weaken1F-skip {α = α} (F-consL e₂) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (consE (val (vvar Z)) (weaken1 (weaken1 e₂))) ((ρ ,, c) ,, a) ≡ bindŜ (Esem e₂ ρ) (λ as → η̂ˢ (a ∷ as))
+  lhsRed = trans (bindŜ-unitˡ (λ a' → bindŜ (Esem (weaken1 (weaken1 e₂)) ((ρ ,, c) ,, a)) (λ as → η̂ˢ (a' ∷ as))) a)
+                 (trans (cong (λ w → bindŜ w (λ as → η̂ˢ (a ∷ as))) (weaken1-coh α (weaken1 e₂) (ρ ,, c) a))
+                        (cong (λ w → bindŜ w (λ as → η̂ˢ (a ∷ as))) (weaken1-coh υ e₂ ρ c)))
+  rhsRed : Esem (consE (val (vvar Z)) (weaken1 e₂)) (ρ ,, a) ≡ bindŜ (Esem e₂ ρ) (λ as → η̂ˢ (a ∷ as))
+  rhsRed = trans (bindŜ-unitˡ (λ a' → bindŜ (Esem (weaken1 e₂) (ρ ,, a)) (λ as → η̂ˢ (a' ∷ as))) a)
+                 (cong (λ w → bindŜ w (λ as → η̂ˢ (a ∷ as))) (weaken1-coh α e₂ ρ a))
+
+weaken1F-skip {α = α} (F-consR v) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (consE (val (weaken1V (weaken1V v))) (val (vvar Z))) ((ρ ,, c) ,, a) ≡ η̂ˢ (Vsem v ρ ∷ a)
+  lhsRed = trans (bindŜ-unitˡ (λ x → bindŜ (η̂ˢ a) (λ y → η̂ˢ (x ∷ y))) (Vsem (weaken1V (weaken1V v)) ((ρ ,, c) ,, a)))
+                 (trans (bindŜ-unitˡ (λ y → η̂ˢ (Vsem (weaken1V (weaken1V v)) ((ρ ,, c) ,, a) ∷ y)) a)
+                        (cong (λ x → η̂ˢ (x ∷ a)) (trans (weaken1V-coh α (weaken1V v) (ρ ,, c) a) (weaken1V-coh υ v ρ c))))
+  rhsRed : Esem (consE (val (weaken1V v)) (val (vvar Z))) (ρ ,, a) ≡ η̂ˢ (Vsem v ρ ∷ a)
+  rhsRed = trans (bindŜ-unitˡ (λ x → bindŜ (η̂ˢ a) (λ y → η̂ˢ (x ∷ y))) (Vsem (weaken1V v) (ρ ,, a)))
+                 (trans (bindŜ-unitˡ (λ y → η̂ˢ (Vsem (weaken1V v) (ρ ,, a) ∷ y)) a)
+                        (cong (λ x → η̂ˢ (x ∷ a)) (weaken1V-coh α v ρ a)))
+
+weaken1F-skip (F-iter1 e₂ e₃) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (iter (val (vvar Z)) (weaken1 (weaken1 e₂)) (weaken1 (weaken1 e₃))) ((ρ ,, c) ,, a)
+         ≡ bindŜ (Esem e₂ ρ) (λ b → bindŜ (Esem e₃ ρ) (λ φ → iterSem a b φ))
+  lhsRed = trans (bindŜ-unitˡ (λ n → bindŜ (Esem (weaken1 (weaken1 e₂)) ((ρ ,, c) ,, a)) (λ b → bindŜ (Esem (weaken1 (weaken1 e₃)) ((ρ ,, c) ,, a)) (λ φ → iterSem n b φ))) a)
+                 (trans (cong (λ w → bindŜ w (λ b → bindŜ (Esem (weaken1 (weaken1 e₃)) ((ρ ,, c) ,, a)) (λ φ → iterSem a b φ))) (trans (weaken1-coh nat (weaken1 e₂) (ρ ,, c) a) (weaken1-coh υ e₂ ρ c)))
+                        (cong (λ w → bindŜ (Esem e₂ ρ) (λ b → bindŜ w (λ φ → iterSem a b φ))) (trans (weaken1-coh nat (weaken1 e₃) (ρ ,, c) a) (weaken1-coh υ e₃ ρ c))))
+  rhsRed : Esem (iter (val (vvar Z)) (weaken1 e₂) (weaken1 e₃)) (ρ ,, a)
+         ≡ bindŜ (Esem e₂ ρ) (λ b → bindŜ (Esem e₃ ρ) (λ φ → iterSem a b φ))
+  rhsRed = trans (bindŜ-unitˡ (λ n → bindŜ (Esem (weaken1 e₂) (ρ ,, a)) (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, a)) (λ φ → iterSem n b φ))) a)
+                 (trans (cong (λ w → bindŜ w (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, a)) (λ φ → iterSem a b φ))) (weaken1-coh nat e₂ ρ a))
+                        (cong (λ w → bindŜ (Esem e₂ ρ) (λ b → bindŜ w (λ φ → iterSem a b φ))) (weaken1-coh nat e₃ ρ a)))
+
+weaken1F-skip {α = α} (F-iter2 v1 e3) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (iter (val (weaken1V (weaken1V v1))) (val (vvar Z)) (weaken1 (weaken1 e3))) ((ρ ,, c) ,, a)
+         ≡ bindŜ (Esem e3 ρ) (λ φ → iterSem (Vsem v1 ρ) a φ)
+  lhsRed = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 (weaken1 e3)) ((ρ ,, c) ,, a)) (λ φ → iterSem n b φ))) (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (Esem (weaken1 (weaken1 e3)) ((ρ ,, c) ,, a)) (λ φ → iterSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) b φ)) a)
+                        (trans (cong (λ w → bindŜ w (λ φ → iterSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) a φ)) (trans (weaken1-coh α (weaken1 e3) (ρ ,, c) a) (weaken1-coh υ e3 ρ c)))
+                               (cong (λ w → bindŜ (Esem e3 ρ) (λ φ → iterSem w a φ)) (trans (weaken1V-coh α (weaken1V v1) (ρ ,, c) a) (weaken1V-coh υ v1 ρ c)))))
+  rhsRed : Esem (iter (val (weaken1V v1)) (val (vvar Z)) (weaken1 e3)) (ρ ,, a)
+         ≡ bindŜ (Esem e3 ρ) (λ φ → iterSem (Vsem v1 ρ) a φ)
+  rhsRed = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → iterSem n b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) a)
+                        (trans (cong (λ w → bindŜ w (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) a φ)) (weaken1-coh α e3 ρ a))
+                               (cong (λ w → bindŜ (Esem e3 ρ) (λ φ → iterSem w a φ)) (weaken1V-coh α v1 ρ a))))
+
+weaken1F-skip {α = α} (F-iter3 v1 v2) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (iter (val (weaken1V (weaken1V v1))) (val (weaken1V (weaken1V v2))) (val (vvar Z))) ((ρ ,, c) ,, a)
+         ≡ iterSem (Vsem v1 ρ) (Vsem v2 ρ) a
+  lhsRed = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ (Vsem (weaken1V (weaken1V v2)) ((ρ ,, c) ,, a))) (λ b → bindŜ (η̂ˢ a) (λ φ → iterSem n b φ))) (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ a) (λ φ → iterSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) b φ)) (Vsem (weaken1V (weaken1V v2)) ((ρ ,, c) ,, a)))
+                        (trans (bindŜ-unitˡ (λ φ → iterSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) (Vsem (weaken1V (weaken1V v2)) ((ρ ,, c) ,, a)) φ) a)
+                               (cong₂ (λ x y → iterSem x y a)
+                                      (trans (weaken1V-coh α (weaken1V v1) (ρ ,, c) a) (weaken1V-coh υ v1 ρ c))
+                                      (trans (weaken1V-coh α (weaken1V v2) (ρ ,, c) a) (weaken1V-coh υ v2 ρ c)))))
+  rhsRed : Esem (iter (val (weaken1V v1)) (val (weaken1V v2)) (val (vvar Z))) (ρ ,, a)
+         ≡ iterSem (Vsem v1 ρ) (Vsem v2 ρ) a
+  rhsRed = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ (Vsem (weaken1V v2) (ρ ,, a))) (λ b → bindŜ (η̂ˢ a) (λ φ → iterSem n b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ a) (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) (Vsem (weaken1V v2) (ρ ,, a)))
+                        (trans (bindŜ-unitˡ (λ φ → iterSem (Vsem (weaken1V v1) (ρ ,, a)) (Vsem (weaken1V v2) (ρ ,, a)) φ) a)
+                               (cong₂ (λ x y → iterSem x y a) (weaken1V-coh α v1 ρ a) (weaken1V-coh α v2 ρ a))))
+
+weaken1F-skip (F-fold1 {σ = σ} e₂ e₃) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (fold (val (vvar Z)) (weaken1 (weaken1 e₂)) (weaken1 (weaken1 e₃))) ((ρ ,, c) ,, a)
+         ≡ bindŜ (Esem e₂ ρ) (λ b → bindŜ (Esem e₃ ρ) (λ φ → foldSem a b φ))
+  lhsRed = trans (bindŜ-unitˡ (λ xs → bindŜ (Esem (weaken1 (weaken1 e₂)) ((ρ ,, c) ,, a)) (λ b → bindŜ (Esem (weaken1 (weaken1 e₃)) ((ρ ,, c) ,, a)) (λ φ → foldSem xs b φ))) a)
+                 (trans (cong (λ w → bindŜ w (λ b → bindŜ (Esem (weaken1 (weaken1 e₃)) ((ρ ,, c) ,, a)) (λ φ → foldSem a b φ))) (trans (weaken1-coh (list σ) (weaken1 e₂) (ρ ,, c) a) (weaken1-coh υ e₂ ρ c)))
+                        (cong (λ w → bindŜ (Esem e₂ ρ) (λ b → bindŜ w (λ φ → foldSem a b φ))) (trans (weaken1-coh (list σ) (weaken1 e₃) (ρ ,, c) a) (weaken1-coh υ e₃ ρ c))))
+  rhsRed : Esem (fold (val (vvar Z)) (weaken1 e₂) (weaken1 e₃)) (ρ ,, a)
+         ≡ bindŜ (Esem e₂ ρ) (λ b → bindŜ (Esem e₃ ρ) (λ φ → foldSem a b φ))
+  rhsRed = trans (bindŜ-unitˡ (λ xs → bindŜ (Esem (weaken1 e₂) (ρ ,, a)) (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, a)) (λ φ → foldSem xs b φ))) a)
+                 (trans (cong (λ w → bindŜ w (λ b → bindŜ (Esem (weaken1 e₃) (ρ ,, a)) (λ φ → foldSem a b φ))) (weaken1-coh (list σ) e₂ ρ a))
+                        (cong (λ w → bindŜ (Esem e₂ ρ) (λ b → bindŜ w (λ φ → foldSem a b φ))) (weaken1-coh (list σ) e₃ ρ a)))
+
+weaken1F-skip {α = α} (F-fold2 v1 e3) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (fold (val (weaken1V (weaken1V v1))) (val (vvar Z)) (weaken1 (weaken1 e3))) ((ρ ,, c) ,, a)
+         ≡ bindŜ (Esem e3 ρ) (λ φ → foldSem (Vsem v1 ρ) a φ)
+  lhsRed = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 (weaken1 e3)) ((ρ ,, c) ,, a)) (λ φ → foldSem xs b φ))) (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (Esem (weaken1 (weaken1 e3)) ((ρ ,, c) ,, a)) (λ φ → foldSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) b φ)) a)
+                        (trans (cong (λ w → bindŜ w (λ φ → foldSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) a φ)) (trans (weaken1-coh α (weaken1 e3) (ρ ,, c) a) (weaken1-coh υ e3 ρ c)))
+                               (cong (λ w → bindŜ (Esem e3 ρ) (λ φ → foldSem w a φ)) (trans (weaken1V-coh α (weaken1V v1) (ρ ,, c) a) (weaken1V-coh υ v1 ρ c)))))
+  rhsRed : Esem (fold (val (weaken1V v1)) (val (vvar Z)) (weaken1 e3)) (ρ ,, a)
+         ≡ bindŜ (Esem e3 ρ) (λ φ → foldSem (Vsem v1 ρ) a φ)
+  rhsRed = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ a) (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → foldSem xs b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (Esem (weaken1 e3) (ρ ,, a)) (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) a)
+                        (trans (cong (λ w → bindŜ w (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) a φ)) (weaken1-coh α e3 ρ a))
+                               (cong (λ w → bindŜ (Esem e3 ρ) (λ φ → foldSem w a φ)) (weaken1V-coh α v1 ρ a))))
+
+weaken1F-skip {α = α} (F-fold3 v1 v2) υ ρ c a = trans lhsRed (sym rhsRed)
+  where
+  lhsRed : Esem (fold (val (weaken1V (weaken1V v1))) (val (weaken1V (weaken1V v2))) (val (vvar Z))) ((ρ ,, c) ,, a)
+         ≡ foldSem (Vsem v1 ρ) (Vsem v2 ρ) a
+  lhsRed = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ (Vsem (weaken1V (weaken1V v2)) ((ρ ,, c) ,, a))) (λ b → bindŜ (η̂ˢ a) (λ φ → foldSem xs b φ))) (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ a) (λ φ → foldSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) b φ)) (Vsem (weaken1V (weaken1V v2)) ((ρ ,, c) ,, a)))
+                        (trans (bindŜ-unitˡ (λ φ → foldSem (Vsem (weaken1V (weaken1V v1)) ((ρ ,, c) ,, a)) (Vsem (weaken1V (weaken1V v2)) ((ρ ,, c) ,, a)) φ) a)
+                               (cong₂ (λ x y → foldSem x y a)
+                                      (trans (weaken1V-coh α (weaken1V v1) (ρ ,, c) a) (weaken1V-coh υ v1 ρ c))
+                                      (trans (weaken1V-coh α (weaken1V v2) (ρ ,, c) a) (weaken1V-coh υ v2 ρ c)))))
+  rhsRed : Esem (fold (val (weaken1V v1)) (val (weaken1V v2)) (val (vvar Z))) (ρ ,, a)
+         ≡ foldSem (Vsem v1 ρ) (Vsem v2 ρ) a
+  rhsRed = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ (Vsem (weaken1V v2) (ρ ,, a))) (λ b → bindŜ (η̂ˢ a) (λ φ → foldSem xs b φ))) (Vsem (weaken1V v1) (ρ ,, a)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ a) (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) b φ)) (Vsem (weaken1V v2) (ρ ,, a)))
+                        (trans (bindŜ-unitˡ (λ φ → foldSem (Vsem (weaken1V v1) (ρ ,, a)) (Vsem (weaken1V v2) (ρ ,, a)) φ) a)
+                               (cong₂ (λ x y → foldSem x y a) (weaken1V-coh α v1 ρ a) (weaken1V-coh α v2 ρ a))))
 
 -- ---------------------------------------------------------------------
 -- plugK-fst-snd-coh: a bespoke bridging lemma, needed for Theorem B.9's
@@ -1142,6 +1522,49 @@ resetS-eq r P P' γ eq with runSelWith P' γ | eq
 addR-0 : ∀ {ε X} (p : R × ŜStep ε X) → addR 0# p ≡ p
 addR-0 (r , s) = cong (λ z → z , s) (+-identityˡ r)
 
+-- PHASE 5: bindŜ-pure-assoc -- needed ONLY for Theorem B.9's (R15) case
+-- (fold's step rule). bindŜ's own GENERAL associativity law is NOT
+-- available in this development (see this file's own earlier note,
+-- above bindŜ-unitˡ's definition: proving it needs induction on an
+-- ARBITRARY Ŝ value's own unfolding depth, which sits behind a function
+-- type, invisible to ordinary structural recursion). This is the
+-- special case where the FIRST Kleisli arrow is PURE (a value h lifted
+-- via η̂ˢ) -- which sidesteps exactly that difficulty: a pure arrow's own
+-- runSelWith is ALWAYS (0#, leaf _), at every depth, so unlike the fully
+-- general law, the leaf/node split driving the recursion below is
+-- governed ENTIRELY by F's own shape, never by the first continuation's.
+-- Proved by recursing into F's own extracted per-reply continuation κ,
+-- the EXACT call-pattern renH-coh/handlerStep-coh's own mutual pair
+-- (above) already uses successfully (and the one Domains.agda's own
+-- bindŜ/mapŜ/glocalS/resetS are each themselves defined by) -- so
+-- accepted by Agda's termination checker the same way.
+-- The one genuinely non-trivial ingredient: the INNER bindŜ's own
+-- continuation (bindŜ F (λx→η̂ˢ(hx))'s own γ-argument, once threaded
+-- through the OUTER bindŜ's definition, is λx→thenS(λy→thenSγ(K2y))
+-- (η̂ˢ(hx))) collapses, in ONE non-recursive step (η̂ˢ's own runSelWith
+-- is a bare leaf, so thenS's own leaf-case fires immediately, no
+-- further recursion), down to the "nice" continuation λx→thenSγ(K2(hx))
+-- -- the SAME one bindŜ F (λx→K2(hx)) itself uses. Stated as a function
+-- equality (not pointwise) so `rewrite` can fire on it directly below,
+-- aligning BOTH sides of bindŜ-pure-assoc's own goal onto the SAME
+-- scrutinee (runSelWith F (λx→thenSγ(K2(hx)))) before splitting on it.
+pureCollapse-eq : ∀ {ε} {X Y U : Set} (γ : U → R̂ ε) (K2 : Y → Ŝ ε U) (h : X → Y)
+                 → (λ x → thenS (λ y → thenS γ (K2 y)) (η̂ˢ (h x))) ≡ (λ x → thenS γ (K2 (h x)))
+pureCollapse-eq γ K2 h = funext (λ x → mapF̂-0+-elim (thenS γ (K2 (h x))))
+
+bindŜ-pure-assoc : ∀ {ε X Y U} (F : Ŝ ε X) (h : X → Y) (K2 : Y → Ŝ ε U)
+                  → bindŜ (bindŜ F (λ x → η̂ˢ (h x))) K2 ≡ bindŜ F (λ x → K2 (h x))
+bindŜ-pure-assoc {ε} {X} {Y} {U} F h K2 = Ŝ-eq γstep
+  where
+  γstep : ∀ γ → runSelWith (bindŜ (bindŜ F (λ x → η̂ˢ (h x))) K2) γ
+              ≡ runSelWith (bindŜ F (λ x → K2 (h x))) γ
+  γstep γ with runSelWith F (λ x → thenS γ (K2 (h x)))
+              | cong (runSelWith F) (pureCollapse-eq γ K2 h)
+  ... | r1 , leaf x       | eq rewrite eq =
+    cong (λ z → z , proj₂ (runSelWith (K2 (h x)) γ)) (cong (_+ proj₁ (runSelWith (K2 (h x)) γ)) (+-identityʳ r1))
+  ... | r1 , node m o v κ | eq rewrite eq =
+    cong (λ f → r1 , node m o v f) (funext (λ a → bindŜ-pure-assoc (κ a) h K2))
+
 -- ---------------------------------------------------------------------
 -- WFG/WFE: a syntactic well-formedness restriction on loss-continuations
 -- (and, recursively, on the expressions embedding them), needed to close
@@ -1187,6 +1610,13 @@ mutual
     wf-vgnd  : ∀ {γ} (x : ⟦ γ ⟧ᴳ) → WFV (vgnd {γ = γ} x)
     wf-vpair : ∀ {σ τ} {v : Val Γ σ} {w : Val Γ τ} → WFV v → WFV w → WFV (vpair v w)
     wf-vabs  : ∀ {σ τ ε} {e : (Γ , σ) ⊢ τ ! ε} → WFE e → WFV (vabs e)
+    -- PHASE 5: sum/nat/list values, mirroring wf-vpair exactly.
+    wf-vinl  : ∀ {σ τ} {v : Val Γ σ} → WFV v → WFV (vinl {τ = τ} v)
+    wf-vinr  : ∀ {σ τ} {v : Val Γ τ} → WFV v → WFV (vinr {σ = σ} v)
+    wf-vzero :             WFV vzero
+    wf-vsucc : ∀ {v : Val Γ nat} → WFV v → WFV (vsucc v)
+    wf-vnil  : ∀ {σ}  → WFV (vnil {σ = σ})
+    wf-vcons : ∀ {σ} {v : Val Γ σ} {w : Val Γ (list σ)} → WFV v → WFV w → WFV (vcons v w)
 
   data WFH {Γ} where
     wf-handler : ∀ {ℓ par σ σ' ε} {h : Handler Γ ℓ par σ σ' ε}
@@ -1207,6 +1637,21 @@ mutual
     wf-reset  : ∀ {σ ε} {e : Γ ⊢ σ ! ε} → WFE e → WFE (resetE e)
     wf-handle : ∀ {ℓ par σ σ' ε} {h : Handler Γ ℓ par σ σ' ε} {e1 : Γ ⊢ gnd par ! ε} {e2 : Γ ⊢ σ ! (ε ,ℓ ℓ)}
               → WFH h → WFE e1 → WFE e2 → WFE (handleE h e1 e2)
+    -- PHASE 5: sum/nat/list expressions, mirroring wf-pair/wf-fst/wf-app
+    -- exactly (cases/iter/fold need one WFE premise per subexpression,
+    -- with cases's own branches additionally needing WFE at the
+    -- Γ,σ/Γ,τ-extended context, mirroring wf-then's own WFG g premise
+    -- shape).
+    wf-inl    : ∀ {σ τ ε} {e : Γ ⊢ σ ! ε} → WFE e → WFE (inl {τ = τ} e)
+    wf-inr    : ∀ {σ τ ε} {e : Γ ⊢ τ ! ε} → WFE e → WFE (inr {σ = σ} e)
+    wf-cases  : ∀ {σ τ ρ ε} {e : Γ ⊢ (σ `+ τ) ! ε} {e1 : (Γ , σ) ⊢ ρ ! ε} {e2 : (Γ , τ) ⊢ ρ ! ε}
+              → WFE e → WFE e1 → WFE e2 → WFE (cases e e1 e2)
+    wf-succ   : ∀ {ε} {e : Γ ⊢ nat ! ε} → WFE e → WFE (succ e)
+    wf-iter   : ∀ {σ ε} {e1 : Γ ⊢ nat ! ε} {e2 : Γ ⊢ σ ! ε} {e3 : Γ ⊢ (σ ⇒ σ ! ε) ! ε}
+              → WFE e1 → WFE e2 → WFE e3 → WFE (iter e1 e2 e3)
+    wf-consE  : ∀ {σ ε} {e1 : Γ ⊢ σ ! ε} {e2 : Γ ⊢ (list σ) ! ε} → WFE e1 → WFE e2 → WFE (consE e1 e2)
+    wf-fold   : ∀ {σ τ ε} {e1 : Γ ⊢ (list σ) ! ε} {e2 : Γ ⊢ τ ! ε} {e3 : Γ ⊢ ((σ `× τ) ⇒ τ ! ε) ! ε}
+              → WFE e1 → WFE e2 → WFE e3 → WFE (fold e1 e2 e3)
 
   data WFG {Γ ε} where
     wf-zero : ∀ {σ} → WFG {σ = σ} zeroLC
@@ -1223,6 +1668,12 @@ mutual
   WFV-renV ρ (wf-vgnd x)    = wf-vgnd x
   WFV-renV ρ (wf-vpair v w) = wf-vpair (WFV-renV ρ v) (WFV-renV ρ w)
   WFV-renV ρ (wf-vabs e)    = wf-vabs (WFE-renE (extR ρ) e)
+  WFV-renV ρ (wf-vinl v)    = wf-vinl (WFV-renV ρ v)
+  WFV-renV ρ (wf-vinr v)    = wf-vinr (WFV-renV ρ v)
+  WFV-renV ρ wf-vzero       = wf-vzero
+  WFV-renV ρ (wf-vsucc v)   = wf-vsucc (WFV-renV ρ v)
+  WFV-renV ρ wf-vnil        = wf-vnil
+  WFV-renV ρ (wf-vcons v w) = wf-vcons (WFV-renV ρ v) (WFV-renV ρ w)
 
   WFH-renH : ∀ {Γ Γ' ℓ par σ σ' ε} (ρ : Ren Γ Γ') {h : Handler Γ ℓ par σ σ' ε} → WFH h → WFH (renH ρ h)
   WFH-renH ρ (wf-handler wfc wfr) =
@@ -1242,6 +1693,13 @@ mutual
   WFE-renE ρ (wf-glocal wfe wfg) = wf-glocal (WFE-renE ρ wfe) (WFG-renV ρ wfg)
   WFE-renE ρ (wf-reset wfe)      = wf-reset (WFE-renE ρ wfe)
   WFE-renE ρ (wf-handle wfh wfe1 wfe2) = wf-handle (WFH-renH ρ wfh) (WFE-renE ρ wfe1) (WFE-renE ρ wfe2)
+  WFE-renE ρ (wf-inl wfe)              = wf-inl (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-inr wfe)              = wf-inr (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-cases wfe wfe1 wfe2)  = wf-cases (WFE-renE ρ wfe) (WFE-renE (extR ρ) wfe1) (WFE-renE (extR ρ) wfe2)
+  WFE-renE ρ (wf-succ wfe)             = wf-succ (WFE-renE ρ wfe)
+  WFE-renE ρ (wf-iter wfe1 wfe2 wfe3)  = wf-iter (WFE-renE ρ wfe1) (WFE-renE ρ wfe2) (WFE-renE ρ wfe3)
+  WFE-renE ρ (wf-consE wfe1 wfe2)      = wf-consE (WFE-renE ρ wfe1) (WFE-renE ρ wfe2)
+  WFE-renE ρ (wf-fold wfe1 wfe2 wfe3)  = wf-fold (WFE-renE ρ wfe1) (WFE-renE ρ wfe2) (WFE-renE ρ wfe3)
 
   WFG-renV : ∀ {Γ Γ' σ ε} (ρ : Ren Γ Γ') {g : LC Γ σ ε} → WFG g → WFG (renV ρ g)
   WFG-renV ρ wf-zero            = wf-zero
@@ -1264,6 +1722,12 @@ mutual
   WFV-subV wfσs (wf-vgnd x)    = wf-vgnd x
   WFV-subV wfσs (wf-vpair v w) = wf-vpair (WFV-subV wfσs v) (WFV-subV wfσs w)
   WFV-subV wfσs (wf-vabs e)    = wf-vabs (WFE-subE (WFsub-ext wfσs) e)
+  WFV-subV wfσs (wf-vinl v)    = wf-vinl (WFV-subV wfσs v)
+  WFV-subV wfσs (wf-vinr v)    = wf-vinr (WFV-subV wfσs v)
+  WFV-subV wfσs wf-vzero       = wf-vzero
+  WFV-subV wfσs (wf-vsucc v)   = wf-vsucc (WFV-subV wfσs v)
+  WFV-subV wfσs wf-vnil        = wf-vnil
+  WFV-subV wfσs (wf-vcons v w) = wf-vcons (WFV-subV wfσs v) (WFV-subV wfσs w)
 
   WFH-subH : ∀ {Γ Γ' ℓ par σ σ' ε} {σs : Sub Γ Γ'} → WFsub σs → {h : Handler Γ ℓ par σ σ' ε} → WFH h → WFH (subH σs h)
   WFH-subH wfσs (wf-handler wfc wfr) =
@@ -1284,6 +1748,13 @@ mutual
   WFE-subE wfσs (wf-glocal wfe wfg) = wf-glocal (WFE-subE wfσs wfe) (WFG-subV wfσs wfg)
   WFE-subE wfσs (wf-reset wfe)      = wf-reset (WFE-subE wfσs wfe)
   WFE-subE wfσs (wf-handle wfh wfe1 wfe2) = wf-handle (WFH-subH wfσs wfh) (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2)
+  WFE-subE wfσs (wf-inl wfe)              = wf-inl (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-inr wfe)              = wf-inr (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-cases wfe wfe1 wfe2)  = wf-cases (WFE-subE wfσs wfe) (WFE-subE (WFsub-ext wfσs) wfe1) (WFE-subE (WFsub-ext wfσs) wfe2)
+  WFE-subE wfσs (wf-succ wfe)             = wf-succ (WFE-subE wfσs wfe)
+  WFE-subE wfσs (wf-iter wfe1 wfe2 wfe3)  = wf-iter (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2) (WFE-subE wfσs wfe3)
+  WFE-subE wfσs (wf-consE wfe1 wfe2)      = wf-consE (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2)
+  WFE-subE wfσs (wf-fold wfe1 wfe2 wfe3)  = wf-fold (WFE-subE wfσs wfe1) (WFE-subE wfσs wfe2) (WFE-subE wfσs wfe3)
 
   WFG-subV : ∀ {Γ Γ' σ ε} {σs : Sub Γ Γ'} → WFsub σs → {g : LC Γ σ ε} → WFG g → WFG (subV σs g)
   WFG-subV wfσs wf-zero            = wf-zero
@@ -1326,6 +1797,18 @@ WFE-plugF F-loss         (wf-loss wfe)     = wfe
 WFE-plugF (F-handleP h b) (wf-handle _ wfe _) = wfe
 WFE-plugF (F-plusL e₂)    (wf-plus wfe _)     = wfe
 WFE-plugF (F-plusR v)     (wf-plus _ wfe)     = wfe
+WFE-plugF F-inl            (wf-inl wfe)        = wfe
+WFE-plugF F-inr            (wf-inr wfe)        = wfe
+WFE-plugF (F-cases _ _)    (wf-cases wfe _ _)  = wfe
+WFE-plugF F-succ           (wf-succ wfe)       = wfe
+WFE-plugF (F-consL _)      (wf-consE wfe _)    = wfe
+WFE-plugF (F-consR _)      (wf-consE _ wfe)    = wfe
+WFE-plugF (F-iter1 _ _)    (wf-iter wfe _ _)   = wfe
+WFE-plugF (F-iter2 _ _)    (wf-iter _ wfe _)   = wfe
+WFE-plugF (F-iter3 _ _)    (wf-iter _ _ wfe)   = wfe
+WFE-plugF (F-fold1 _ _)    (wf-fold wfe _ _)   = wfe
+WFE-plugF (F-fold2 _ _)    (wf-fold _ wfe _)   = wfe
+WFE-plugF (F-fold3 _ _)    (wf-fold _ _ wfe)   = wfe
 
 -- WFE-plugS: WFE-plugF's own analogue for the four SFrame shapes.
 WFE-plugS : ∀ {Γ α ε τ ε'} (s : SFrame Γ α ε τ ε') {e : Γ ⊢ α ! ε} → WFE (plugS s e) → WFE e
@@ -1369,6 +1852,18 @@ WFE-plugF-fill F-loss          (wf-loss _)            wfe' = wf-loss wfe'
 WFE-plugF-fill (F-handleP h b) (wf-handle wfh _ wfb)  wfe' = wf-handle wfh wfe' wfb
 WFE-plugF-fill (F-plusL e₂)    (wf-plus _ wfe2)       wfe' = wf-plus wfe' wfe2
 WFE-plugF-fill (F-plusR v)     (wf-plus wfv _)        wfe' = wf-plus wfv wfe'
+WFE-plugF-fill F-inl           (wf-inl _)             wfe' = wf-inl wfe'
+WFE-plugF-fill F-inr           (wf-inr _)             wfe' = wf-inr wfe'
+WFE-plugF-fill (F-cases e1 e2) (wf-cases _ wfe1 wfe2) wfe' = wf-cases wfe' wfe1 wfe2
+WFE-plugF-fill F-succ          (wf-succ _)            wfe' = wf-succ wfe'
+WFE-plugF-fill (F-consL e₂)    (wf-consE _ wfe2)      wfe' = wf-consE wfe' wfe2
+WFE-plugF-fill (F-consR v)     (wf-consE wfval _)     wfe' = wf-consE wfval wfe'
+WFE-plugF-fill (F-iter1 e2 e3) (wf-iter _ wfe2 wfe3)  wfe' = wf-iter wfe' wfe2 wfe3
+WFE-plugF-fill (F-iter2 v1 e3) (wf-iter wfval1 _ wfe3) wfe' = wf-iter wfval1 wfe' wfe3
+WFE-plugF-fill (F-iter3 v1 v2) (wf-iter wfval1 wfval2 _) wfe' = wf-iter wfval1 wfval2 wfe'
+WFE-plugF-fill (F-fold1 e2 e3) (wf-fold _ wfe2 wfe3)  wfe' = wf-fold wfe' wfe2 wfe3
+WFE-plugF-fill (F-fold2 v1 e3) (wf-fold wfval1 _ wfe3) wfe' = wf-fold wfval1 wfe' wfe3
+WFE-plugF-fill (F-fold3 v1 v2) (wf-fold wfval1 wfval2 _) wfe' = wf-fold wfval1 wfval2 wfe'
 
 -- WFE-plugK-fill: WFE-plugF-fill/WFE-plugS-fill's own analogue for a
 -- whole ContCxt, no renaming (unlike WFE-plugK-ren-fill, needed by R5's
@@ -1401,6 +1896,18 @@ WFE-frame-fill F-loss          _                        wfe' = wf-loss wfe'
 WFE-frame-fill (F-handleP h b) (wf-handle wfh _ wfb)    wfe' = wf-handle (WFH-renH S wfh) wfe' (WFE-renE S wfb)
 WFE-frame-fill (F-plusL e₂)    (wf-plus _ wfe2)         wfe' = wf-plus wfe' (WFE-renE S wfe2)
 WFE-frame-fill (F-plusR v)     (wf-plus (wf-val wfv) _) wfe' = wf-plus (wf-val (WFV-renV S wfv)) wfe'
+WFE-frame-fill F-inl           _                        wfe' = wf-inl wfe'
+WFE-frame-fill F-inr           _                        wfe' = wf-inr wfe'
+WFE-frame-fill (F-cases e1 e2) (wf-cases _ wfe1 wfe2)   wfe' = wf-cases wfe' (WFE-renE (extR S) wfe1) (WFE-renE (extR S) wfe2)
+WFE-frame-fill F-succ          _                        wfe' = wf-succ wfe'
+WFE-frame-fill (F-consL e₂)    (wf-consE _ wfe2)        wfe' = wf-consE wfe' (WFE-renE S wfe2)
+WFE-frame-fill (F-consR v)     (wf-consE (wf-val wfv) _) wfe' = wf-consE (wf-val (WFV-renV S wfv)) wfe'
+WFE-frame-fill (F-iter1 e2 e3) (wf-iter _ wfe2 wfe3)    wfe' = wf-iter wfe' (WFE-renE S wfe2) (WFE-renE S wfe3)
+WFE-frame-fill (F-iter2 v1 e3) (wf-iter (wf-val wfv1) _ wfe3) wfe' = wf-iter (wf-val (WFV-renV S wfv1)) wfe' (WFE-renE S wfe3)
+WFE-frame-fill (F-iter3 v1 v2) (wf-iter (wf-val wfv1) (wf-val wfv2) _) wfe' = wf-iter (wf-val (WFV-renV S wfv1)) (wf-val (WFV-renV S wfv2)) wfe'
+WFE-frame-fill (F-fold1 e2 e3) (wf-fold _ wfe2 wfe3)    wfe' = wf-fold wfe' (WFE-renE S wfe2) (WFE-renE S wfe3)
+WFE-frame-fill (F-fold2 v1 e3) (wf-fold (wf-val wfv1) _ wfe3) wfe' = wf-fold (wf-val (WFV-renV S wfv1)) wfe' (WFE-renE S wfe3)
+WFE-frame-fill (F-fold3 v1 v2) (wf-fold (wf-val wfv1) (wf-val wfv2) _) wfe' = wf-fold (wf-val (WFV-renV S wfv1)) (wf-val (WFV-renV S wfv2)) wfe'
 
 -- WFE-sframe-fill: WFE-frame-fill's own analogue for SFrame, needed by
 -- WFE-plugK-ren-fill below (R5's own k'/yArg construction weakens EVERY
@@ -1762,6 +2269,144 @@ theorem-B9 (R9 {sub = sub} {g = g} v) _ ρ =
   cong (λ z → z , leaf (Vsem v ρ)) (sym (+-identityˡ 0#))
   where γ = ⌊ g ⌋[ sub , ρ ]
 
+-- PHASE 5: sum/nat/list cases. Rinl/Rinr/Rsucc/Rcons are pure
+-- value-coalescing, following R2-pair's own template exactly (both
+-- sides reduce to the SAME leaf via bindŜ-unitˡ, r=0# trivial via
+-- +-identityˡ). R10/R11 substitute a value into a binder-extended
+-- branch body, following R3's own template exactly (bindŜ-unitˡ peels
+-- the outer bind down to the chosen branch, sub1-coh bridges the
+-- substituted branch back to the branch evaluated at an extended
+-- environment).
+theorem-B9 (Rinl {sub = sub} {g = g} v) _ ρ =
+  trans (cong (λ w → runSelWith w γ) (bindŜ-unitˡ (λ a → η̂ˢ (inj₁ a)) (Vsem v ρ)))
+        (cong (λ z → z , leaf (inj₁ (Vsem v ρ))) (sym (+-identityˡ 0#)))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+theorem-B9 (Rinr {sub = sub} {g = g} v) _ ρ =
+  trans (cong (λ w → runSelWith w γ) (bindŜ-unitˡ (λ a → η̂ˢ (inj₂ a)) (Vsem v ρ)))
+        (cong (λ z → z , leaf (inj₂ (Vsem v ρ))) (sym (+-identityˡ 0#)))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+theorem-B9 (Rsucc {sub = sub} {g = g} v) _ ρ =
+  trans (cong (λ w → runSelWith w γ) (bindŜ-unitˡ (λ n → η̂ˢ (suc n)) (Vsem v ρ)))
+        (cong (λ z → z , leaf (suc (Vsem v ρ))) (sym (+-identityˡ 0#)))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+theorem-B9 (Rcons {sub = sub} {g = g} v w) _ ρ =
+  trans (cong (λ z → runSelWith z γ)
+              (trans (bindŜ-unitˡ (λ a → bindŜ (η̂ˢ (Vsem w ρ)) (λ as → η̂ˢ (a ∷ as))) (Vsem v ρ))
+                     (bindŜ-unitˡ (λ as → η̂ˢ (Vsem v ρ ∷ as)) (Vsem w ρ))))
+        (cong (λ z → z , leaf (Vsem v ρ ∷ Vsem w ρ)) (sym (+-identityˡ 0#)))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+-- R10/R11: the step's own Esem(cases (val (vinl/vinr v)) ..) goes through
+-- cases-eq and bindŜ-unitˡ against casesK, then sub1-coh bridges e1[v]/e2[v].
+theorem-B9 (R10 {sub = sub} {g = g} v e1 e2) _ ρ =
+  trans (cong (λ w → runSelWith w γ)
+              (trans (cases-eq (val (vinl v)) e1 e2 ρ) (bindŜ-unitˡ (casesK e1 e2 ρ) (inj₁ (Vsem v ρ)))))
+        (trans (sym (addR-0 (runSelWith (Esem e1 (ρ ,, Vsem v ρ)) γ)))
+               (cong (λ w → addR 0# (runSelWith w γ)) (sym (sub1-coh e1 ρ v))))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+theorem-B9 (R11 {sub = sub} {g = g} v e1 e2) _ ρ =
+  trans (cong (λ w → runSelWith w γ)
+              (trans (cases-eq (val (vinr v)) e1 e2 ρ) (bindŜ-unitˡ (casesK e1 e2 ρ) (inj₂ (Vsem v ρ)))))
+        (trans (sym (addR-0 (runSelWith (Esem e2 (ρ ,, Vsem v ρ)) γ)))
+               (cong (λ w → addR 0# (runSelWith w γ)) (sym (sub1-coh e2 ρ v))))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+
+-- R12/R14 (iter/fold's zero/nil base cases): three bindŜ-unitˡ
+-- applications peel e1/e2/e3's values down to a direct application of
+-- iterSem/foldSem AT zero/[] -- which, by Denotational.agda's OWN
+-- definition, is literally `η̂ˢ b` (the base-case value's own leaf),
+-- with no further algebra needed, mirroring R8/R9's own trivial
+-- template exactly.
+theorem-B9 (R12 {sub = sub} {g = g} v2 v3) _ ρ =
+  trans (cong (λ w → runSelWith w γ)
+              (trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ (Vsem v2 ρ)) (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → iterSem n b φ))) zero)
+                     (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → iterSem zero b φ)) (Vsem v2 ρ))
+                            (bindŜ-unitˡ (λ φ → iterSem zero (Vsem v2 ρ) φ) (Vsem v3 ρ)))))
+        (cong (λ z → z , leaf (Vsem v2 ρ)) (sym (+-identityˡ 0#)))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+-- R13 (iter's succ/step case): NOT an induction -- a single unfolding,
+-- exactly as this phase's brief predicts. Both sides reduce (via the
+-- SAME three-bindŜ-unitˡ chain used by R12 above, `innerRed`) to
+-- `bindŜ (iterSem (Vsem v1 ρ) (Vsem v2 ρ) (Vsem v3 ρ)) (Vsem v3 ρ)` --
+-- the LHS reaches it directly via iterSem's own defining equation for
+-- `suc n` (`iterSem (suc n) b φ = bindŜ (iterSem n b φ) φ`, which holds
+-- BY DEFINITION, so `lhsRed`'s last step is accepted by plain
+-- definitional unfolding, no extra lemma needed); the RHS
+-- (`app (val v3) (iter (val v1) (val v2) (val v3))`) reaches the SAME
+-- term by unfolding `app`'s own bindŜ-unitˡ around `innerRed`.
+theorem-B9 (R13 {sub = sub} {g = g} v1 v2 v3) _ ρ =
+  trans (cong (λ w → runSelWith w γ) lhsRed)
+        (trans (sym (addR-0 (runSelWith (bindŜ (iterSem (Vsem v1 ρ) (Vsem v2 ρ) (Vsem v3 ρ)) (Vsem v3 ρ)) γ)))
+               (cong (λ w → addR 0# (runSelWith w γ)) (sym rhsRed)))
+  where
+  γ = ⌊ g ⌋[ sub , ρ ]
+  lhsRed : Esem (iter (val (vsucc v1)) (val v2) (val v3)) ρ ≡ bindŜ (iterSem (Vsem v1 ρ) (Vsem v2 ρ) (Vsem v3 ρ)) (Vsem v3 ρ)
+  lhsRed = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ (Vsem v2 ρ)) (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → iterSem n b φ))) (suc (Vsem v1 ρ)))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → iterSem (suc (Vsem v1 ρ)) b φ)) (Vsem v2 ρ))
+                        (bindŜ-unitˡ (λ φ → iterSem (suc (Vsem v1 ρ)) (Vsem v2 ρ) φ) (Vsem v3 ρ)))
+  innerRed : Esem (iter (val v1) (val v2) (val v3)) ρ ≡ iterSem (Vsem v1 ρ) (Vsem v2 ρ) (Vsem v3 ρ)
+  innerRed = trans (bindŜ-unitˡ (λ n → bindŜ (η̂ˢ (Vsem v2 ρ)) (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → iterSem n b φ))) (Vsem v1 ρ))
+                   (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → iterSem (Vsem v1 ρ) b φ)) (Vsem v2 ρ))
+                          (bindŜ-unitˡ (λ φ → iterSem (Vsem v1 ρ) (Vsem v2 ρ) φ) (Vsem v3 ρ)))
+  rhsRed : Esem (app (val v3) (iter (val v1) (val v2) (val v3))) ρ ≡ bindŜ (iterSem (Vsem v1 ρ) (Vsem v2 ρ) (Vsem v3 ρ)) (Vsem v3 ρ)
+  rhsRed = trans (bindŜ-unitˡ (λ φ' → bindŜ (Esem (iter (val v1) (val v2) (val v3)) ρ) φ') (Vsem v3 ρ))
+                 (cong (λ w → bindŜ w (Vsem v3 ρ)) innerRed)
+
+theorem-B9 (R14 {sub = sub} {g = g} v2 v3) _ ρ =
+  trans (cong (λ w → runSelWith w γ)
+              (trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ (Vsem v2 ρ)) (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → foldSem xs b φ))) [])
+                     (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ φ → foldSem [] b φ)) (Vsem v2 ρ))
+                            (bindŜ-unitˡ (λ φ → foldSem [] (Vsem v2 ρ) φ) (Vsem v3 ρ)))))
+        (cong (λ z → z , leaf (Vsem v2 ρ)) (sym (+-identityˡ 0#)))
+  where γ = ⌊ g ⌋[ sub , ρ ]
+
+-- R15 (fold's cons/step case): mirrors R13's own shape (foldSem's
+-- defining equation for `x ∷ xs`, `foldSem (x ∷ xs) b φ = bindŜ
+-- (foldSem xs b φ) (λ r → φ (x , r))`, unfolds the SAME way iterSem's
+-- suc-equation did) for `lhsRed`, but with ONE genuine extra wrinkle on
+-- the `rhsRed` side that R13 did NOT have: the reduct's own step
+-- application is to a PAIR (v1, fold(v2,v3,v4)), built via the ordinary
+-- expression-former `pair` (R2-pair settles it into a vpair only once
+-- fold(v2,v3,v4) itself reaches a value) -- so `rhsRed` first reaches
+-- `bindŜ (bindŜ N K1) K2` (N := foldSem(Vsem v2 ρ)(Vsem v3 ρ)(Vsem v4 ρ),
+-- K1 b = η̂ˢ(Vsem v1 ρ , b), K2 = Vsem v4 ρ) via pairRed, and THIS is a
+-- genuine instance of the TWO-nested-bindŜ shape bindŜ-pure-assoc (above)
+-- was built for: K1 is pure, so the "regrouping" into `bindŜ N (λr → K2
+-- (Vsem v1 ρ , r))` -- matching `lhsRed`'s own target exactly -- is
+-- exactly bindŜ-pure-assoc's own conclusion, NOT the general
+-- bind-associativity law this file's earlier note documents as
+-- unavailable.
+theorem-B9 (R15 {sub = sub} {g = g} v1 v2 v3 v4) _ ρ =
+  trans (cong (λ w → runSelWith w γ) lhsRed)
+        (trans (sym (addR-0 (runSelWith (bindŜ (foldSem (Vsem v2 ρ) (Vsem v3 ρ) (Vsem v4 ρ)) (λ r → Vsem v4 ρ (Vsem v1 ρ , r))) γ)))
+               (cong (λ w → addR 0# (runSelWith w γ)) (sym rhsRed)))
+  where
+  γ = ⌊ g ⌋[ sub , ρ ]
+  lhsRed : Esem (fold (val (vcons v1 v2)) (val v3) (val v4)) ρ
+         ≡ bindŜ (foldSem (Vsem v2 ρ) (Vsem v3 ρ) (Vsem v4 ρ)) (λ r → Vsem v4 ρ (Vsem v1 ρ , r))
+  lhsRed = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ b → bindŜ (η̂ˢ (Vsem v4 ρ)) (λ φ → foldSem xs b φ))) (Vsem v1 ρ ∷ Vsem v2 ρ))
+                 (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ (Vsem v4 ρ)) (λ φ → foldSem (Vsem v1 ρ ∷ Vsem v2 ρ) b φ)) (Vsem v3 ρ))
+                        (bindŜ-unitˡ (λ φ → foldSem (Vsem v1 ρ ∷ Vsem v2 ρ) (Vsem v3 ρ) φ) (Vsem v4 ρ)))
+  innerRed : Esem (fold (val v2) (val v3) (val v4)) ρ ≡ foldSem (Vsem v2 ρ) (Vsem v3 ρ) (Vsem v4 ρ)
+  innerRed = trans (bindŜ-unitˡ (λ xs → bindŜ (η̂ˢ (Vsem v3 ρ)) (λ b → bindŜ (η̂ˢ (Vsem v4 ρ)) (λ φ → foldSem xs b φ))) (Vsem v2 ρ))
+                   (trans (bindŜ-unitˡ (λ b → bindŜ (η̂ˢ (Vsem v4 ρ)) (λ φ → foldSem (Vsem v2 ρ) b φ)) (Vsem v3 ρ))
+                          (bindŜ-unitˡ (λ φ → foldSem (Vsem v2 ρ) (Vsem v3 ρ) φ) (Vsem v4 ρ)))
+  pairRed : Esem (pair (val v1) (fold (val v2) (val v3) (val v4))) ρ
+          ≡ bindŜ (foldSem (Vsem v2 ρ) (Vsem v3 ρ) (Vsem v4 ρ)) (λ b → η̂ˢ (Vsem v1 ρ , b))
+  pairRed = trans (bindŜ-unitˡ (λ a → bindŜ (Esem (fold (val v2) (val v3) (val v4)) ρ) (λ b → η̂ˢ (a , b))) (Vsem v1 ρ))
+                  (cong (λ w → bindŜ w (λ b → η̂ˢ (Vsem v1 ρ , b))) innerRed)
+  rhsRed : Esem (app (val v4) (pair (val v1) (fold (val v2) (val v3) (val v4)))) ρ
+         ≡ bindŜ (foldSem (Vsem v2 ρ) (Vsem v3 ρ) (Vsem v4 ρ)) (λ r → Vsem v4 ρ (Vsem v1 ρ , r))
+  rhsRed = trans (bindŜ-unitˡ (λ φ' → bindŜ (Esem (pair (val v1) (fold (val v2) (val v3) (val v4))) ρ) φ') (Vsem v4 ρ))
+                 (trans (cong (λ w → bindŜ w (Vsem v4 ρ)) pairRed)
+                        (bindŜ-pure-assoc (foldSem (Vsem v2 ρ) (Vsem v3 ρ) (Vsem v4 ρ)) (λ b → Vsem v1 ρ , b) (Vsem v4 ρ)))
+
 -- (F): regular-frame congruence. lemma-B6 rewrites both plugF f e and
 -- plugF f e' into the SAME bindŜ-with-D shape; bindŜ-addR then lifts the
 -- IH across it, fed by `ihFixed` -- theorem-B9's OWN IH on the smaller
@@ -1860,6 +2505,20 @@ WFE-preserved (R7 sub v e) wfg (wf-then (wf-val wfv) wfge) = wf-glocal (WFG-e[v]
 WFE-preserved (R8 sub1 sub2 v g1) wfg (wf-glocal (wf-val wfv) wfg1) = wf-val wfv
 WFE-preserved (R9 v) wfg (wf-reset (wf-val wfv)) = wf-val wfv
 WFE-preserved (Rplus r w) wfg (wf-plus (wf-val (wf-vgnd _)) (wf-val (wf-vgnd _))) = wf-val (wf-vgnd _)
+-- PHASE 5: sum/nat/list cases, mirroring R2-pair/R2-fst/R2-snd/R3's own
+-- shapes exactly.
+WFE-preserved (Rinl v) wfg (wf-inl (wf-val wfv)) = wf-val (wf-vinl wfv)
+WFE-preserved (Rinr v) wfg (wf-inr (wf-val wfv)) = wf-val (wf-vinr wfv)
+WFE-preserved (Rsucc v) wfg (wf-succ (wf-val wfv)) = wf-val (wf-vsucc wfv)
+WFE-preserved (Rcons v w) wfg (wf-consE (wf-val wfv) (wf-val wfw)) = wf-val (wf-vcons wfv wfw)
+WFE-preserved (R10 v e1 e2) wfg (wf-cases (wf-val (wf-vinl wfv)) wfe1 wfe2) = WFE-[] wfe1 wfv
+WFE-preserved (R11 v e1 e2) wfg (wf-cases (wf-val (wf-vinr wfv)) wfe1 wfe2) = WFE-[] wfe2 wfv
+WFE-preserved (R12 v2 v3) wfg (wf-iter (wf-val wf-vzero) (wf-val wfv2) (wf-val wfv3)) = wf-val wfv2
+WFE-preserved (R13 v1 v2 v3) wfg (wf-iter (wf-val (wf-vsucc wfv1)) (wf-val wfv2) (wf-val wfv3)) =
+  wf-app (wf-val wfv3) (wf-iter (wf-val wfv1) (wf-val wfv2) (wf-val wfv3))
+WFE-preserved (R14 v2 v3) wfg (wf-fold (wf-val wf-vnil) (wf-val wfv2) (wf-val wfv3)) = wf-val wfv2
+WFE-preserved (R15 v1 v2 v3 v4) wfg (wf-fold (wf-val (wf-vcons wfv1 wfv2)) (wf-val wfv3) (wf-val wfv4)) =
+  wf-app (wf-val wfv4) (wf-pair (wf-val wfv1) (wf-fold (wf-val wfv2) (wf-val wfv3) (wf-val wfv4)))
 WFE-preserved (F-rule sub f stp) wfg wfpe =
   WFE-plugF-fill f wfpe (WFE-preserved stp newg-wfg (WFE-plugF f wfpe))
   where
