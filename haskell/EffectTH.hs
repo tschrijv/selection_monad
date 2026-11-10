@@ -24,6 +24,16 @@
 -- untouched 'SelectionMonad_ParameterSupport2' primitives ('op', 'opS',
 -- 'Handler', 'handle', ':?', ':*', 'run', ...).
 --
+-- The quasiquoter's PARSING technique is adopted from @Sel.hs@
+-- (@Control.Mp.Sel@, this project's original multi-prompt-delimited-
+-- continuation implementation): parse the quoted block as a real
+-- Haskell @data@ declaration via haskell-src-meta's 'parseDecs' and
+-- walk the resulting TH AST directly, rather than hand-rolling a
+-- parser for a restricted type grammar (see the "Parsing" section
+-- below for the full rationale, including why the rest of @Sel.hs@'s
+-- design -- its own @Op@ type and marker\/prompt-based dispatch -- is
+-- NOT adopted, only its parsing technique).
+--
 -- GHC's TH staging restriction means the quasiquoter must live in a
 -- different module from any use of @[effect| ... |]@; see
 -- @Section4Example.hs@ for the worked NDet/decide example and the
@@ -93,8 +103,8 @@ module EffectTH
   )
 where
 
-import Data.Char (isAlphaNum, isSpace, isUpper)
 import Data.List (nub)
+import Language.Haskell.Meta.Parse (parseDecs)
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import SelectionMonad_ParameterSupport2
@@ -166,140 +176,65 @@ runSel :: (Monoid r) => Sel r VoidEff a -> a
 runSel = fst . run
 
 -- ---------------------------------------------------------------------
--- A tiny hand-rolled parser for the restricted grammar
---   data <ConName> = <ConName> { <field> :: Op <Type> <Type>, ... }
--- (haskell-src-meta is not installed, and none is needed: this is far
--- simpler than arbitrary Haskell).
+-- Parsing: [effect| ... |]'s quoted text -> EffectDecl
+--
+-- Adopts Sel.hs's own @opParser@ technique (Control.Mp.Sel, the
+-- original multi-prompt-delimited-continuation implementation this
+-- project also carries): parse the quoted block as a REAL Haskell
+-- @data@ declaration via haskell-src-meta's 'parseDecs', then walk the
+-- resulting TH 'Dec'/'Type' AST directly, instead of hand-rolling a
+-- parser for a restricted type grammar. Unlike Sel.hs's own macro --
+-- which extends its already-6-parameter, globally-shared
+-- @Op a b c r e ans@ type by appending the 4 implicit parameters a
+-- field's bare @Op I O@ is missing (via 'foldl' 'AppT') -- this one
+-- extracts @I@/@O@ from each field and builds a full dispatch-functor /
+-- handler-definition pair from scratch in 'genEffect' below, since this
+-- module's underlying 'Sel' is the structural sum-of-functors one from
+-- 'SelectionMonad_ParameterSupport2' (dispatch via @(:?)@/@op@ on a
+-- plain 'Functor', found at RUN time by structural injection), not
+-- Sel.hs's own marker/prompt-based one (dispatch via runtime-unique
+-- 'Marker' identity, found by walking the 'Context'). The two
+-- underlying 'Sel's are genuinely different implementations; only the
+-- quasiquoter's PARSING technique is adopted here, by design.
 -- ---------------------------------------------------------------------
 
--- | A restricted type grammar: identifiers (lowercase = type variable,
--- uppercase = type constructor, including "()"), type application,
--- lists, and tuples. Enough for every @Op I O@ actually seen (@()@,
--- @Bool@, @[a]@, @a@, @[Param]@, @[Float]@, @(Step,Step)@, ...), not
--- arbitrary Haskell types.
-data PTy
-  = TyVar String
-  | TyCon String
-  | TyApp PTy PTy
-  | TyList PTy
-  | TyTuple [PTy]
-  deriving (Show)
-
-freeVars :: PTy -> [String]
-freeVars (TyVar v) = [v]
-freeVars (TyCon _) = []
-freeVars (TyApp a b) = freeVars a ++ freeVars b
-freeVars (TyList a) = freeVars a
-freeVars (TyTuple ts) = concatMap freeVars ts
-
-type Field = (String, PTy, PTy)
+type Field = (String, Type, Type)
 
 data EffectDecl = EffectDecl {edName :: String, edFields :: [Field]}
 
-type P a = String -> Either String (a, String)
+-- | Every type variable mentioned in a field's @I@/@O@ type (so the
+-- generated functor\/handler-definition declarations can be
+-- parameterized over them) -- the TH 'Type' analogue of the old
+-- hand-rolled parser's @freeVars@.
+tyVarsIn :: Type -> [Name]
+tyVarsIn (VarT n) = [n]
+tyVarsIn (AppT a b) = tyVarsIn a ++ tyVarsIn b
+tyVarsIn (SigT t _) = tyVarsIn t
+tyVarsIn (ForallT _ _ t) = tyVarsIn t
+tyVarsIn (InfixT a _ b) = tyVarsIn a ++ tyVarsIn b
+tyVarsIn (ParensT t) = tyVarsIn t
+tyVarsIn _ = []
 
-skipWS :: String -> String
-skipWS = dropWhile isSpace
-
-lit :: String -> P ()
-lit s inp =
-  let inp' = skipWS inp
-   in if take (length s) inp' == s
-        then Right ((), drop (length s) inp')
-        else Left ("expected " ++ show s ++ " near " ++ show (take 30 inp'))
-
-ident :: P String
-ident inp =
-  let inp' = skipWS inp
-      (tok, rest) = span (\c -> isAlphaNum c || c == '_' || c == '\'') inp'
-   in if null tok
-        then Left ("expected identifier near " ++ show (take 30 inp'))
-        else Right (tok, rest)
-
--- | A single "atomic" type: identifier, unit, bracketed list, or
--- parenthesised type\/tuple.
-parseAtom :: P PTy
-parseAtom inp =
-  let inp' = skipWS inp
-   in case inp' of
-        ('(' : rest) ->
-          case skipWS rest of
-            (')' : rest2) -> Right (TyCon "()", rest2)
-            _ -> do
-              (t1, r1) <- parseType rest
-              goTuple [t1] r1
-        ('[' : rest) -> do
-          (t, r1) <- parseType rest
-          case skipWS r1 of
-            (']' : r2) -> Right (TyList t, r2)
-            _ -> Left ("expected ']' near " ++ show (take 30 r1))
-        _ -> do
-          (name, r1) <- ident inp'
-          Right (if isUpper (head name) then TyCon name else TyVar name, r1)
+parseEffect :: String -> Either String EffectDecl
+parseEffect str = do
+  decs <- parseDecs str
+  case decs of
+    [DataD _ tyName _ _ [RecC _ fields] _] ->
+      EffectDecl (nameBase tyName) <$> mapM toField fields
+    [DataD _ _ _ _ cons _] ->
+      Left ("expected exactly one record constructor with Op-typed fields, got " ++ show (length cons) ++ " constructor(s)")
+    [_] -> Left "expected a `data Eff = Eff { field :: Op I O, ... }` declaration"
+    _ -> Left ("expected exactly one declaration, got " ++ show (length decs))
   where
-    goTuple acc r =
-      case skipWS r of
-        (',' : r2) -> do (t, r3) <- parseType r2; goTuple (acc ++ [t]) r3
-        (')' : r2) -> Right (if length acc == 1 then head acc else TyTuple acc, r2)
-        _ -> Left ("expected ',' or ')' near " ++ show (take 30 r))
-
--- | A type-application chain of atoms (e.g. @Maybe Int@); greedily
--- consumes atoms until one fails to parse (i.e. until a terminator like
--- @,@, @)@, @]@, @}@ is hit).
-parseType :: P PTy
-parseType inp = do
-  (a1, r1) <- parseAtom inp
-  goApp a1 r1
-  where
-    goApp acc r =
-      case parseAtom r of
-        Right (a2, r2) -> goApp (TyApp acc a2) r2
-        Left _ -> Right (acc, r)
-
-parseField :: P Field
-parseField inp = do
-  (fname, r1) <- ident inp
-  (_, r2) <- lit "::" r1
-  (_, r3) <- lit "Op" r2
-  (ity, r4) <- parseAtom r3
-  (oty, r5) <- parseAtom r4
-  Right ((fname, ity, oty), r5)
-
-parseEffect :: P EffectDecl
-parseEffect inp = do
-  (_, r1) <- lit "data" inp
-  (ename, r2) <- ident r1
-  (_, r3) <- lit "=" r2
-  (_cname, r4) <- ident r3 -- the constructor name; assumed == effect name, as in every example
-  (_, r5) <- lit "{" r4
-  (f1, r6) <- parseField r5
-  (fs, r7) <- goFields [f1] r6
-  (_, r8) <- lit "}" r7
-  Right (EffectDecl ename fs, r8)
-  where
-    goFields acc r =
-      case lit "," r of
-        Right (_, r2) -> do (f, r3) <- parseField r2; goFields (acc ++ [f]) r3
-        Left _ -> Right (acc, r)
-
-runFullParse :: String -> Either String EffectDecl
-runFullParse inp = do
-  (decl, rest) <- parseEffect inp
-  if all isSpace rest
-    then Right decl
-    else Left ("trailing input: " ++ show (take 40 rest))
+    toField :: (Name, Bang, Type) -> Either String Field
+    toField (fname, _, AppT (AppT (ConT opName) ity) oty)
+      | nameBase opName == "Op" = Right (nameBase fname, ity, oty)
+    toField (fname, _, ty) =
+      Left ("field " ++ nameBase fname ++ " must have type `Op I O`, got " ++ pprint ty)
 
 -- ---------------------------------------------------------------------
 -- Code generation: EffectDecl -> [Dec]
 -- ---------------------------------------------------------------------
-
-thType :: PTy -> Type
-thType (TyCon "()") = TupleT 0
-thType (TyCon c) = ConT (mkName c)
-thType (TyVar v) = VarT (mkName v)
-thType (TyApp f a) = AppT (thType f) (thType a)
-thType (TyList a) = AppT ListT (thType a)
-thType (TyTuple ts) = foldl AppT (TupleT (length ts)) (map thType ts)
 
 -- | The dispatch-functor's constructor name for one field.
 conFName :: String -> String -> Name
@@ -327,8 +262,7 @@ clauseType i o r e =
 
 genEffect :: EffectDecl -> Q [Dec]
 genEffect (EffectDecl eff fields) = do
-  let tyvarNames = nub (concatMap (\(_, i, o) -> freeVars i ++ freeVars o) fields)
-      tyvars = map mkName tyvarNames
+  let tyvars = nub (concatMap (\(_, i, o) -> tyVarsIn i ++ tyVarsIn o) fields)
       effF = functorName eff
       rN = mkName "r"
       eN = mkName "e"
@@ -339,8 +273,8 @@ genEffect (EffectDecl eff fields) = do
       functorCon (fname, ity, oty) =
         NormalC
           (conFName eff fname)
-          [ (Bang NoSourceUnpackedness NoSourceStrictness, thType ity),
-            (Bang NoSourceUnpackedness NoSourceStrictness, AppT (AppT ArrowT (thType oty)) (VarT xN))
+          [ (Bang NoSourceUnpackedness NoSourceStrictness, ity),
+            (Bang NoSourceUnpackedness NoSourceStrictness, AppT (AppT ArrowT oty) (VarT xN))
           ]
       functorDecl =
         DataD
@@ -362,7 +296,7 @@ genEffect (EffectDecl eff fields) = do
                 AppT (ConT ''Functor) (VarT eN),
                 AppT (AppT (ConT (mkName ":?")) effFApplied) (VarT eN)
               ]
-              (AppT (AppT ArrowT (thType ity)) (selT (VarT rN) (VarT eN) (thType oty)))
+              (AppT (AppT ArrowT ity) (selT (VarT rN) (VarT eN) oty))
           )
       performFun (fname, _, _) =
         FunD
@@ -382,7 +316,7 @@ genEffect (EffectDecl eff fields) = do
       handlerCon =
         NormalC
           (mkName eff)
-          [ (Bang NoSourceUnpackedness NoSourceStrictness, clauseType (thType ity) (thType oty) (VarT rN) (VarT eN) (VarT bN))
+          [ (Bang NoSourceUnpackedness NoSourceStrictness, clauseType ity oty (VarT rN) (VarT eN) (VarT bN))
             | (_, ity, oty) <- fields
           ]
       handlerDecl =
@@ -435,8 +369,8 @@ effect =
     { quoteExp = err,
       quotePat = err,
       quoteType = err,
-      quoteDec = \s -> case runFullParse s of
-        Left e -> fail ("[effect| ... |]: parse error: " ++ e)
+      quoteDec = \s -> case parseEffect s of
+        Left e -> fail ("[effect| ... |]: " ++ e)
         Right decl -> genEffect decl
     }
   where
