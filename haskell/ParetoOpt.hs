@@ -1,3 +1,12 @@
+{-
+    TODOs:
+        - ハンドラ一般化
+            - minWithみたいな評価関数だけ受け取って何について最適化するか調整できるようにする
+            - parameter更新形は適応できない
+        - handlerPRetみたいな便利形定義する
+        - パレートフロンティア模索
+-}
+
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -19,7 +28,7 @@
 module ParetoOpt where
 
 import Control.Monad (ap, foldM)
-import Data.List (group, maximumBy, minimumBy, sort)
+import Data.List (group, maximumBy, minimumBy, sort, nub)
 import Data.Monoid (Sum (..))
 import Prelude hiding (Left, Right, max, min)
 import DataDual ( Float' )
@@ -35,8 +44,8 @@ type Cost = Float'
 type Time = Float'
 type CT = (Cost, Time)
 
-type Transfer = Float'
-type CTT = (Cost, Time, Transfer)
+-- type Transfer = Float'
+-- type CTT = (Cost, Time, Transfer)
 
 
 -- types of transportation
@@ -62,9 +71,9 @@ ct_bus =
 
 ct_train :: [[CT]]
 ct_train = 
-    [ [(0,0), (1200,25), (0,0),    (0,0),      (0,0)]     -- S -> B not avairable
+    [ [(0,0), (1200,25), (0,0),    (0,0),      (0,0)]     -- S -> C not avairable
     , [(0,0), (0,0),     (900,20),(1100,22),   (0,0)]
-    , [(0,0), (0,0),     (0,0),   (0,0),       (0,0)]     -- A -> C not avairable
+    , [(0,0), (0,0),     (0,0),   (0,0),       (0,0)]     -- B -> G not avairable
     , [(0,0), (0,0),     (0,0),   (0,0),       (1000,18)]
     , [(0,0), (0,0),     (0,0),   (0,0),       (0,0)]
     ]
@@ -157,7 +166,10 @@ walk path current = do
 -------------
 -- best cost 
 -------------
-hCost :: (Functor e) => [(Mode, Node)] -> Sel CT (Pareto Mode Node :* e) a -> Sel CT e a
+hCost :: (Functor e) 
+    => [(Mode, Node)] 
+    -> Sel CT (Pareto Mode Node :* e) a 
+    -> Sel CT e a
 hCost p = handleP costAlg p 
 
 costAlg :: (Functor e) 
@@ -291,14 +303,140 @@ score dl (c, t) | t <= dl   = (0, c)
 cutoffResult :: Float' -> ([(Mode, Node)], CT)
 cutoffResult co = run (hCutOff co (0, 0) (walk [] Start))
 
-
+--------------------
 -- pareto frontier
+--------------------
+
+-- version 1: no usage of loss cont and parameter
+
+-- snd dominate fst
+dominates :: CT -> CT -> Bool
+dominates (c1, t1) (c2, t2) = c1 <= c2 && t1 <= t2 && (c1, t1) /= (c2, t2)
+
+-- filter pareto ones
+paretoFront :: (a -> CT) -> [a] -> [a]
+paretoFront f xs = [ x | x <- xs, not (any (\y -> f y `dominates` f x) xs) ]
+
+-- hNDet
+hAll :: (Functor e) => Sel CT (Pareto Mode Node :* e) a -> Sel CT e [a]
+hAll = handle Handler { hret = \_ x -> return [x]
+                      , hops = allAlg } ()
+
+-- list all possible route
+allAlg :: (Functor e)
+  => Pareto Mode Node ((() -> Sel CT e CT, () -> Sel CT e [a]))
+  -> () -> Sel CT e [a]
+allAlg (Pareto node k) p = do
+  rs <- mapM (\c -> (snd . k) c p) (candidatesFrom node)
+  return (concat rs)
+
+paretoResult :: [([(Mode, Node)], CT)]
+paretoResult =
+  let paths = fst (run (hAll (walk [] Start)))
+  in map (\p -> (p, pathLoss p)) (paretoFront pathLoss paths)
 
 
 
+-- -- version 2: no usage of loss cont 
+
+-- -- P :: (acumulated CT for current route search, routes found so far)
+-- type P = (CT, [CT])   
+
+-- -- snd dominates fst or same
+-- weakly :: CT -> CT -> Bool
+-- weakly (a, b) (c, d) = a <= c && b <= d
+
+-- hPareto :: (Functor e) => Sel CT (Pareto Mode Node :* e) a -> Sel CT e [(a, CT)]
+-- hPareto = handle Handler { hret = \(past, _) x -> return [(x, past)]
+--                          , hops = paretoAlg
+--                          } ((0, 0), [])
+
+-- paretoAlg :: (Functor e)
+--   => Pareto Mode Node ((P -> Sel CT e CT, P -> Sel CT e [(a, CT)]))
+--   -> P -> Sel CT e [(a, CT)]
+-- paretoAlg (Pareto node k) (past, front0) = 
+--     go (candidatesFrom node) front0 []
+--         where
+--             go [] _ acc = return acc
+--             go (c : cs) front acc = do
+--                 let past'  = addCT past (onePathLoss node c)
+--                     pruned | snd c == Goal = any (`dominates` past') front
+--                            | otherwise     = any (`weakly` past') front
+--                 if pruned
+--                     then go cs front acc
+--                     else do
+--                     rs <- lreset ((snd . k) c (past', front))
+--                     go cs (front ++ map snd rs) (acc ++ rs)
+
+-- paretoResult2 :: [([(Mode, Node)], CT)]
+-- paretoResult2 = paretoFront snd (fst (run (hPareto (walk [] Start))))
 
 
 
+-- pruning based on the future
+-- non-determinism
+    -- 普通の継続を複数回実行するときに、lossが蓄積されてしまうのではないか問題 (確率*nonDet やってた時のlocal的なものが必要そう)
+        -- local: lreset + loss取り出し機能
+    -- loss continuation 自体に非決定性が生まれる
+        -- 次のノード1つ選んでも、そのノードの後のルートによってlossが複数ありうる
+
+hParetoF :: (Functor e) => Sel CT (Pareto Mode Node :* NDet :* e) a -> Sel CT (NDet :* e) [a]
+hParetoF = handle Handler { hret = \_ x -> return [x]
+                           , hops = paretoFAlg } ()
+
+paretoFAlg :: (Functor e)
+  => Pareto Mode Node ((() -> Sel CT (NDet :* e) CT, () -> Sel CT (NDet :* e) a))
+  -> () 
+  -> Sel CT (NDet :* e) a
+paretoFAlg (Pareto node k) p = do
+    let a = choose $ map (\c -> do l <- (fst . k) c p; return (l,c)) (candidatesFrom node)
+    let n = hNDetP a
+    ns <- widenSel n
+    -- trace ("ns: " ++ show ns) return ()
+    let nns = normalizePareto (fmap (\((a,b),c) -> (a,(b,c))) ns)
+    trace ("nns: " ++ show nns) return ()
+    choose $ fmap (\(c, lb) -> hNDetQ lb ((snd . k) c p) ) (nub (fmap snd nns)) -- infrormation loss for candidata with which loss
+
+normalizePareto :: [(CT, a)] -> [(CT, a)]
+normalizePareto cta = 
+    -- case cta of
+    --     [] -> []
+    --     x :xs -> [x]
+    filter (\(ct,a) -> not (any (dominates ct) (fmap fst cta))) cta
+
+choose :: (Functor e, Monoid r) => [Sel r (NDet :* e) a] -> Sel r (NDet :* e)a
+choose = foldr1 (\c1 c2 -> do b <- decide; if b then c1 else c2)
+
+paretoFResult :: ([[[(Mode, Node)]]], CT) -- ([(Mode,Node)], [CT])
+paretoFResult = run $ hNDet $ (hParetoF (walk [] A))
 
 
 
+nDetAlgP :: (Monoid r, Functor e) 
+              => NDet ((p -> Sel r e r, p -> Sel r e [(a, [Bool])])) -> p -> Sel r e [(a, [Bool])]
+nDetAlgP (Decide k) p = do
+  x <- (snd . k) True p
+  y <- (snd . k) False p
+  return (fmap (\(a,b) -> (a, True : b)) x  ++  fmap (\(a,b) -> (a, False : b)) y)
+
+hNDetP :: (Functor e, Monoid r) => Sel r (NDet :* e) a -> Sel r e [(a, [Bool])] -- [a]
+hNDetP = handle Handler { 
+                    hret = (\p x -> return [(x,[])]) 
+                  , hops = nDetAlgP
+                  } ()
+
+nDetAlgQ :: (Monoid r, Functor e) 
+              => NDet (([Bool] -> Sel r (NDet :* e) r, [Bool] -> Sel r (NDet :* e) a)) -> [Bool] -> Sel r (NDet :* e) a
+nDetAlgQ (Decide k) p = do
+    case p of
+        [] -> _ --hNDet
+        x : xs -> (snd . k) x xs
+--   x <- (snd . k) True p
+--   y <- (snd . k) False p
+--   return (fmap (\(a,b) -> (a, True : b)) x  ++  fmap (\(a,b) -> (a, False : b)) y)
+
+hNDetQ :: (Functor e, Monoid r) => p -> Sel r (NDet :* e) a -> Sel r (NDet :* e) a
+hNDetQ p = handleG Handler { 
+                    hret = (\p x -> return x) 
+                  , hops = nDetAlgQ 
+                  } p

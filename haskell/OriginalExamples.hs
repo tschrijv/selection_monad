@@ -47,7 +47,7 @@ nDetAlg (Decide k) p = do
   y <- (snd . k) False p
   return (x ++ y)
 
-hNDet :: (Functor e, Monoid r) => Sel r (NDet :* e) Bool -> Sel r e [Bool]
+hNDet :: (Functor e, Monoid r) => Sel r (NDet :* e) a -> Sel r e [a]
 hNDet = handle Handler { 
                     hret = (\p x -> return [x]) 
                   , hops = nDetAlg 

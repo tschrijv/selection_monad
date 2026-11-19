@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wno-missing-methods #-}
 
-module SelectionMonadParameterSupport where
+module SelectionMonad_ParameterSupport where
 
 import Control.Monad (ap)
 import Data.List (group, maximumBy, minimumBy, sort)
@@ -128,45 +128,45 @@ thenE g1 p = Sel $ \ g ->
     (r, Leaf x) -> runSelWith (glocal zeroLC (fmap (r <>) (g1 x))) g
     (r, Node t) -> (mempty, Node (fmap (fmap (r <>) . thenE g1) t))
 
-widen :: (Monoid r, Functor e, Functor f) => 
-  Sel r e a -> Sel r (f :* e) a
-widen p = Sel $ \ g ->
-  let (r, w) = runSelWith p g
-  in case w of
-       Leaf x -> (r, Leaf x)
-       Node t -> (r, Node (RightEff (fmap widen t)))
+-- widen :: (Monoid r, Functor e, Functor f) => 
+--   Sel r e a -> Sel r (f :* e) a
+-- widen p = Sel $ \ g ->
+--   let (r, w) = runSelWith p g
+--   in case w of
+--        Leaf x -> (r, Leaf x)
+--        Node t -> (r, Node (RightEff (fmap widen t)))
 
-data Handler r f e p a b = Handler
-  { hret :: p -> a -> Sel r e b,
-    hops :: f (p -> Sel r e r, p -> Sel r e b) -> p -> Sel r e b
- }
+-- data Handler r f e p a b = Handler
+--   { hret :: p -> a -> Sel r e b,
+--     hops :: f (p -> Sel r e r, p -> Sel r e b) -> p -> Sel r e b
+--  }
 
-handle :: (Functor f, Functor e, Monoid r) =>
-  Handler r f e p a b -> p -> Sel r (f :* e) a -> Sel r e b
-handle h par p = Sel $ \ g ->
-  let (r, w) = runSelWith p (\ a -> widen (thenE g (hret h par a)))
-  in case w of
-    Leaf x -> addLoss' r (runSelWith (hret h par x) g)
-    Node (LeftEff t) ->  addLoss' r
-      (runSelWith 
-        (hops h 
-           (fmap 
-              (\ q -> 
-                ( \ par' -> thenE g (handle h par' q)
-                , \ par' -> glocal g (handle h par' q)  
-                )
-              )
-              t)
-          par
-        ) g)
-    Node (RightEff t) -> (r, Node (fmap (fmap (handle h par) t)))
+-- handle :: (Functor f, Functor e, Monoid r) =>
+--   Handler r f e p a b -> p -> Sel r (f :* e) a -> Sel r e b
+-- handle h par p = Sel $ \ g ->
+--   let (r, w) = runSelWith p (\ a -> widen (thenE g (hret h par a)))
+--   in case w of
+--     Leaf x -> addLoss' r (runSelWith (hret h par x) g)
+--     Node (LeftEff t) ->  addLoss' r
+--       (runSelWith 
+--         (hops h 
+--            (fmap 
+--               (\ q -> 
+--                 ( \ par' -> thenE g (handle h par' q)
+--                 , \ par' -> glocal g (handle h par' q)  
+--                 )
+--               )
+--               t)
+--           par
+--         ) g)
+--     Node (RightEff t) -> (r, Node (fmap (fmap (handle h par) t)))
 
-reset :: (Functor e, Monoid r) => Sel r e a -> Sel r e a
-reset p = Sel $ \ g ->
-  let (r, w) = runSelWith p g
-  in case w of
-    Leaf x -> (mempty, Leaf x)
-    Node t -> (mempty, Node (fmap (reset) t))
+-- reset :: (Functor e, Monoid r) => Sel r e a -> Sel r e a
+-- reset p = Sel $ \ g ->
+--   let (r, w) = runSelWith p g
+--   in case w of
+--     Leaf x -> (mempty, Leaf x)
+--     Node t -> (mempty, Node (fmap (reset) t))
 
 --  let (r, w) = runSelWith p (\ a -> runSelWith (hret h a) gamma)
 --  in case w of

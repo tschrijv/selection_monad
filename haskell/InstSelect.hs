@@ -9,6 +9,7 @@
 module InstSelect where
 
 import SelectionMonad_ParameterSupport2
+import OriginalExamples
 import Prelude hiding (min, max)
 import Control.Monad (join)
 import Data.Monoid (Sum)
@@ -81,8 +82,6 @@ inst_candidate tree = case tree of
 
 cost_inst :: Inst -> Sum Int
 cost_inst inst = 1
-
-
 
 inst_select :: (Min (Inst, [Tree]) :? e) => Tree -> Sel (Sum Int) e [Inst]
 inst_select tree = do

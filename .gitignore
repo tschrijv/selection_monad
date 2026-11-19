@@ -5,3 +5,8 @@ _build/
 *.aux
 *.log
 *.out
+
+# Cabal build artifacts
+dist-newstyle/
+
+.DS_Store
