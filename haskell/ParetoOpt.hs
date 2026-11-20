@@ -28,7 +28,7 @@
 module ParetoOpt where
 
 import Control.Monad (ap, foldM)
-import Data.List (group, maximumBy, minimumBy, sort, nub)
+import Data.List (group, maximumBy, minimumBy, sort)
 import Data.Monoid (Sum (..))
 import Prelude hiding (Left, Right, max, min)
 import DataDual ( Float' )
@@ -380,63 +380,82 @@ paretoResult =
     -- loss continuation 自体に非決定性が生まれる
         -- 次のノード1つ選んでも、そのノードの後のルートによってlossが複数ありうる
 
-hParetoF :: (Functor e) => Sel CT (Pareto Mode Node :* NDet :* e) a -> Sel CT (NDet :* e) [a]
-hParetoF = handle Handler { hret = \_ x -> return [x]
-                           , hops = paretoFAlg } ()
-
-paretoFAlg :: (Functor e)
-  => Pareto Mode Node ((() -> Sel CT (NDet :* e) CT, () -> Sel CT (NDet :* e) a))
-  -> () 
-  -> Sel CT (NDet :* e) a
-paretoFAlg (Pareto node k) p = do
-    let a = choose $ map (\c -> do l <- (fst . k) c p; return (l,c)) (candidatesFrom node)
-    let n = hNDetP a
-    ns <- widenSel n
-    -- trace ("ns: " ++ show ns) return ()
-    let nns = normalizePareto (fmap (\((a,b),c) -> (a,(b,c))) ns)
-    trace ("nns: " ++ show nns) return ()
-    choose $ fmap (\(c, lb) -> hNDetQ lb ((snd . k) c p) ) (nub (fmap snd nns)) -- infrormation loss for candidata with which loss
-
-normalizePareto :: [(CT, a)] -> [(CT, a)]
-normalizePareto cta = 
-    -- case cta of
-    --     [] -> []
-    --     x :xs -> [x]
-    filter (\(ct,a) -> not (any (dominates ct) (fmap fst cta))) cta
-
-choose :: (Functor e, Monoid r) => [Sel r (NDet :* e) a] -> Sel r (NDet :* e)a
-choose = foldr1 (\c1 c2 -> do b <- decide; if b then c1 else c2)
-
-paretoFResult :: ([[[(Mode, Node)]]], CT) -- ([(Mode,Node)], [CT])
-paretoFResult = run $ hNDet $ (hParetoF (walk [] A))
-
-
-
-nDetAlgP :: (Monoid r, Functor e) 
+nDetAlgP :: (Monoid r, Functor e)
               => NDet ((p -> Sel r e r, p -> Sel r e [(a, [Bool])])) -> p -> Sel r e [(a, [Bool])]
 nDetAlgP (Decide k) p = do
   x <- (snd . k) True p
   y <- (snd . k) False p
   return (fmap (\(a,b) -> (a, True : b)) x  ++  fmap (\(a,b) -> (a, False : b)) y)
 
+-- Explore both branches of every `decide`, tagging each resulting value
+-- with the sequence of True/False choices that produced it. Used below
+-- purely as a prediction device: run entirely inside the upE-wrapped
+-- "ask the continuation" bubble (fst . k), where Sel's own loss
+-- accumulator always stays mempty (upE reports mempty at every node,
+-- putting the real information in the VALUE instead, exactly as
+-- hCutOff's own (fst . k) does for a single predicted CT) -- so
+-- exploring every branch here, and letting hNDetP sum their (always
+-- mempty) individual contributions, never pollutes any prediction.
 hNDetP :: (Functor e, Monoid r) => Sel r (NDet :* e) a -> Sel r e [(a, [Bool])] -- [a]
-hNDetP = handle Handler { 
-                    hret = (\p x -> return [(x,[])]) 
+hNDetP = handle Handler {
+                    hret = (\p x -> return [(x,[])])
                   , hops = nDetAlgP
                   } ()
 
-nDetAlgQ :: (Monoid r, Functor e) 
-              => NDet (([Bool] -> Sel r (NDet :* e) r, [Bool] -> Sel r (NDet :* e) a)) -> [Bool] -> Sel r (NDet :* e) a
-nDetAlgQ (Decide k) p = do
-    case p of
-        [] -> _ --hNDet
-        x : xs -> (snd . k) x xs
---   x <- (snd . k) True p
---   y <- (snd . k) False p
---   return (fmap (\(a,b) -> (a, True : b)) x  ++  fmap (\(a,b) -> (a, False : b)) y)
+-- Replay one fixed, already-recorded sequence of NDet choices: pop one
+-- Bool off the front for every `decide` encountered, instead of
+-- exploring both. Used below to re-run, for real, exactly the one
+-- branch whose predicted loss was kept by the Pareto filter: the real
+-- run (snd . k) and the predicted run (fst . k) it was taken from
+-- execute the identical program for the same candidate, so they hit
+-- exactly the same `decide`s in the same order, and the recorded trace
+-- is always exactly long enough.
+replayAlg :: (Functor e) => NDet ([Bool] -> Sel r e r, [Bool] -> Sel r e a) -> [Bool] -> Sel r e a
+replayAlg (Decide k) (x : xs) = (snd . k) x xs
+replayAlg (Decide _) []       = error "hReplay: recorded trace ran out before the computation did"
 
-hNDetQ :: (Functor e, Monoid r) => p -> Sel r (NDet :* e) a -> Sel r (NDet :* e) a
-hNDetQ p = handleG Handler { 
-                    hret = (\p x -> return x) 
-                  , hops = nDetAlgQ 
-                  } p
+hReplay :: (Functor e, Monoid r) => [Bool] -> Sel r (NDet :* e) a -> Sel r e a
+hReplay = handleP replayAlg
+
+-- Handle Pareto by, at every choice, asking every candidate what its
+-- own eventual loss would be (fst . k), under every nondeterministic
+-- resolution of the choices still to come (hNDetP), keeping only the
+-- (candidate, future choices) pairs that are Pareto-optimal, and then
+-- actually resuming (snd . k) along exactly those. Each surviving
+-- route's own loss is threaded as the handler's own parameter rather
+-- than through Sel's own accumulator (hret pairs the final value with
+-- that parameter directly), so several frontier survivors explored
+-- side by side via the final `choose` never have their losses summed
+-- together the way a plain NDet handler's own result would.
+hParetoF :: (Functor e) => CT -> Sel CT (Pareto Mode Node :* NDet :* e) a -> Sel CT (NDet :* e) [(a, CT)]
+hParetoF past0 = handle Handler { hret = \past x -> return [(x, past)]
+                                 , hops = paretoFAlg } past0
+
+paretoFAlg :: forall e a. (Functor e)
+    => Pareto Mode Node ((CT -> Sel CT (NDet :* e) CT, CT -> Sel CT (NDet :* e) [(a, CT)]))
+    -> CT
+    -> Sel CT (NDet :* e) [(a, CT)]
+paretoFAlg (Pareto node k) past = do
+    predicted <- mapM predictOne (candidatesFrom node)
+    let survivors = normalizePareto (concat predicted)
+    choose (map replayOne survivors)
+  where
+    predictOne :: (Mode, Node) -> Sel CT (NDet :* e) [(CT, ((Mode, Node), [Bool]))]
+    predictOne c = do
+      let past' = addCT past (onePathLoss node c)
+      ws <- widenSel (hNDetP ((fst . k) c past'))
+      return (map (\(ct, tr) -> (ct, (c, tr))) ws)
+
+    replayOne :: (CT, ((Mode, Node), [Bool])) -> Sel CT (NDet :* e) [(a, CT)]
+    replayOne (_, (c, tr)) = widenSel (hReplay tr ((snd . k) c (addCT past (onePathLoss node c))))
+
+-- keep only the Pareto-optimal CTs (dropping ct whenever some other ct'
+-- in the list dominates it)
+normalizePareto :: [(CT, a)] -> [(CT, a)]
+normalizePareto cta = filter (\(ct,_) -> not (any (\ct' -> dominates ct' ct) (fmap fst cta))) cta
+
+choose :: (Functor e, Monoid r) => [Sel r (NDet :* e) a] -> Sel r (NDet :* e)a
+choose = foldr1 (\c1 c2 -> do b <- decide; if b then c1 else c2)
+
+paretoFResult :: [([(Mode, Node)], CT)]
+paretoFResult = concat (fst (run (hNDet (hParetoF (0,0) (walk [] Start)))))
